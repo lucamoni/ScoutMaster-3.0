@@ -1,0 +1,62 @@
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',
+npm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },
+npm warn EBADENGINE   current: { node: 'v23.10.0', npm: '11.6.2' }
+npm warn EBADENGINE }
+npm warn deprecated sourcemap-codec@1.4.8: Please use @jridgewell/sourcemap-codec instead
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+added 238 packages, removed 3 packages, and audited 601 packages in 4m
+
+162 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (4 moderate, 1 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm warn exec The following package was not found and will be installed: shadcn@4.16.2
+- Preflight checks.
+✔ Preflight checks.
+- Verifying framework.
+✔ Verifying framework. Found Next.js.
+- Validating Tailwind CSS. Found v4.
+✔ Validating Tailwind CSS. Found v4.
+- Validating import alias.
+✔ Validating import alias.
+- Writing components.json.
+✔ Writing components.json.
+- Checking registry.
+✔ Checking registry.
+- Installing dependencies.
+- Installing dependencies.
+✔ Installing dependencies.
+- Updating fonts.
+✔ Updating fonts.
+- Updating files.
+✔ Created 2 files:
+  - src/components/ui/button.tsx
+  - src/lib/utils.ts
+- Updating src/app/globals.css
+✔ Updating src/app/globals.css
+
+Project initialization completed.
+You may now add components.
+
+- Checking registry.
+✔ Checking registry.
+- Updating files.
+✔ Created 8 files:
+  - src/components/ui/card.tsx
+  - src/components/ui/table.tsx
+  - src/components/ui/input.tsx
+  - src/components/ui/label.tsx
+  - src/components/ui/checkbox.tsx
+  - src/components/ui/select.tsx
+  - src/components/ui/tabs.tsx
+  - src/components/ui/dialog.tsx
+ℹ Skipped 1 file: (files might be identical, use --overwrite to overwrite)
+  - src/components/ui/button.tsx

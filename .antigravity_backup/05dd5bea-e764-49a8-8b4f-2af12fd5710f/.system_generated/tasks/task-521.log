@@ -1,0 +1,10 @@
+Successfully scheduled one-shot timer.
+Expected to fire at: 2026-08-09T18:13:50+02:00
+Prompt: Wait for npm install
+Early Termination: 05dd5bea-e764-49a8-8b4f-2af12fd5710f/task-518
+
+[2026-08-09T18:13:15+02:00] Still waiting. Remaining time: 35s
+[2026-08-09T18:13:25+02:00] Still waiting. Remaining time: 25s
+[2026-08-09T18:13:35+02:00] Still waiting. Remaining time: 15s
+[2026-08-09T18:13:45+02:00] Still waiting. Remaining time: 5s
+[2026-08-09T18:13:48+02:00] Timer cancelled: agent received a message during wait.

@@ -1,0 +1,58 @@
+
+> scoutmaster-app@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 185ms
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.7s
+  Running TypeScript ...
+src/app/(dashboard)/cassa/components/CassaClient.tsx(100,26): error TS2322: Type '{ children: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & Props<unknown>'.
+  Property 'asChild' does not exist on type 'IntrinsicAttributes & Props<unknown>'.
+src/app/(dashboard)/cassa/components/CassaClient.tsx(116,99): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(dashboard)/cassa/components/CassaClient.tsx(129,97): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(dashboard)/cassa/components/CassaClient.tsx(139,103): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(dashboard)/cassa/ocr/page.tsx(201,99): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(dashboard)/cassa/ocr/page.tsx(215,97): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(dashboard)/cassa/ocr/page.tsx(225,103): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/app/(dashboard)/components/AnagraficaClient.tsx(36,15): error TS2345: Argument of type '{ [x: string]: any; }' is not assignable to parameter of type 'RejectExcessProperties<{ cognome?: string | undefined; foglio_privacy_firmato?: boolean | null | undefined; partecipazione_ci?: boolean | null | undefined; scheda_medica_ci?: boolean | null | undefined; ... 6 more ...; pattuglia?: string | ... 1 more ... | undefined; }, { ...; }>'.
+  Type '{ [x: string]: any; }' is not assignable to type '{ [x: string]: never; [x: number]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'any' is not assignable to type 'never'.
+src/app/(dashboard)/privacy/components/PrivacyClient.tsx(23,43): error TS2345: Argument of type '{ [x: string]: boolean; }' is not assignable to parameter of type 'RejectExcessProperties<{ cognome?: string | undefined; foglio_privacy_firmato?: boolean | null | undefined; partecipazione_ci?: boolean | null | undefined; scheda_medica_ci?: boolean | null | undefined; ... 6 more ...; pattuglia?: string | ... 1 more ... | undefined; }, { ...; }>'.
+  Type '{ [x: string]: boolean; }' is not assignable to type '{ [x: string]: never; [x: number]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'boolean' is not assignable to type 'never'.
+src/app/(dashboard)/privacy/page.tsx(7,6): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", "public", { Tables: { eventi: { Row: { data_inizio: string | null; id: string; nome_evento: string; quota_standard: number | null; tipo_evento: string | null; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; partecipazioni_eventi: { ...; }; quote_mensili: { ...;...'.
+src/app/(dashboard)/quote-mensili/components/QuoteClient.tsx(49,15): error TS2345: Argument of type '{ [x: string]: boolean; }' is not assignable to parameter of type 'RejectExcessProperties<{ anno_scout?: string | undefined; aprile?: boolean | null | undefined; dicembre?: boolean | null | undefined; febbraio?: boolean | null | undefined; gennaio?: boolean | null | undefined; ... 5 more ...; ragazzo_id?: string | ... 1 more ... | undefined; }, { ...; }>'.
+  Type '{ [x: string]: boolean; }' is not assignable to type '{ [x: string]: never; [x: number]: never; }'.
+    'string' index signatures are incompatible.
+      Type 'boolean' is not assignable to type 'never'.
+src/app/(dashboard)/report/page.tsx(8,14): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", "public", { Tables: { eventi: { Row: { data_inizio: string | null; id: string; nome_evento: string; quota_standard: number | null; tipo_evento: string | null; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; partecipazioni_eventi: { ...; }; quote_mensili: { ...;...'.
+src/app/(dashboard)/report/page.tsx(9,14): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", "public", { Tables: { eventi: { Row: { data_inizio: string | null; id: string; nome_evento: string; quota_standard: number | null; tipo_evento: string | null; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; partecipazioni_eventi: { ...; }; quote_mensili: { ...;...'.
+src/app/(dashboard)/report/page.tsx(10,14): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", "public", { Tables: { eventi: { Row: { data_inizio: string | null; id: string; nome_evento: string; quota_standard: number | null; tipo_evento: string | null; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; partecipazioni_eventi: { ...; }; quote_mensili: { ...;...'.
+src/app/(dashboard)/report/page.tsx(11,14): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", "public", { Tables: { eventi: { Row: { data_inizio: string | null; id: string; nome_evento: string; quota_standard: number | null; tipo_evento: string | null; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; partecipazioni_eventi: { ...; }; quote_mensili: { ...;...'.
+src/app/(dashboard)/report/page.tsx(12,14): error TS2339: Property 'from' does not exist on type 'Promise<SupabaseClient<Database, "public", "public", { Tables: { eventi: { Row: { data_inizio: string | null; id: string; nome_evento: string; quota_standard: number | null; tipo_evento: string | null; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; partecipazioni_eventi: { ...; }; quote_mensili: { ...;...'.
+src/app/(dashboard)/uscite/components/UsciteClient.tsx(58,15): error TS2345: Argument of type '{ evento_id: string | null; id: string; metodo_pagamento: string | null; quota_dovuta: number | null; ragazzo_id: string | null; riscosso: boolean | null; scheda_medica_consegnata: boolean | null; stato_presenza: string | null; } | { ...; }' is not assignable to parameter of type 'RejectExcessProperties<{ evento_id?: string | null | undefined; id?: string | undefined; metodo_pagamento?: string | null | undefined; quota_dovuta?: number | null | undefined; ragazzo_id?: string | null | undefined; riscosso?: boolean | ... 1 more ... | undefined; scheda_medica_consegnata?: boolean | ... 1 more ......'.
+  Type '{ [x: string]: any; ragazzo_id: string; evento_id: string; stato_presenza: any; riscosso: any; metodo_pagamento: any; quota_dovuta: null; scheda_medica_consegnata: boolean; }' is not assignable to type 'RejectExcessProperties<{ evento_id?: string | null | undefined; id?: string | undefined; metodo_pagamento?: string | null | undefined; quota_dovuta?: number | null | undefined; ragazzo_id?: string | null | undefined; riscosso?: boolean | ... 1 more ... | undefined; scheda_medica_consegnata?: boolean | ... 1 more ......'.
+    Type '{ [x: string]: any; ragazzo_id: string; evento_id: string; stato_presenza: any; riscosso: any; metodo_pagamento: any; quota_dovuta: null; scheda_medica_consegnata: boolean; }' is missing the following properties from type 'RejectExcessProperties<{ evento_id?: string | null | undefined; id?: string | undefined; metodo_pagamento?: string | null | undefined; quota_dovuta?: number | null | undefined; ragazzo_id?: string | null | undefined; riscosso?: boolean | ... 1 more ... | undefined; scheda_medica_consegnata?: boolean | ... 1 more ......': length, pop, push, concat, and 35 more.
+src/app/(dashboard)/uscite/components/UsciteClient.tsx(75,43): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: SelectRootChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+Failed to type check.
+

@@ -1,0 +1,89 @@
+
+> scoutmaster-app@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 101ms
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 100s
+  Running TypeScript ...
+  Finished TypeScript in 2.8s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/15) ...
+  Generating static pages using 7 workers (3/15) 
+  Generating static pages using 7 workers (7/15) 
+  Generating static pages using 7 workers (11/15) 
+✓ Generating static pages using 7 workers (15/15) in 415ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /api/chatbot
+├ ƒ /api/ocr
+├ ƒ /api/reminder
+├ ƒ /cassa
+├ ƒ /cassa/ocr
+├ ƒ /login
+├ ƒ /privacy
+├ ƒ /quote-mensili
+├ ƒ /reminder
+├ ƒ /report
+└ ƒ /uscite
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+> scoutmaster-app@0.1.0 start
+> next start
+
+▲ Next.js 16.3.0
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.7:3000
+✓ Ready in 100ms
+✓ Running next.config.ts took 32ms
+API key should be set when using the Gemini API.
+API key should be set when using the Gemini API.
+Errore CassaBot: Error [ApiError]: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"ACCESS_TOKEN_SCOPE_INSUFFICIENT","metadata":{"method":"google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent","service":"generativelanguage.googleapis.com"}}]}}
+    at nR (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:138382)
+    at async (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:132992)
+    at async n$.generateContent (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:168981)
+    at async sp (.next/server/chunks/_1vujwe_._.js:57:29)
+    at async X (.next/server/chunks/_1vujwe_._.js:57:3271)
+    at async Y (.next/server/chunks/_1vujwe_._.js:57:4349) {
+  status: 403
+}
+API key should be set when using the Gemini API.
+API key should be set when using the Gemini API.
+Errore OCR: Error [ApiError]: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"ACCESS_TOKEN_SCOPE_INSUFFICIENT","metadata":{"method":"google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent","service":"generativelanguage.googleapis.com"}}]}}
+    at nR (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:138382)
+    at async (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:132992)
+    at async n$.generateContent (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:168981)
+    at async a (.next/server/chunks/[root-of-the-server]__0ppx9ee._.js:1:2328)
+    at async J (.next/server/chunks/[root-of-the-server]__0ppx9ee._.js:1:6382)
+    at async W (.next/server/chunks/[root-of-the-server]__0ppx9ee._.js:1:7460) {
+  status: 403
+}
+API key should be set when using the Gemini API.
+API key should be set when using the Gemini API.
+Errore CassaBot: Error [ApiError]: {"error":{"code":403,"message":"Request had insufficient authentication scopes.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"ACCESS_TOKEN_SCOPE_INSUFFICIENT","metadata":{"method":"google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent","service":"generativelanguage.googleapis.com"}}]}}
+    at nR (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:138382)
+    at async (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:132992)
+    at async n$.generateContent (.next/server/chunks/[root-of-the-server]__09tp1w2._.js:2:168981)
+    at async sp (.next/server/chunks/_1vujwe_._.js:57:29)
+    at async X (.next/server/chunks/_1vujwe_._.js:57:3271)
+    at async Y (.next/server/chunks/_1vujwe_._.js:57:4349) {
+  status: 403
+}

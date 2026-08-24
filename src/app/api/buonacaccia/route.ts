@@ -1,0 +1,107 @@
+import { NextResponse } from 'next/server'
+import { GoogleGenAI } from '@google/genai'
+
+export async function POST(req: Request) {
+  try {
+    const { url } = await req.json()
+    if (!url) {
+      return NextResponse.json({ error: 'URL mancante' }, { status: 400 })
+    }
+
+    let cleanText = url
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
+        }
+      })
+      
+      if (response.ok) {
+        const html = await response.text()
+        cleanText = html
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .substring(0, 30000)
+      }
+    } catch (fetchErr) {
+      console.warn('Impossibile scaricare direttamente l\'URL, procedo con l\'analisi del testo:', fetchErr)
+    }
+
+    let eventData = {
+      titolo: 'Evento BuonaCaccia',
+      categoria: 'Specialita',
+      branca: 'EG',
+      regione: null,
+      luogo: null,
+      data_inizio: new Date().toISOString().split('T')[0],
+      data_fine: null,
+      apertura_iscrizioni: null,
+      chiusura_iscrizioni: null,
+      costo_evento: 0,
+      note: null
+    }
+
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: [
+            {
+              text: `Sei un assistente per lo scoutismo AGESCI. Analizza il seguente testo ed estrai i dati richiesti.
+RESTITUISCI SOLO UN OGGETTO JSON.
+Se non trovi un'informazione, imposta il valore a null.
+Le date devono essere nel formato YYYY-MM-DD.
+
+I campi JSON attesi sono:
+{
+  "titolo": string, (titolo completo dell'evento)
+  "categoria": string, (uno tra: 'Specialita', 'Competenza', 'CFT', 'CFM', 'CFA', 'Piccole Orme', 'Altro')
+  "branca": string, (uno tra: 'EG', 'CAPI')
+  "regione": string, (regione dell'evento se specificata)
+  "luogo": string, (località/indirizzo esatto dell'evento)
+  "data_inizio": string, (YYYY-MM-DD)
+  "data_fine": string, (YYYY-MM-DD)
+  "apertura_iscrizioni": string, (YYYY-MM-DDTHH:mm:00Z)
+  "chiusura_iscrizioni": string, (YYYY-MM-DDTHH:mm:00Z)
+  "costo_evento": number, (il costo in euro, solo numero)
+  "note": string
+}
+
+Testo da analizzare:
+${cleanText}`
+            }
+          ],
+          config: {
+            responseMimeType: 'application/json'
+          }
+        })
+
+        if (response.text) {
+          let jsonStr = response.text.trim()
+          if (jsonStr.startsWith('```json')) {
+            jsonStr = jsonStr.replace(/^```json\n?/, '').replace(/\n?```$/, '')
+          } else if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/^```\n?/, '').replace(/\n?```$/, '')
+          }
+          const aiParsed = JSON.parse(jsonStr)
+          eventData = { ...eventData, ...aiParsed }
+        }
+      } catch (geminiErr) {
+        console.warn('Fallback Gemini per evento BuonaCaccia:', geminiErr)
+      }
+    }
+
+    return NextResponse.json({ data: eventData })
+  } catch (error: unknown) {
+    const err = error as Error
+    console.error('Errore analisi evento:', err)
+    return NextResponse.json({ error: 'Impossibile estrarre i dati con l\'IA: ' + err.message }, { status: 500 })
+  }
+}

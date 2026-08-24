@@ -1,0 +1,8 @@
+- [ ] 1. Generare lo script SQL per Supabase (Tabelle, Alter, Triggers) e fornirlo all'utente.
+- [ ] 2. Aggiornare il file `src/types/database.types.ts` con i nuovi tipi (dopo la conferma di esecuzione dell'utente).
+- [x] 3. Modificare `/api/ocr/route.ts` per scaricare le categorie_spesa dal DB.
+- [x] 4. Implementare la UI di gestione in `CassaClient.tsx` (Gestione Categorie, CRUD Spese).
+- [x] 5. Implementare la UI in `AnagraficaClient.tsx` (Soft Delete, Creazione, Modifica Ragazzi, Pattuglie dinamiche).
+- [x] 6. Implementare la UI in `UsciteClient.tsx` (CRUD Eventi).
+- [x] 7. Aggiornare tutti i Page component per pre-fetchare le pattuglie e le categorie.
+- [x] 8. Test finale della build.

@@ -1,0 +1,22 @@
+node:fs:1022
+  binding.rename(
+          ^
+
+Error: EPERM: operation not permitted, rename 'src/middleware.ts' -> 'src/proxy.ts'
+    at Object.renameSync (node:fs:1022:11)
+    at [eval]:1:30
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:449:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:447:60)
+    at evalFunction (node:internal/process/execution:280:30)
+    at evalTypeScript (node:internal/process/execution:292:3)
+    at node:internal/main/eval_string:71:3 {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'rename',
+  path: 'src/middleware.ts',
+  dest: 'src/proxy.ts'
+}
+
+Node.js v23.10.0

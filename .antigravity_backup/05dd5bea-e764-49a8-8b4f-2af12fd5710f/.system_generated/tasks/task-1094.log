@@ -1,0 +1,34 @@
+
+> scoutmaster-app@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 19.6s
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 error:
+./src/app/(dashboard)/components/AnagraficaClient.tsx:239:1
+Error: Expected '}', got '<eof>'
+  237 |   )
+  238 | }
+> 239 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./src/app/(dashboard)/components/AnagraficaClient.tsx
+    ./src/app/(dashboard)/page.tsx
+
+
+    at <unknown> (./src/app/(dashboard)/components/AnagraficaClient.tsx:239:1)

@@ -1,0 +1,8 @@
+Successfully scheduled one-shot timer.
+Expected to fire at: 2026-08-10T10:15:47+02:00
+Prompt: Wait for task 741
+Early Termination: 05dd5bea-e764-49a8-8b4f-2af12fd5710f/task-741
+
+[2026-08-10T10:15:27+02:00] Still waiting. Remaining time: 20s
+[2026-08-10T10:15:37+02:00] Still waiting. Remaining time: 10s
+[2026-08-10T10:15:47+02:00] Timer fired.

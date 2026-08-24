@@ -1,0 +1,11 @@
+Successfully scheduled one-shot timer.
+Expected to fire at: 2026-08-09T18:01:45+02:00
+Prompt: Check if build has finished
+Early Termination: 05dd5bea-e764-49a8-8b4f-2af12fd5710f/task-410
+
+[2026-08-09T18:00:55+02:00] Still waiting. Remaining time: 50s
+[2026-08-09T18:01:05+02:00] Still waiting. Remaining time: 40s
+[2026-08-09T18:01:15+02:00] Still waiting. Remaining time: 30s
+[2026-08-09T18:01:25+02:00] Still waiting. Remaining time: 20s
+[2026-08-09T18:01:35+02:00] Still waiting. Remaining time: 10s
+[2026-08-09T18:01:45+02:00] Timer fired.

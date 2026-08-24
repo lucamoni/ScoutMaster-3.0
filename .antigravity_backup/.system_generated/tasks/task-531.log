@@ -1,0 +1,89 @@
+
+> scoutmaster-app@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 38.0s
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 4 errors:
+./src/app/(dashboard)/reminder/components/ReminderClient.tsx:6:1
+Error: Module not found: Can't resolve '@/components/ui/textarea'
+  4 | import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/co...
+  5 | import { Button } from '@/components/ui/button'
+> 6 | import { Textarea } from '@/components/ui/textarea'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  7 | import { Loader2, MessageCircle, Send } from 'lucide-react'
+  8 |
+  9 | export default function ReminderClient({ data }: { data: any[] }) {
+
+Import map: aliased to relative './src/components/ui/textarea' inside of [project]/
+
+
+Import trace:
+  Server Component:
+    ./src/app/(dashboard)/reminder/components/ReminderClient.tsx
+    ./src/app/(dashboard)/reminder/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./src/app/api/chatbot/route.ts:2:1
+Error: Module not found: Can't resolve '@google/genai'
+  1 | import { NextResponse } from 'next/server'
+> 2 | import { GoogleGenAI } from '@google/genai'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  3 | import { createServerClient } from '@supabase/ssr'
+  4 | import { cookies } from 'next/headers'
+  5 | import { Database } from '@/types/database.types'
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./src/app/api/ocr/route.ts:2:1
+Error: Module not found: Can't resolve '@google/genai'
+  1 | import { NextResponse } from 'next/server'
+> 2 | import { GoogleGenAI } from '@google/genai'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  3 |
+  4 | export async function POST(request: Request) {
+  5 |   try {
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./src/app/api/reminder/route.ts:2:1
+Error: Module not found: Can't resolve '@google/genai'
+  1 | import { NextResponse } from 'next/server'
+> 2 | import { GoogleGenAI } from '@google/genai'
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  3 |
+  4 | export async function POST(request: Request) {
+  5 |   try {
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (./src/app/(dashboard)/reminder/components/ReminderClient.tsx:6:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./src/app/api/chatbot/route.ts:2:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./src/app/api/ocr/route.ts:2:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./src/app/api/reminder/route.ts:2:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)

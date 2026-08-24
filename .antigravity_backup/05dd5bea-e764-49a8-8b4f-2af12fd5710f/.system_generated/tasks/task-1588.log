@@ -1,0 +1,4 @@
+src/middleware.ts
+find: src/types: Operation not permitted
+find: src/app: Operation not permitted
+src/lib/supabase/middleware.ts

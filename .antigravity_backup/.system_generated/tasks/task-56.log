@@ -1,0 +1,49 @@
+
+Using defaults for unprovided options:
+
+  --ts                    TypeScript (use --js for JavaScript)
+  --no-react-compiler     No React Compiler (use --react-compiler for React Compiler)
+  --agents-md             AGENTS.md (use --no-agents-md for No AGENTS.md)
+
+Creating a new Next.js app in /Users/lucamoni/Documents/Documenti - MacBook Pro di Luca/SCOUT/ScoutMaster 2.0/scoutmaster-app.
+
+Using npm.
+
+Initializing project with template: app-tw 
+
+
+Installing dependencies:
+- next
+- react
+- react-dom
+
+Installing devDependencies:
+- @tailwindcss/postcss
+- @types/node
+- @types/react
+- @types/react-dom
+- eslint
+- eslint-config-next
+- tailwindcss
+- typescript
+
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',
+npm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },
+npm warn EBADENGINE   current: { node: 'v23.10.0', npm: '11.6.2' }
+npm warn EBADENGINE }
+
+added 365 packages, and audited 366 packages in 2m
+
+147 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+Generating route types...
+✓ Types generated successfully
+
+Initialized a git repository.
+
+Success! Created scoutmaster-app at /Users/lucamoni/Documents/Documenti - MacBook Pro di Luca/SCOUT/ScoutMaster 2.0/scoutmaster-app
+
