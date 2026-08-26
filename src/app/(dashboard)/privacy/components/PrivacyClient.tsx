@@ -28,7 +28,8 @@ import {
   Eye,
   File,
   Paperclip,
-  FileUp
+  UserCheck,
+  Info
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -78,16 +79,14 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const [isArchivioModalOpen, setIsArchivioModalOpen] = useState(false)
   const [targetRagazzoForArchivio, setTargetRagazzoForArchivio] = useState<Ragazzo | null>(null)
   const [isUploadingToArchivio, setIsUploadingToArchivio] = useState(false)
-  const [selectedFileToUpload, setSelectedFileToUpload] = useState<File | null>(null)
-  const [uploadTitoloDoc, setUploadTitoloDoc] = useState('')
-  const [uploadTipoDoc, setUploadTipoDoc] = useState('foglio_privacy_firmato')
 
-  // Stato per Caricamento ed Analisi AI per Singolo Ragazzo o Generale
+  // Stato per Caricamento ed Analisi AI
   const [isAiUploadOpen, setIsAiUploadOpen] = useState(false)
   const [targetScoutForAi, setTargetScoutForAi] = useState<Ragazzo | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState<any>(null)
-  const [selectedDiscrepancies, setSelectedDiscrepancies] = useState<Record<string, boolean>>({})
+  const [selectedCategory, setSelectedCategory] = useState<string>('foglio_privacy_firmato')
+  const [shouldUpdateAnagrafica, setShouldUpdateAnagrafica] = useState<boolean>(true)
   const [scannedFileObj, setScannedFileObj] = useState<File | null>(null)
 
   // Stato per Azione di Gruppo / Squadriglia
@@ -143,13 +142,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
       .trim()
   }
 
-  const handleFileSelection = (file: File) => {
-    setSelectedFileToUpload(file)
-    if (!uploadTitoloDoc.trim()) {
-      setUploadTitoloDoc(cleanFileNameToTitle(file.name))
-    }
-  }
-
   const handleAddCustomDocForScout = async () => {
     if (!targetRagazzoForDoc || !newCustomDocTitolo.trim()) {
       toast.error('Inserisci il nome del documento specifico')
@@ -181,54 +173,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     toast.success('Documento personalizzato rimosso')
   }
 
-  // Caricamento Semplificato & Sincronizzato con Auto-Spunta
-  const handleConfirmUploadToArchivio = async () => {
-    if (!targetRagazzoForArchivio || !selectedFileToUpload) {
-      toast.error('Seleziona un file prima di salvare')
-      return
-    }
-    setIsUploadingToArchivio(true)
-
-    try {
-      const file = selectedFileToUpload
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const base64Url = e.target?.result as string
-        const finalTitle = uploadTitoloDoc.trim() || cleanFileNameToTitle(file.name)
-
-        const newArchivedItem: ArchivedDocumentFile = {
-          id: 'arch_' + Date.now(),
-          ragazzo_id: targetRagazzoForArchivio.id,
-          ragazzo_nome: `${targetRagazzoForArchivio.nome} ${targetRagazzoForArchivio.cognome}`,
-          titolo_documento: finalTitle,
-          tipo_documento: uploadTipoDoc,
-          file_name: file.name,
-          file_url: base64Url,
-          mime_type: file.type,
-          created_at: new Date().toISOString()
-        }
-
-        const updatedFiles = [newArchivedItem, ...archivedFiles]
-        await saveArchivedFilesToDb(updatedFiles)
-
-        if (uploadTipoDoc in targetRagazzoForArchivio) {
-          const field = uploadTipoDoc as PrivacyField
-          setRagazzi(prev => prev.map(r => r.id === targetRagazzoForArchivio.id ? { ...r, [field]: true } : r))
-          await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetRagazzoForArchivio.id)
-        }
-
-        toast.success(`File "${file.name}" caricato ed SPUNTATO in lista per ${targetRagazzoForArchivio.nome}!`)
-        setIsUploadingToArchivio(false)
-        setSelectedFileToUpload(null)
-        setUploadTitoloDoc('')
-      }
-      reader.readAsDataURL(file)
-    } catch {
-      toast.error('Impossibile salvare il file nell\'archivio')
-      setIsUploadingToArchivio(false)
-    }
-  }
-
   const handleDeleteArchivedFile = async (fileId: string) => {
     if (!confirm('Eliminare questo documento salvato dall\'archivio?')) return
     const updated = archivedFiles.filter(af => af.id !== fileId)
@@ -246,12 +190,11 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     await supabase.from('ragazzi').update({ [field]: newValue } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
   }
 
-  // Scansione ed Analisi IA Documento (Generale o per Singolo Ragazzo)
+  // Scansione ed Analisi IA Documento
   const handleFileUploadWithAi = async (file: File) => {
     setIsScanning(true)
     setScanResult(null)
     setScannedFileObj(file)
-    setSelectedDiscrepancies({})
 
     const formData = new FormData()
     formData.append('file', file)
@@ -269,12 +212,18 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
       setScanResult(result)
       
-      if (result.discrepancies && result.discrepancies.length > 0) {
-        const initialDiscState: Record<string, boolean> = {}
-        result.discrepancies.forEach((d: any) => {
-          initialDiscState[d.field] = true
-        })
-        setSelectedDiscrepancies(initialDiscState)
+      // Auto-seleziona la categoria basata sul riconoscimento IA
+      if (result.extracted) {
+        const ext = result.extracted
+        if (ext.scheda_medica_ci || ext.tipo_documento_riconosciuto?.includes('Invernale')) {
+          setSelectedCategory('scheda_medica_ci')
+        } else if (ext.scheda_medica_ce || ext.tipo_documento_riconosciuto?.includes('Estivo')) {
+          setSelectedCategory('scheda_medica_ce')
+        } else if (ext.ricevuta_censimento || ext.tipo_documento_riconosciuto?.includes('Censimento')) {
+          setSelectedCategory('ricevuta_censimento')
+        } else {
+          setSelectedCategory('foglio_privacy_firmato')
+        }
       }
 
       toast.success('Documento analizzato con successo dall\'IA!')
@@ -285,7 +234,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     }
   }
 
-  const autoArchiveScannedFile = async (ragazzoId: string, ragazzoNome: string, tipoDoc: string) => {
+  const autoArchiveScannedFile = async (ragazzoId: string, ragazzoNome: string, tipoDocLabel: string) => {
     if (!scannedFileObj) return
     const reader = new FileReader()
     reader.onload = async (e) => {
@@ -295,8 +244,8 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         id: 'arch_' + Date.now(),
         ragazzo_id: ragazzoId,
         ragazzo_nome: ragazzoNome,
-        titolo_documento: `${tipoDoc} (${titleClean})`,
-        tipo_documento: tipoDoc,
+        titolo_documento: `${tipoDocLabel} (${titleClean})`,
+        tipo_documento: selectedCategory,
         file_name: scannedFileObj.name,
         file_url: base64Url,
         mime_type: scannedFileObj.type,
@@ -308,7 +257,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     reader.readAsDataURL(scannedFileObj)
   }
 
-  // Salva Documento per Singolo Ragazzo Selezionato
+  // Salva Documento e Spunta Categoria Selezionata
   const handleSaveDocForTargetScout = async () => {
     const scout = targetScoutForAi || scanResult?.matchedScout
     if (!scout || !scanResult || !scanResult.extracted) return
@@ -316,30 +265,36 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
     const updatePayload: Record<string, any> = {}
 
-    if (ext.foglio_privacy_firmato) updatePayload.foglio_privacy_firmato = true
-    if (ext.scheda_medica_ci) updatePayload.scheda_medica_ci = true
-    if (ext.scheda_medica_ce) updatePayload.scheda_medica_ce = true
-    if (ext.ricevuta_censimento) updatePayload.ricevuta_censimento = true
+    // Imposta la spunta per la categoria scelta dall'utente nella tendina
+    if (selectedCategory in scout || ['foglio_privacy_firmato', 'partecipazione_ci', 'scheda_medica_ci', 'partecipazione_ce', 'scheda_medica_ce', 'quota_censimento', 'ricevuta_censimento'].includes(selectedCategory)) {
+      updatePayload[selectedCategory] = true
+    }
 
-    if (scanResult.discrepancies) {
-      scanResult.discrepancies.forEach((d: any) => {
-        if (selectedDiscrepancies[d.field]) {
-          updatePayload[d.field] = d.extractedValue
-        }
-      })
+    // Se l'utente vuole applicare anche i dati anagrafici estratti dall'IA
+    if (shouldUpdateAnagrafica && ext) {
+      if (ext.codice_fiscale) updatePayload.codice_fiscale = ext.codice_fiscale
+      if (ext.data_nascita) updatePayload.data_nascita = ext.data_nascita
+      if (ext.pattuglia) updatePayload.pattuglia = ext.pattuglia
+      if (ext.telefono_ragazzo) updatePayload.telefono_ragazzo = ext.telefono_ragazzo
+      if (ext.genitore_1_nome) updatePayload.genitore_1_nome = ext.genitore_1_nome
+      if (ext.genitore_1_telefono) updatePayload.genitore_1_telefono = ext.genitore_1_telefono
+      if (ext.genitore_2_nome) updatePayload.genitore_2_nome = ext.genitore_2_nome
+      if (ext.genitore_2_telefono) updatePayload.genitore_2_telefono = ext.genitore_2_telefono
     }
 
     try {
       const { error } = await supabase.from('ragazzi').update(updatePayload).eq('id', scout.id)
       if (error) throw error
 
-      await autoArchiveScannedFile(scout.id, `${scout.nome} ${scout.cognome}`, ext.tipo_documento_riconosciuto || 'Documento Scout')
+      await autoArchiveScannedFile(scout.id, `${scout.nome} ${scout.cognome}`, getCategoryLabel(selectedCategory))
 
-      toast.success(`Documento ed anagrafica di ${scout.nome} ${scout.cognome} salvati ed aggiornati!`)
+      toast.success(`Documento per ${scout.nome} ${scout.cognome} salvato in "${getCategoryLabel(selectedCategory)}" ed anagrafica aggiornata!`)
       setRagazzi(prev => prev.map(r => r.id === scout.id ? { ...r, ...updatePayload } : r))
       setIsAiUploadOpen(false)
+      setScanResult(null)
+      setScannedFileObj(null)
     } catch (err: any) {
-      toast.error(err.message || 'Impossibile aggiornare l\'anagrafica')
+      toast.error(err.message || 'Impossibile salvare il documento')
     }
   }
 
@@ -361,26 +316,24 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         genitore_1_telefono: ext.genitore_1_telefono || null,
         genitore_2_nome: ext.genitore_2_nome || null,
         genitore_2_telefono: ext.genitore_2_telefono || null,
-        foglio_privacy_firmato: ext.foglio_privacy_firmato || true,
-        scheda_medica_ci: ext.scheda_medica_ci || false,
-        scheda_medica_ce: ext.scheda_medica_ce || false,
-        ricevuta_censimento: ext.ricevuta_censimento || false
+        [selectedCategory]: true
       }
 
       const { data, error } = await supabase.from('ragazzi').insert(newRagazzoPayload).select().single()
       if (error) throw error
 
-      await autoArchiveScannedFile(data.id, `${data.nome} ${data.cognome}`, ext.tipo_documento_riconosciuto || 'Modulo Privacy')
+      await autoArchiveScannedFile(data.id, `${data.nome} ${data.cognome}`, getCategoryLabel(selectedCategory))
 
       toast.success(`Nuovo ragazzo ${data.nome} ${data.cognome} aggiunto ed archiviato!`)
       setRagazzi(prev => [...prev, data])
       setIsAiUploadOpen(false)
+      setScanResult(null)
+      setScannedFileObj(null)
     } catch (err: any) {
       toast.error(err.message || 'Impossibile creare il nuovo ragazzo')
     }
   }
 
-  // Applica aggiornamento di gruppo per squadriglia
   const handleApplyBulk = async () => {
     setIsApplyingBulk(true)
     try {
@@ -412,6 +365,19 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
   const hasArchivedFile = (ragazzoId: string, fieldType: PrivacyField) => {
     return archivedFiles.some(af => af.ragazzo_id === ragazzoId && (af.tipo_documento === fieldType || af.tipo_documento.includes(fieldType)))
+  }
+
+  const getCategoryLabel = (catKey: string) => {
+    switch (catKey) {
+      case 'foglio_privacy_firmato': return 'Modulo Privacy AGESCI'
+      case 'partecipazione_ci': return 'Autorizzazione Campo Invernale'
+      case 'scheda_medica_ci': return 'Scheda Medica Campo Invernale'
+      case 'partecipazione_ce': return 'Autorizzazione Campo Estivo'
+      case 'scheda_medica_ce': return 'Scheda Medica Campo Estivo'
+      case 'quota_censimento': return 'Quota Censimento'
+      case 'ricevuta_censimento': return 'Ricevuta Censimento'
+      default: return 'Certificato Medico / Altro Documento'
+    }
   }
 
   const renderCell = (r: Ragazzo, field: PrivacyField) => {
@@ -483,6 +449,12 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     return `https://wa.me/${finalPhone}?text=${encodeURIComponent(testo)}`
   }
 
+  // Estrae i dati anagrafici utili per la preview nel box
+  const hasExtractedAnagrafica = (ext: any) => {
+    if (!ext) return false
+    return !!(ext.codice_fiscale || ext.data_nascita || ext.pattuglia || ext.telefono_ragazzo || ext.genitore_1_nome || ext.genitore_1_telefono || ext.genitore_2_nome || ext.genitore_2_telefono)
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Intestazione */}
@@ -493,7 +465,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
             Documenti & Privacy Reparto
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestisci le consegne e carica i documenti con IA sia in generale che per ogni singola persona.
+            Gestisci le consegne, assegna le categorie ai documenti e controlla l'estrazione anagrafica IA.
           </p>
         </div>
 
@@ -695,26 +667,26 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         </div>
       </div>
 
-      {/* MODALE CARICAMENTO ED ANALISI AI (PER PERSONA O GENERALE) */}
+      {/* MODALE CARICAMENTO ED ANALISI AI CON TENDINA CATEGORIA E SPECCHIETTO ANAGRAFICA */}
       <Dialog open={isAiUploadOpen} onOpenChange={setIsAiUploadOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg text-purple-900">
               <Sparkles className="w-5 h-5 text-amber-500" />
               {targetScoutForAi ? `Carica / Modifica Documento AI per ${targetScoutForAi.nome} ${targetScoutForAi.cognome}` : 'Inserisci Documento Generale AI'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Carica una foto o PDF: Gemini Vision AI riconoscerà automaticamente il tipo di documento, spunterà la casella ed aggiornerà i dati!
+              Seleziona la foto o il PDF del documento. Gemini Vision AI analizzerà i dati e ti consentirà di scegliere la Categoria di assegnazione!
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 text-xs">
             <div className="border-2 border-dashed border-purple-200 rounded-xl p-6 text-center hover:border-purple-500 transition-colors bg-purple-50/50">
               {isScanning ? (
                 <div className="flex flex-col items-center justify-center space-y-2 py-4">
                   <Loader2 className="w-8 h-8 animate-spin text-purple-700" />
                   <span className="text-sm font-semibold text-purple-900">Analisi Gemini Vision IA in corso...</span>
-                  <span className="text-xs text-slate-500">Riconoscimento tipo documento e verifica anagrafica...</span>
+                  <span className="text-xs text-slate-500">Riconoscimento testo ed estrazione dati anagrafici...</span>
                 </div>
               ) : (
                 <label className="cursor-pointer flex flex-col items-center justify-center space-y-2">
@@ -733,31 +705,79 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
               )}
             </div>
 
-            {/* RISULTATO ANALISI AI ED AZIONE SALVATAGGIO */}
+            {/* DOPO L'ANALISI: SELEZIONE CATEGORIA + SPECCHIETTO ANAGRAFICA */}
             {scanResult && scanResult.extracted && (
               <div className="space-y-4 pt-2">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-900 space-y-2">
-                  <div className="flex items-center justify-between font-bold text-sm text-emerald-950">
-                    <span className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Documento Riconosciuto: {scanResult.extracted.tipo_documento_riconosciuto}
-                    </span>
-                    <Badge className="bg-emerald-600 text-white text-[10px]">IA Verificato</Badge>
-                  </div>
-
-                  <div className="text-emerald-800">
-                    Documento associato a: <strong>{targetScoutForAi ? `${targetScoutForAi.nome} ${targetScoutForAi.cognome}` : `${scanResult.extracted.nome || 'Esploratore'} ${scanResult.extracted.cognome || ''}`}</strong>
+                {/* TENDINA SELEZIONE CATEGORIA DOCUMENTO */}
+                <div className="space-y-1.5 bg-purple-50 p-3.5 rounded-xl border border-purple-200">
+                  <Label className="font-bold text-purple-950 flex items-center gap-1.5 text-xs">
+                    <FileText className="w-4 h-4 text-purple-700" /> Categoria / Casella Documento da Assegnare:
+                  </Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="h-9 bg-white font-medium">
+                      <SelectValue placeholder="Seleziona Categoria Documento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="foglio_privacy_firmato">Modulo Privacy AGESCI</SelectItem>
+                      <SelectItem value="partecipazione_ci">Autorizzazione Campo Invernale</SelectItem>
+                      <SelectItem value="scheda_medica_ci">Scheda Medica Campo Invernale</SelectItem>
+                      <SelectItem value="partecipazione_ce">Autorizzazione Campo Estivo</SelectItem>
+                      <SelectItem value="scheda_medica_ce">Scheda Medica Campo Estivo</SelectItem>
+                      <SelectItem value="quota_censimento">Quota Censimento</SelectItem>
+                      <SelectItem value="ricevuta_censimento">Ricevuta Censimento</SelectItem>
+                      <SelectItem value="Certificato Medico">Certificato Medico / Altro Documento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="text-[11px] text-purple-700 mt-1">
+                    Il file verrà archiviato e la spunta per <strong>"{getCategoryLabel(selectedCategory)}"</strong> verrà impostata su Consegnato (✅).
                   </div>
                 </div>
 
-                {/* BOTTONE SALVATAGGIO PER SINGOLO RAGAZZO O NUOVO */}
+                {/* SPECCHIETTO ESITO ANAGRAFICA E DATI RILEVATI DALL'IA */}
+                {hasExtractedAnagrafica(scanResult.extracted) ? (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 space-y-2 text-emerald-950">
+                    <div className="flex items-center justify-between font-bold text-xs">
+                      <span className="flex items-center gap-1.5 text-emerald-800">
+                        <UserCheck className="w-4 h-4 text-emerald-600" />
+                        Dati Anagrafici Rilevati dall'IA:
+                      </span>
+                      <Badge className="bg-emerald-600 text-white text-[10px]">Trovati Dati</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-white p-2.5 rounded-lg border border-emerald-200/80">
+                      {scanResult.extracted.codice_fiscale && <div><strong>Codice Fiscale:</strong> {scanResult.extracted.codice_fiscale}</div>}
+                      {scanResult.extracted.data_nascita && <div><strong>Data Nascita:</strong> {scanResult.extracted.data_nascita}</div>}
+                      {scanResult.extracted.pattuglia && <div><strong>Pattuglia:</strong> {scanResult.extracted.pattuglia}</div>}
+                      {scanResult.extracted.genitore_1_nome && <div><strong>Genitore 1:</strong> {scanResult.extracted.genitore_1_nome} ({scanResult.extracted.genitore_1_telefono || ''})</div>}
+                      {scanResult.extracted.genitore_2_nome && <div><strong>Genitore 2:</strong> {scanResult.extracted.genitore_2_nome} ({scanResult.extracted.genitore_2_telefono || ''})</div>}
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <Checkbox 
+                        id="update_anag" 
+                        checked={shouldUpdateAnagrafica} 
+                        onCheckedChange={(v) => setShouldUpdateAnagrafica(!!v)}
+                      />
+                      <Label htmlFor="update_anag" className="text-xs text-emerald-900 font-medium cursor-pointer">
+                        Aggiorna o completa i dati dell'anagrafica ragazzi con questi valori
+                      </Label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span>Nessun dato anagrafico aggiuntivo presente nel documento. Verranno salvate la categoria ed il file in archivio.</span>
+                  </div>
+                )}
+
+                {/* PULSANTE CONFERMA SALVATAGGIO */}
                 <Button 
                   onClick={targetScoutForAi ? handleSaveDocForTargetScout : (scanResult.isNewScout ? handleConfirmNewScoutFromOcr : handleSaveDocForTargetScout)} 
                   size="sm" 
-                  className="bg-purple-700 hover:bg-purple-800 text-white font-semibold text-xs gap-1.5 w-full py-2.5"
+                  className="bg-purple-700 hover:bg-purple-800 text-white font-semibold text-xs gap-1.5 w-full py-2.5 shadow-sm"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Salva Documento in Archivio ed Spunta Consegnato
+                  Salva Documento in "{getCategoryLabel(selectedCategory)}" ed Spunta Consegnato
                 </Button>
               </div>
             )}
@@ -774,7 +794,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
               Archivio Digitale Documenti {targetRagazzoForArchivio ? `di ${targetRagazzoForArchivio.nome} ${targetRagazzoForArchivio.cognome}` : 'Reparto'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Carica un file PDF o Foto: la casella corrispondente risulterà spuntata in automatico.
+              Visualizza e gestisci i file originali salvati in archivio.
             </DialogDescription>
           </DialogHeader>
 
