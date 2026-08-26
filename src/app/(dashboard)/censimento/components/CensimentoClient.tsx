@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Save } from 'lucide-react'
+import { Save, Calculator, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Card } from '@/components/ui/card'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 
@@ -27,6 +28,7 @@ export default function CensimentoClient({
   const [quotaFratelli, setQuotaFratelli] = useState(initialQuotaFratelli)
   const [isSaving, setIsSaving] = useState(false)
   const [filterPattuglia, setFilterPattuglia] = useState<string>('TUTTE')
+  const [calcNumFratelli, setCalcNumFratelli] = useState<number>(2)
 
   const supabase = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,6 +37,14 @@ export default function CensimentoClient({
 
   const numStandard = Number(quotaStandard) || 45
   const numFratelli = Number(quotaFratelli) || 35
+
+  // Calcolatore Quota Censimento Fratelli
+  const totaleCensimentoCalc = calcNumFratelli > 1 
+    ? numStandard + (calcNumFratelli - 1) * numFratelli 
+    : numStandard
+  const risparmioFratelli = calcNumFratelli > 1 
+    ? (calcNumFratelli * numStandard) - totaleCensimentoCalc 
+    : 0
 
   const handleSaveQuota = async () => {
     setIsSaving(true)
@@ -73,14 +83,58 @@ export default function CensimentoClient({
     <div className="p-6 md:p-10 space-y-8 max-w-6xl mx-auto text-foreground">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Censimento Annuale</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Gestisci le quote del censimento e le ricevute</p>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Censimento Annuale Reparto</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">Gestisci le quote del censimento, le riduzioni fratelli e la consegna delle ricevute cartacee</p>
       </div>
+
+      {/* Widget Calcolatore Quota Censimento Fratelli (ESCLUSIVAMENTE IN CENSIMENTO) */}
+      <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-5 rounded-2xl shadow-2xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-amber-950 dark:text-amber-300 font-bold text-base">
+              <Calculator className="w-5 h-5 text-amber-600 shrink-0" />
+              Calcolatore Quota Censimento Fratelli
+            </div>
+            <p className="text-xs text-amber-900/80 dark:text-amber-400">
+              Calcola la spesa totale censimento per famiglie con più ragazzi iscritti (1° figlio: €{numStandard} • Fratelli: €{numFratelli}).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-amber-200 shadow-2xs shrink-0">
+            <div className="space-y-1 text-xs">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Numero Fratelli:</span>
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 w-7 p-0" 
+                  onClick={() => setCalcNumFratelli(Math.max(1, calcNumFratelli - 1))}
+                >-</Button>
+                <span className="font-bold text-sm w-5 text-center">{calcNumFratelli}</span>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 w-7 p-0" 
+                  onClick={() => setCalcNumFratelli(calcNumFratelli + 1)}
+                >+</Button>
+              </div>
+            </div>
+
+            <div className="border-l border-slate-200 dark:border-slate-800 pl-4 space-y-0.5">
+              <div className="text-xs text-slate-500 font-medium">Totale Famiglia:</div>
+              <div className="text-lg font-bold text-amber-950 dark:text-amber-200 tabular-nums">€{totaleCensimentoCalc}.00</div>
+              {risparmioFratelli > 0 && (
+                <div className="text-[10px] font-semibold text-emerald-600">Risparmio: €{risparmioFratelli}.00</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Card Impostazioni Censimento */}
       <div className="border rounded-xl p-6 bg-card space-y-4 shadow-2xs">
         <div>
-          <h2 className="text-sm font-semibold">Impostazioni Censimento</h2>
+          <h2 className="text-sm font-semibold">Impostazioni Tariffe Censimento</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Definisci la quota standard e la quota scontata per i fratelli per quest'anno</p>
         </div>
 
