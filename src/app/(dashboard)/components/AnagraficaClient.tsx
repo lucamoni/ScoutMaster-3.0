@@ -66,9 +66,10 @@ const getSquadrigliaBadge = (pattugliaNome?: string | null) => {
   return { icon: Compass, bg: 'bg-sky-50 text-sky-900 border-sky-200' }
 }
 
-import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 export default function AnagraficaClient({ initialData, initialPattuglie, initialCandidature }: { initialData: Ragazzo[], initialPattuglie: Pattuglia[], initialCandidature?: Candidatura[] }) {
+  const router = useRouter()
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialData)
   const [squadriglie, setSquadriglie] = useState<Pattuglia[]>(initialPattuglie)
   const [candidature] = useState<Candidatura[]>(initialCandidature || [])
@@ -122,10 +123,15 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     )
     const updateData = { [field]: value } as Database['public']['Tables']['ragazzi']['Update']
     const { error } = await supabase.from('ragazzi').update(updateData).eq('id', id)
-    if (error) console.error('Errore:', error)
+    if (error) {
+      console.error('Errore aggiornamento campo:', error)
+      toast.error("Errore aggiornamento: " + error.message)
+      return
+    }
     if (field === 'attivo' && value === false) {
       setRagazzi(prev => prev.filter(r => r.id !== id))
     }
+    router.refresh()
   }
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -137,23 +143,38 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     cleanData.nome = formData.nome
     cleanData.cognome = formData.cognome
 
+    if (cleanData.importo_censimento !== null && cleanData.importo_censimento !== undefined) {
+      const num = Number(cleanData.importo_censimento)
+      cleanData.importo_censimento = isNaN(num) ? null : num
+    }
+
     if (editingId) {
       const { error } = await supabase.from('ragazzi').update(cleanData as Database['public']['Tables']['ragazzi']['Update']).eq('id', editingId)
-      if (!error) {
-        setRagazzi(prev => prev.map(r => r.id === editingId ? { ...r, ...cleanData } as Ragazzo : r))
-        setIsOpen(false)
-        setEditingId(null)
-        setFormData(defaultForm)
-        toast.success("Scheda Taccuino aggiornata!")
+      if (error) {
+        console.error("Errore durante l'aggiornamento anagrafica:", error)
+        toast.error("Errore salvataggio: " + error.message)
+        return
       }
+      setRagazzi(prev => prev.map(r => r.id === editingId ? { ...r, ...cleanData } as Ragazzo : r))
+      setIsOpen(false)
+      setEditingId(null)
+      setFormData(defaultForm)
+      toast.success("Scheda Taccuino aggiornata!")
+      router.refresh()
     } else {
       cleanData.attivo = true
       const { data, error } = await supabase.from('ragazzi').insert(cleanData as Database['public']['Tables']['ragazzi']['Insert']).select().single()
-      if (!error && data) {
+      if (error) {
+        console.error("Errore inserimento ragazzo:", error)
+        toast.error("Errore aggiunta ragazzo: " + error.message)
+        return
+      }
+      if (data) {
         setRagazzi([...ragazzi, data].sort((a, b) => (a.pattuglia || '').localeCompare(b.pattuglia || '')))
         setIsOpen(false)
         setFormData(defaultForm)
         toast.success("Nuovo esploratore aggiunto al Taccuino!")
+        router.refresh()
       }
     }
   }
