@@ -26,6 +26,7 @@ import {
   Sparkles,
   FileText,
   FileCheck,
+  FolderArchive,
   Globe
 } from 'lucide-react'
 import { CassaBot } from '@/components/CassaBot'
@@ -118,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       links: [
         { name: 'Documenti & Privacy', href: '/privacy', icon: FileText },
         { name: 'Modelli Vuoti', href: '/modelli-vuoti', icon: FileCheck },
+        { name: 'Archivio Documenti', href: '/archivio-documenti', icon: FolderArchive },
       ]
     },
     {
