@@ -19,6 +19,10 @@ import { Label } from '@/components/ui/label'
 import { Save, CheckCheck, XCircle, CheckCircle2, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+import { createClient } from '@/lib/supabase/client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Quote = Database['public']['Tables']['quote_mensili']['Row']
 
@@ -38,16 +42,33 @@ export default function QuoteClient({
   currentYear: string,
   initialQuotaStandard: number
 }) {
+  const router = useRouter()
   const [quote, setQuote] = useState<Quote[]>(initialQuote)
   const [quotaStandard, setQuotaStandard] = useState(initialQuotaStandard.toString())
   const [isSavingQuota, setIsSavingQuota] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isBulkLoading, setIsBulkLoading] = useState(false)
   
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('quote_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quote_mensili' }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const updated = payload.new as Quote
+          setQuote(prev => {
+            const filtered = prev.filter(q => !(q.ragazzo_id === updated.ragazzo_id && normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(updated.anno_scout)))
+            return [...filtered, updated]
+          })
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase])
 
   const ragazziFiltrati = ragazzi.filter(r => {
     const full = `${r.nome || ''} ${r.cognome || ''}`.toLowerCase()

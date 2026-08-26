@@ -24,6 +24,7 @@ import {
   ArrowLeft
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
 
@@ -182,6 +183,8 @@ export default function SaldaOraClient({
     }
   }
 
+  const router = useRouter()
+
   // Azione 1: Salda Tutto per un singolo ragazzo in 1-Click
   const handleSaldaTutto = async (ragazzo: Ragazzo) => {
     setLoadingBoyId(ragazzo.id)
@@ -208,6 +211,15 @@ export default function SaldaOraClient({
         } else {
           await supabase.from('quote_mensili').insert({ ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload })
         }
+
+        setQuote(prev => {
+          const filtered = prev.filter(q => !(q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear))
+          const existing = prev.find(q => q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)
+          const updatedObj = existing 
+            ? { ...existing, ...updatePayload }
+            : { id: existingQ?.id || 'temp', ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload } as Quota
+          return [...filtered, updatedObj]
+        })
       }
 
       // C. Salda Eventi
@@ -219,9 +231,19 @@ export default function SaldaOraClient({
           } else {
             await supabase.from('partecipazioni_eventi').insert({ ragazzo_id: ragazzo.id, evento_id: evDetail.eventoId, riscosso: true, stato_presenza: 'Presente' } as Database['public']['Tables']['partecipazioni_eventi']['Insert'])
           }
+
+          setPartecipazioni(prev => {
+            const filtered = prev.filter(p => !(p.ragazzo_id === ragazzo.id && p.evento_id === evDetail.eventoId))
+            const existing = prev.find(p => p.ragazzo_id === ragazzo.id && p.evento_id === evDetail.eventoId)
+            const updatedP = existing
+              ? { ...existing, riscosso: true }
+              : { id: existingP?.id || 'temp', ragazzo_id: ragazzo.id, evento_id: evDetail.eventoId, riscosso: true, stato_presenza: 'Presente' } as Partecipazione
+            return [...filtered, updatedP]
+          })
         }
       }
 
+      router.refresh()
       toast.success(`Tutte le pendenze di ${ragazzo.nome} ${ragazzo.cognome} sono state saldate!`, { id: `salda-${ragazzo.id}` })
     } catch (err: any) {
       toast.error(`Errore nel saldare: ${err.message}`, { id: `salda-${ragazzo.id}` })
@@ -268,6 +290,15 @@ export default function SaldaOraClient({
         await supabase.from('quote_mensili').insert({ ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload })
       }
 
+      setQuote(prev => {
+        const filtered = prev.filter(q => !(q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear))
+        const existing = prev.find(q => q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear)
+        const updatedObj = existing 
+          ? { ...existing, ...monthUpdatePayload }
+          : { id: existingQ?.id || 'temp', ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload } as Quota
+        return [...filtered, updatedObj]
+      })
+
       // Eventi
       const allBoyParts = partecipazioni.filter(p => p.ragazzo_id === r.id)
       for (const ev of eventi) {
@@ -280,8 +311,18 @@ export default function SaldaOraClient({
         } else if (isPaid) {
           await supabase.from('partecipazioni_eventi').insert({ ragazzo_id: r.id, evento_id: ev.id, riscosso: true, stato_presenza: 'Presente' } as Database['public']['Tables']['partecipazioni_eventi']['Insert'])
         }
+
+        setPartecipazioni(prev => {
+          const filtered = prev.filter(p => !(p.ragazzo_id === r.id && p.evento_id === ev.id))
+          const existing = prev.find(p => p.ragazzo_id === r.id && p.evento_id === ev.id)
+          const updatedP = existing
+            ? { ...existing, riscosso: isPaid }
+            : { id: existingP?.id || 'temp', ragazzo_id: r.id, evento_id: ev.id, riscosso: isPaid, stato_presenza: 'Presente' } as Partecipazione
+          return [...filtered, updatedP]
+        })
       }
 
+      router.refresh()
       toast.success(`Pagamenti aggiornati per ${r.nome}!`, { id: `save-modal-${r.id}` })
       setSelectedBoyForModal(null)
     } catch (err: any) {

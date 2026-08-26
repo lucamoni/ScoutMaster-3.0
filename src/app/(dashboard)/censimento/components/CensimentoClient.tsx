@@ -14,6 +14,8 @@ import { Card } from '@/components/ui/card'
 
 import { createClient } from '@/lib/supabase/client'
 
+import { useEffect } from 'react'
+
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 
 export default function CensimentoClient({
@@ -33,6 +35,22 @@ export default function CensimentoClient({
   const [calcNumFratelli, setCalcNumFratelli] = useState<number>(2)
 
   const supabase = createClient()
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('censimento_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ragazzi' }, (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          const updated = payload.new as Ragazzo
+          setRagazzi(prev => prev.map(r => r.id === updated.id ? updated : r))
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase])
 
   const numStandard = Number(quotaStandard) || 45
   const numFratelli = Number(quotaFratelli) || 35
