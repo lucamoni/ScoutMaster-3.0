@@ -60,17 +60,40 @@ export async function POST(req: Request) {
       }
     }
 
+    const checkUpper = ((extractedTitle || '') + ' ' + cleanText + ' ' + url).toUpperCase()
+    let initialBranca = 'EG'
+    let initialCategoria = 'Specialita'
+    let initialCosto = 35
+
+    if (
+      url.includes('CID=4000000') ||
+      checkUpper.includes('CFT') ||
+      checkUpper.includes('CFM') ||
+      checkUpper.includes('CFA') ||
+      checkUpper.includes('ROSS') ||
+      checkUpper.includes('TIROCINANTI') ||
+      checkUpper.includes('FORMAZIONE') ||
+      checkUpper.includes('CAPI')
+    ) {
+      initialBranca = 'CAPI'
+      if (checkUpper.includes('CFT') || checkUpper.includes('TIROCINANTI')) initialCategoria = 'CFT'
+      else if (checkUpper.includes('CFM')) initialCategoria = 'CFM'
+      else if (checkUpper.includes('CFA')) initialCategoria = 'CFA'
+      else initialCategoria = 'Altro'
+      initialCosto = 60
+    }
+
     let eventData = {
       titolo: extractedTitle || 'Evento BuonaCaccia',
-      categoria: 'Specialita',
-      branca: 'EG',
+      categoria: initialCategoria,
+      branca: initialBranca,
       regione: null,
       luogo: null,
       data_inizio: new Date().toISOString().split('T')[0],
       data_fine: null,
       apertura_iscrizioni: null,
       chiusura_iscrizioni: null,
-      costo_evento: 0,
+      costo_evento: initialCosto,
       note: null
     }
 
@@ -131,6 +154,14 @@ ${cleanText}`
 
     if (isInvalidTitle(eventData.titolo)) {
       eventData.titolo = extractedTitle && !isInvalidTitle(extractedTitle) ? extractedTitle : 'Evento BuonaCaccia'
+    }
+
+    // Forza CAPI se dal titolo si evince chiaramente un evento formazione capi
+    if (initialBranca === 'CAPI') {
+      eventData.branca = 'CAPI'
+      if (eventData.categoria === 'Specialita' || eventData.categoria === 'Competenza' || !eventData.categoria) {
+        eventData.categoria = initialCategoria
+      }
     }
 
     return NextResponse.json({ data: eventData })

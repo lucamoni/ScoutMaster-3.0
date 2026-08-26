@@ -85,7 +85,35 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         supabase.from('eventi_buonacaccia' as any).select('*').order('data_inizio', { ascending: true }),
         supabase.from('candidature_buonacaccia' as any).select('*')
       ])
-      if (eventiRes.data) setEventi(eventiRes.data as unknown as Evento[])
+      if (eventiRes.data) {
+        const cleanedEventi = (eventiRes.data as unknown as Evento[]).map(ev => {
+          const upper = (ev.titolo || '').toUpperCase()
+          const isCapiEvent = (
+            ev.branca === 'CAPI' ||
+            upper.includes('CFT') ||
+            upper.includes('CFM') ||
+            upper.includes('CFA') ||
+            upper.includes('ROSS') ||
+            upper.includes('TIROCINANTI') ||
+            upper.includes('FORMAZIONE')
+          )
+          if (isCapiEvent) {
+            let cat = ev.categoria
+            if (cat === 'Specialita' || cat === 'Competenza' || !cat) {
+              if (upper.includes('CFT') || upper.includes('TIROCINANTI')) cat = 'CFT'
+              else if (upper.includes('CFM')) cat = 'CFM'
+              else if (upper.includes('CFA')) cat = 'CFA'
+              else cat = 'Altro'
+            }
+            if (ev.branca !== 'CAPI' || ev.categoria !== cat) {
+              supabase.from('eventi_buonacaccia' as any).update({ branca: 'CAPI', categoria: cat }).eq('id', ev.id).then(() => {})
+              return { ...ev, branca: 'CAPI', categoria: cat }
+            }
+          }
+          return ev
+        })
+        setEventi(cleanedEventi)
+      }
       if (candRes.data) {
         const ragazziMap = new Map(ragazzi.map((r: any) => [r.id, r]))
         const mapped = (candRes.data as any[]).map(c => {
@@ -168,25 +196,26 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
   }
 
-  const deriveEventMetadata = (title: string, hintBranca?: 'EG' | 'CAPI') => {
+  const deriveEventMetadata = (title: string, hintBranca?: 'EG' | 'CAPI', hintCategoria?: string) => {
     const upper = title.toUpperCase()
     let branca: 'EG' | 'CAPI' = hintBranca || 'EG'
-    let categoria = 'Specialita'
+    let categoria = hintCategoria || 'Specialita'
     let costo = 35
 
-    if (hintBranca === 'CAPI' || upper.includes('CFT') || upper.includes('CFM') || upper.includes('CFA') || upper.includes('ROSS') || upper.includes('CAPI') || upper.includes('FORMAZIONE')) {
+    if (hintBranca === 'CAPI' || upper.includes('CFT') || upper.includes('CFM') || upper.includes('CFA') || upper.includes('ROSS') || upper.includes('CAPI') || upper.includes('FORMAZIONE') || upper.includes('TIROCINANTI')) {
       branca = 'CAPI'
-      if (upper.includes('CFT')) categoria = 'CFT'
-      else if (upper.includes('CFM')) categoria = 'CFM'
-      else if (upper.includes('CFA')) categoria = 'CFA'
-      else categoria = 'Altro'
+      if (upper.includes('CFT') || upper.includes('TIROCINANTI') || hintCategoria === 'CFT') categoria = 'CFT'
+      else if (upper.includes('CFM') || hintCategoria === 'CFM') categoria = 'CFM'
+      else if (upper.includes('CFA') || hintCategoria === 'CFA') categoria = 'CFA'
+      else if (upper.includes('ROSS')) categoria = 'Altro'
+      else categoria = hintCategoria && hintCategoria !== 'Specialita' ? hintCategoria : 'CFT'
       costo = 60
     } else {
       branca = 'EG'
       if (upper.includes('COMPETENZA')) categoria = 'Competenza'
       else if (upper.includes('ORME') || upper.includes('PICCOLE')) categoria = 'Piccole Orme'
       else if (upper.includes('ESTIVO')) { categoria = 'Specialita'; costo = 150; }
-      else categoria = 'Specialita'
+      else categoria = hintCategoria || 'Specialita'
     }
 
     return { branca, categoria, costo }
@@ -199,7 +228,14 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   }
 
   // Auto-import via URL o Catalogo
-  const handleImport = useCallback(async (urlParam?: string, directTitle?: string, directDate?: string, directLuogo?: string) => {
+  const handleImport = useCallback(async (
+    urlParam?: string, 
+    directTitle?: string, 
+    directDate?: string, 
+    directLuogo?: string,
+    directCategoria?: string,
+    directBranca?: 'EG' | 'CAPI'
+  ) => {
     const targetUrl = typeof urlParam === 'string' ? urlParam : importUrl
     if (!targetUrl) {
       toast.error('Inserisci l\'URL dell\'evento BuonaCaccia')
@@ -207,8 +243,8 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
     setIsImporting(true)
     try {
-      const activeCategoryHint: 'EG' | 'CAPI' = (isLinkModalOpen && linkModalTab === 'CAPI') || (!isLinkModalOpen && activeTab === 'capi') ? 'CAPI' : 'EG'
-      const derivedMeta = deriveEventMetadata(directTitle || '', activeCategoryHint)
+      const activeCategoryHint: 'EG' | 'CAPI' = directBranca || ((isLinkModalOpen && linkModalTab === 'CAPI') || (!isLinkModalOpen && activeTab === 'capi') ? 'CAPI' : 'EG')
+      const derivedMeta = deriveEventMetadata(directTitle || '', activeCategoryHint, directCategoria)
       const parsedDates = parseDateRangeString(directDate)
 
       const initialTitle = !isGenericTitle(directTitle) ? directTitle! : 'Evento BuonaCaccia'
@@ -232,7 +268,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         const { data } = await res.json()
         if (data) {
           if (data.titolo && !isGenericTitle(data.titolo)) eventPayload.titolo = data.titolo
-          if (data.categoria) eventPayload.categoria = data.categoria
+          if (data.categoria && data.categoria !== 'Specialita') eventPayload.categoria = data.categoria
           if (data.branca) eventPayload.branca = data.branca
           if (data.luogo) eventPayload.luogo = data.luogo
           if (data.costo_evento) eventPayload.costo_evento = data.costo_evento
@@ -245,9 +281,17 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         console.warn('Fallback estrazione BuonaCaccia:', err)
       }
 
-      // Se eravamo nella tab Formazione Capi, garantisci branca: 'CAPI'
-      if (activeCategoryHint === 'CAPI') {
+      // Se eravamo nella tab Formazione Capi o l'evento è per Capi, garantisci branca: 'CAPI'
+      const titleUpper = (eventPayload.titolo || directTitle || '').toUpperCase()
+      const isCapiEvent = activeCategoryHint === 'CAPI' || titleUpper.includes('CFT') || titleUpper.includes('CFM') || titleUpper.includes('CFA') || titleUpper.includes('ROSS') || titleUpper.includes('TIROCINANTI') || titleUpper.includes('FORMAZIONE')
+      if (isCapiEvent) {
         eventPayload.branca = 'CAPI'
+        if (!eventPayload.categoria || eventPayload.categoria === 'Specialita' || eventPayload.categoria === 'Competenza') {
+          if (titleUpper.includes('CFT') || titleUpper.includes('TIROCINANTI')) eventPayload.categoria = 'CFT'
+          else if (titleUpper.includes('CFM')) eventPayload.categoria = 'CFM'
+          else if (titleUpper.includes('CFA')) eventPayload.categoria = 'CFA'
+          else eventPayload.categoria = directCategoria || 'CFT'
+        }
       }
 
       const insertData = {
@@ -815,7 +859,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                         className="whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs gap-1.5 shadow-2xs" 
                         disabled={isImporting} 
                         onClick={() => {
-                          handleImport(`https://buonacaccia.net/Event.aspx?e=${ev.id}`, ev.titolo, ev.date, ev.luogo)
+                          handleImport(`https://buonacaccia.net/Event.aspx?e=${ev.id}`, ev.titolo, ev.date, ev.luogo, ev.categoria, linkModalTab)
                         }}
                       >
                         {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
