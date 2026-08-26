@@ -68,6 +68,30 @@ const getSquadrigliaBadge = (pattugliaNome?: string | null) => {
 
 import { useRouter } from 'next/navigation'
 
+const ALLOWED_RAGAZZI_COLUMNS = new Set([
+  'id',
+  'nome',
+  'cognome',
+  'pattuglia',
+  'attivo',
+  'quota_censimento',
+  'ricevuta_censimento',
+  'importo_censimento',
+  'foglio_privacy_firmato',
+  'partecipazione_ci',
+  'scheda_medica_ci',
+  'partecipazione_ce',
+  'scheda_medica_ce',
+  'codice_fiscale',
+  'data_nascita',
+  'telefono_ragazzo',
+  'genitore_1_nome',
+  'genitore_1_telefono',
+  'genitore_2_nome',
+  'genitore_2_telefono',
+  'note_sanitarie'
+])
+
 export default function AnagraficaClient({ initialData, initialPattuglie, initialCandidature }: { initialData: Ragazzo[], initialPattuglie: Pattuglia[], initialCandidature?: Candidatura[] }) {
   const router = useRouter()
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialData)
@@ -120,7 +144,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
   const safeUpsertRagazzoDB = async (payload: Record<string, unknown>, id?: string) => {
     const sanitized: Record<string, unknown> = {}
     Object.keys(payload).forEach(key => {
-      if (payload[key] !== undefined) {
+      if (payload[key] !== undefined && ALLOWED_RAGAZZI_COLUMNS.has(key)) {
         sanitized[key] = payload[key] === '' ? null : payload[key]
       }
     })
@@ -131,7 +155,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
 
     // 1. Se Supabase restituisce PGRST204 (colonna non trovata nella schema cache), rimuovi la colonna non esistente e riprova
     let attempts = 0
-    while (res.error && res.error.code === 'PGRST204' && attempts < 5) {
+    while (res.error && res.error.code === 'PGRST204' && attempts < 20) {
       attempts++
       const match = res.error.message.match(/Could not find the '([^']+)' column/)
       const badCol = match ? match[1] : null
