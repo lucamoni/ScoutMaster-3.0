@@ -83,13 +83,33 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   const [isAddingCandidato, setIsAddingCandidato] = useState(false)
 
   const fetchData = useCallback(async () => {
-    const [eventiRes, candRes] = await Promise.all([
-      supabase.from('eventi_buonacaccia' as any).select('*').order('data_inizio', { ascending: true }),
-      supabase.from('candidature_buonacaccia' as any).select('*, ragazzi(nome, cognome, telefono_ragazzo, genitore_1_telefono, genitore_2_telefono)')
-    ])
-    if (eventiRes.data) setEventi(eventiRes.data as unknown as Evento[])
-    if (candRes.data) setCandidature(candRes.data as unknown as Candidatura[])
-  }, [supabase])
+    try {
+      const [eventiRes, candRes] = await Promise.all([
+        supabase.from('eventi_buonacaccia' as any).select('*').order('data_inizio', { ascending: true }),
+        supabase.from('candidature_buonacaccia' as any).select('*')
+      ])
+      if (eventiRes.data) setEventi(eventiRes.data as unknown as Evento[])
+      if (candRes.data) {
+        const ragazziMap = new Map(ragazzi.map((r: any) => [r.id, r]))
+        const mapped = (candRes.data as any[]).map(c => {
+          const rag = ragazziMap.get(c.ragazzo_id)
+          return {
+            ...c,
+            ragazzi: rag ? {
+              nome: rag.nome,
+              cognome: rag.cognome,
+              telefono_ragazzo: rag.telefono_ragazzo,
+              genitore_1_telefono: rag.genitore_1_telefono,
+              genitore_2_telefono: rag.genitore_2_telefono
+            } : null
+          }
+        })
+        setCandidature(mapped)
+      }
+    } catch (err) {
+      console.warn('Errore aggiornamento dati Buonacaccia:', err)
+    }
+  }, [supabase, ragazzi])
 
   const fetchEventList = async (type: 'EG' | 'CAPI') => {
     setIsFetchingList(true)
@@ -266,12 +286,13 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
     setIsSavingEvento(true)
     try {
+      const { id, ragazzi, candidature, ...cleanPayload } = editingEvento as any
       if (editingEvento.id) {
-        const { error } = await supabase.from('eventi_buonacaccia' as any).update(editingEvento).eq('id', editingEvento.id)
+        const { error } = await supabase.from('eventi_buonacaccia' as any).update(cleanPayload).eq('id', editingEvento.id)
         if (error) throw error
         toast.success('Evento aggiornato')
       } else {
-        const { error } = await supabase.from('eventi_buonacaccia' as any).insert(editingEvento)
+        const { error } = await supabase.from('eventi_buonacaccia' as any).insert(cleanPayload)
         if (error) throw error
         toast.success('Evento creato')
       }
@@ -279,7 +300,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
       fetchData()
     } catch (error: unknown) {
       const err = error as Error
-      toast.error(err.message)
+      toast.error(err.message || 'Errore durante il salvataggio dell\'evento')
     } finally {
       setIsSavingEvento(false)
     }
