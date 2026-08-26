@@ -407,6 +407,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     return { label: 'Nessuna Scadenza', color: 'bg-muted-foreground', icon: Calendar }
   }
 
+  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
   const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
 
   useEffect(() => {
