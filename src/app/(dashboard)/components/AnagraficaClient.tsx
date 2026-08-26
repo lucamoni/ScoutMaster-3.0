@@ -117,12 +117,42 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
 
   const supabase = createClient()
 
+  const safeUpsertRagazzoDB = async (payload: Record<string, unknown>, id?: string) => {
+    const sanitized: Record<string, unknown> = {}
+    Object.keys(payload).forEach(key => {
+      if (payload[key] !== undefined) {
+        sanitized[key] = payload[key]
+      }
+    })
+
+    let res = id
+      ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+      : await supabase.from('ragazzi').insert(sanitized as any).select().single()
+
+    // Se Supabase restituisce PGRST204 (colonna non trovata nella schema cache), rimuovi la colonna non esistente e riprova
+    let attempts = 0
+    while (res.error && res.error.code === 'PGRST204' && attempts < 5) {
+      attempts++
+      const match = res.error.message.match(/Could not find the '([^']+)' column/)
+      const badCol = match ? match[1] : null
+      if (badCol && badCol in sanitized) {
+        delete sanitized[badCol]
+        res = id
+          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+          : await supabase.from('ragazzi').insert(sanitized as any).select().single()
+      } else {
+        break
+      }
+    }
+
+    return { data: res.data, error: res.error, sanitized }
+  }
+
   const updateRagazzo = async (id: string, field: keyof Ragazzo, value: unknown) => {
     setRagazzi((prev) =>
       prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
     )
-    const updateData = { [field]: value } as Database['public']['Tables']['ragazzi']['Update']
-    const { error } = await supabase.from('ragazzi').update(updateData).eq('id', id)
+    const { error } = await safeUpsertRagazzoDB({ [field]: value }, id)
     if (error) {
       console.error('Errore aggiornamento campo:', error)
       toast.error("Errore aggiornamento: " + error.message)
@@ -149,13 +179,13 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     }
 
     if (editingId) {
-      const { error } = await supabase.from('ragazzi').update(cleanData as Database['public']['Tables']['ragazzi']['Update']).eq('id', editingId)
+      const { error, sanitized } = await safeUpsertRagazzoDB(cleanData, editingId)
       if (error) {
         console.error("Errore durante l'aggiornamento anagrafica:", error)
         toast.error("Errore salvataggio: " + error.message)
         return
       }
-      setRagazzi(prev => prev.map(r => r.id === editingId ? { ...r, ...cleanData } as Ragazzo : r))
+      setRagazzi(prev => prev.map(r => r.id === editingId ? { ...r, ...sanitized } as Ragazzo : r))
       setIsOpen(false)
       setEditingId(null)
       setFormData(defaultForm)
@@ -163,14 +193,14 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
       router.refresh()
     } else {
       cleanData.attivo = true
-      const { data, error } = await supabase.from('ragazzi').insert(cleanData as Database['public']['Tables']['ragazzi']['Insert']).select().single()
+      const { data, error } = await safeUpsertRagazzoDB(cleanData)
       if (error) {
         console.error("Errore inserimento ragazzo:", error)
         toast.error("Errore aggiunta ragazzo: " + error.message)
         return
       }
       if (data) {
-        setRagazzi([...ragazzi, data].sort((a, b) => (a.pattuglia || '').localeCompare(b.pattuglia || '')))
+        setRagazzi([...ragazzi, data as Ragazzo].sort((a, b) => (a.pattuglia || '').localeCompare(b.pattuglia || '')))
         setIsOpen(false)
         setFormData(defaultForm)
         toast.success("Nuovo esploratore aggiunto al Taccuino!")
