@@ -27,7 +27,9 @@ import {
   FileText,
   FileCheck,
   FolderArchive,
-  Globe
+  Globe,
+  CheckCircle2,
+  Zap
 } from 'lucide-react'
 import { CassaBot } from '@/components/CassaBot'
 import { cn } from '@/lib/utils'
@@ -107,6 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     {
       groupLabel: 'AMMINISTRAZIONE',
       links: [
+        { name: '⚡ Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
         { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: Sparkles },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
@@ -362,6 +365,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
         
         <Link
+          href="/salda-ora"
+          className={cn(
+            "flex flex-1 flex-col items-center justify-center gap-1 touch-min transition-colors",
+            pathname === '/salda-ora' ? "text-emerald-600 font-bold" : "text-slate-500 hover:text-emerald-600"
+          )}
+        >
+          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          <span className="text-[10px] leading-none font-bold text-emerald-700">Salda Ora</span>
+        </Link>
+
+        <Link
           href="/cassa"
           className={cn(
             "flex flex-1 flex-col items-center justify-center gap-1 touch-min transition-colors",
@@ -369,7 +383,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         >
           <Wallet className="h-5 w-5" />
-          <span className="text-[10px] leading-none">Cassa Rapida</span>
+          <span className="text-[10px] leading-none">Cassa</span>
         </Link>
 
         <Link
