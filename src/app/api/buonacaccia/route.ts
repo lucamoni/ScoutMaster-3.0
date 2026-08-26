@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 
+const isInvalidTitle = (t?: string | null) => {
+  if (!t) return true
+  const lower = t.toLowerCase().trim()
+  return (
+    t.trim().length < 3 ||
+    lower.includes('lista eventi') ||
+    lower.includes('dettagli evento') ||
+    lower.includes('evento buonacaccia') ||
+    lower.includes('gestione eventi') ||
+    lower === 'events' ||
+    lower === 'eventi' ||
+    lower === 'home' ||
+    lower === 'buonacaccia'
+  )
+}
+
 export async function POST(req: Request) {
   try {
     const { url } = await req.json()
@@ -40,7 +56,7 @@ export async function POST(req: Request) {
       const titleMatch = rawHtml.match(/<title>([^<]+)<\/title>/i) || rawHtml.match(/<h[12][^>]*>([^<]+)<\/h[12]>/i)
       if (titleMatch && titleMatch[1]) {
         let t = titleMatch[1].replace(/- Buona\s?Caccia/i, '').replace(/BuonaCaccia/i, '').trim()
-        if (t.length > 3) extractedTitle = t
+        if (!isInvalidTitle(t)) extractedTitle = t
       }
     }
 
@@ -73,7 +89,7 @@ Le date di iscrizione se presenti devono essere nel formato YYYY-MM-DDTHH:mm:00Z
 
 I campi JSON attesi sono:
 {
-  "titolo": string, (titolo completo dell'evento compreso di regione e tipo se presente, es. '[Campania] CFM L/C - Ottobre - Dicembre mod. B')
+  "titolo": string, (titolo completo dell'evento compreso di regione e tipo se presente, es. '[Campania] CFM L/C - Ottobre - Dicembre mod. B'. NON USARE 'Lista eventi' o 'Dettagli evento')
   "categoria": string, (uno tra: 'Specialita', 'Competenza', 'CFT', 'CFM', 'CFA', 'Piccole Orme', 'Altro')
   "branca": string, (uno tra: 'EG', 'CAPI')
   "regione": string, (regione dell'evento se specificata)
@@ -103,11 +119,18 @@ ${cleanText}`
             jsonStr = jsonStr.replace(/^```\n?/, '').replace(/\n?```$/, '')
           }
           const aiParsed = JSON.parse(jsonStr)
+          if (aiParsed.titolo && isInvalidTitle(aiParsed.titolo)) {
+            delete aiParsed.titolo
+          }
           eventData = { ...eventData, ...aiParsed }
         }
       } catch (geminiErr) {
         console.warn('Fallback Gemini per evento BuonaCaccia:', geminiErr)
       }
+    }
+
+    if (isInvalidTitle(eventData.titolo)) {
+      eventData.titolo = extractedTitle && !isInvalidTitle(extractedTitle) ? extractedTitle : 'Evento BuonaCaccia'
     }
 
     return NextResponse.json({ data: eventData })

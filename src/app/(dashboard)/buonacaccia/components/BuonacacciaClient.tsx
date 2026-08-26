@@ -168,13 +168,13 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
   }
 
-  const deriveEventMetadata = (title: string) => {
+  const deriveEventMetadata = (title: string, hintBranca?: 'EG' | 'CAPI') => {
     const upper = title.toUpperCase()
-    let branca = 'EG'
+    let branca: 'EG' | 'CAPI' = hintBranca || 'EG'
     let categoria = 'Specialita'
     let costo = 35
 
-    if (upper.includes('CFT') || upper.includes('CFM') || upper.includes('CFA') || upper.includes('ROSS') || upper.includes('CAPI') || upper.includes('FORMAZIONE')) {
+    if (hintBranca === 'CAPI' || upper.includes('CFT') || upper.includes('CFM') || upper.includes('CFA') || upper.includes('ROSS') || upper.includes('CAPI') || upper.includes('FORMAZIONE')) {
       branca = 'CAPI'
       if (upper.includes('CFT')) categoria = 'CFT'
       else if (upper.includes('CFM')) categoria = 'CFM'
@@ -192,6 +192,12 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     return { branca, categoria, costo }
   }
 
+  const isGenericTitle = (t?: string | null) => {
+    if (!t) return true
+    const l = t.toLowerCase().trim()
+    return l === '' || l.includes('lista eventi') || l.includes('dettagli evento') || l.includes('evento buonacaccia') || l === 'events' || l === 'eventi'
+  }
+
   // Auto-import via URL o Catalogo
   const handleImport = useCallback(async (urlParam?: string, directTitle?: string, directDate?: string, directLuogo?: string) => {
     const targetUrl = typeof urlParam === 'string' ? urlParam : importUrl
@@ -201,11 +207,14 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
     setIsImporting(true)
     try {
-      const derivedMeta = deriveEventMetadata(directTitle || 'Evento BuonaCaccia')
+      const activeCategoryHint: 'EG' | 'CAPI' = (isLinkModalOpen && linkModalTab === 'CAPI') || (!isLinkModalOpen && activeTab === 'capi') ? 'CAPI' : 'EG'
+      const derivedMeta = deriveEventMetadata(directTitle || '', activeCategoryHint)
       const parsedDates = parseDateRangeString(directDate)
 
+      const initialTitle = !isGenericTitle(directTitle) ? directTitle! : 'Evento BuonaCaccia'
+
       let eventPayload: Partial<Evento> = {
-        titolo: directTitle || 'Evento BuonaCaccia',
+        titolo: initialTitle,
         categoria: derivedMeta.categoria,
         branca: derivedMeta.branca,
         luogo: directLuogo || null,
@@ -222,7 +231,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         })
         const { data } = await res.json()
         if (data) {
-          if (data.titolo && data.titolo !== 'Evento BuonaCaccia') eventPayload.titolo = data.titolo
+          if (data.titolo && !isGenericTitle(data.titolo)) eventPayload.titolo = data.titolo
           if (data.categoria) eventPayload.categoria = data.categoria
           if (data.branca) eventPayload.branca = data.branca
           if (data.luogo) eventPayload.luogo = data.luogo
@@ -236,8 +245,13 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         console.warn('Fallback estrazione BuonaCaccia:', err)
       }
 
+      // Se eravamo nella tab Formazione Capi, garantisci branca: 'CAPI'
+      if (activeCategoryHint === 'CAPI') {
+        eventPayload.branca = 'CAPI'
+      }
+
       const insertData = {
-        titolo: eventPayload.titolo || directTitle || 'Evento BuonaCaccia',
+        titolo: !isGenericTitle(eventPayload.titolo) ? eventPayload.titolo : (!isGenericTitle(directTitle) ? directTitle : 'Evento BuonaCaccia'),
         categoria: eventPayload.categoria || derivedMeta.categoria,
         branca: eventPayload.branca || derivedMeta.branca,
         regione: eventPayload.regione || null,
