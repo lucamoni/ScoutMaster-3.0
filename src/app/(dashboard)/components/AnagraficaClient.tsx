@@ -66,6 +66,8 @@ const getSquadrigliaBadge = (pattugliaNome?: string | null) => {
   return { icon: Compass, bg: 'bg-sky-50 text-sky-900 border-sky-200' }
 }
 
+import { createClient } from '@/lib/supabase/client'
+
 export default function AnagraficaClient({ initialData, initialPattuglie, initialCandidature }: { initialData: Ragazzo[], initialPattuglie: Pattuglia[], initialCandidature?: Candidatura[] }) {
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialData)
   const [squadriglie, setSquadriglie] = useState<Pattuglia[]>(initialPattuglie)
@@ -112,10 +114,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     }
   }
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const updateRagazzo = async (id: string, field: keyof Ragazzo, value: unknown) => {
     setRagazzi((prev) =>

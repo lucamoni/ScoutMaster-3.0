@@ -12,6 +12,8 @@ import { Save, Calculator, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 
+import { createClient } from '@/lib/supabase/client'
+
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 
 export default function CensimentoClient({
@@ -30,10 +32,7 @@ export default function CensimentoClient({
   const [filterPattuglia, setFilterPattuglia] = useState<string>('TUTTE')
   const [calcNumFratelli, setCalcNumFratelli] = useState<number>(2)
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const numStandard = Number(quotaStandard) || 45
   const numFratelli = Number(quotaFratelli) || 35
@@ -188,7 +187,8 @@ export default function CensimentoClient({
           </Select>
         </div>
 
-        <div className="border rounded-xl bg-card overflow-hidden">
+        {/* Vista Tabellare Desktop */}
+        <div className="hidden md:block border rounded-xl bg-card overflow-hidden">
           <table className="w-full text-xs text-left">
             <thead className="border-b bg-muted/20 text-muted-foreground">
               <tr>
@@ -267,6 +267,75 @@ export default function CensimentoClient({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Vista Card Mobile */}
+        <div className="md:hidden space-y-3">
+          {ragazziFiltrati.map((r) => {
+            const isPaid = r.quota_censimento === true
+            const isFratello = Number(r.importo_censimento) === numFratelli
+
+            return (
+              <div key={r.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">{r.nome} {r.cognome}</h3>
+                    <span className="text-xs text-slate-500">{r.pattuglia || 'Senza Pattuglia'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleQuotaPagata(r.id, r.quota_censimento)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-bold transition-all min-h-[38px] touch-min border",
+                      isPaid 
+                        ? "bg-emerald-600 text-white border-emerald-700 shadow-2xs" 
+                        : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                    )}
+                  >
+                    {isPaid ? '✓ Saldato' : 'Da Saldare'}
+                  </button>
+                </div>
+
+                <div className="flex justify-between items-center pt-1">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer touch-min">
+                    <Checkbox 
+                      checked={r.ricevuta_censimento === true}
+                      onCheckedChange={() => toggleRicevuta(r.id, r.ricevuta_censimento)}
+                      className="h-4 w-4"
+                    />
+                    Ricevuta Cartacea
+                  </label>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => updateImportoRagazzo(r.id, numStandard)}
+                      className={cn(
+                        "text-[10px] px-2.5 py-1.5 rounded-xl border transition-all font-bold touch-min",
+                        (!isFratello)
+                          ? 'bg-agesci-blue text-white border-agesci-blue shadow-2xs'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      )}
+                    >
+                      Std {numStandard}€
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateImportoRagazzo(r.id, numFratelli)}
+                      className={cn(
+                        "text-[10px] px-2.5 py-1.5 rounded-xl border transition-all font-bold touch-min",
+                        (isFratello)
+                          ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      )}
+                    >
+                      Fratello {numFratelli}€
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

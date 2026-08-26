@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useRouter } from 'next/navigation'
 
+import { createClient } from '@/lib/supabase/client'
+
 type Evento = Database['public']['Tables']['eventi']['Row']
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row']
@@ -45,10 +47,7 @@ export default function UsciteClient({
     metodo_pagamento: 'Contanti'
   })
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   // Subiscrizione Supabase Realtime in tempo reale per Eventi e Partecipazioni
   useEffect(() => {
@@ -660,8 +659,8 @@ export default function UsciteClient({
         </div>
       </div>
 
-      {/* Griglia Tabellare con Controlli di Aggregato per Colonna (Evento) e Riga (Ragazzo) */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white flex-1 overflow-auto relative shadow-2xs">
+      {/* Griglia Tabellare Desktop */}
+      <div className="hidden md:block rounded-2xl border border-slate-200/80 bg-white flex-1 overflow-auto relative shadow-2xs">
         <table className="w-full text-xs text-left border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200/80 sticky top-0 z-10 shadow-2xs">
             <tr>
@@ -746,7 +745,6 @@ export default function UsciteClient({
                         <div className="text-[10px] text-slate-500 truncate font-normal">{r.pattuglia || 'Non assegnata'}</div>
                       </div>
                       
-                      {/* Controlli per Singolo Ragazzo */}
                       <div className="flex flex-col gap-0.5 items-end">
                         <button
                           type="button"
@@ -779,7 +777,6 @@ export default function UsciteClient({
                     return (
                       <TableCell key={e.id} className="p-1 border-r border-slate-200/80 align-top">
                         <div className="flex flex-col gap-1 w-full h-full justify-center">
-                          {/* Badge Pillola Presenza */}
                           <Select
                             value={p?.stato_presenza || 'Assente'}
                             onValueChange={(val) => updatePartecipazione(r.id, e.id, 'stato_presenza', val)}
@@ -800,7 +797,6 @@ export default function UsciteClient({
                             </SelectContent>
                           </Select>
 
-                          {/* Pagamento, Metodo e Quota Personalizzata */}
                           <div className={cn("flex items-center gap-1 w-full justify-between px-1", isAssente && "opacity-40")}>
                             <div className="flex items-center gap-1">
                               <Checkbox
@@ -822,7 +818,6 @@ export default function UsciteClient({
                               </Select>
                             </div>
 
-                            {/* Campo Quota Dovuta (€) */}
                             <div className="flex items-center gap-0.5" title="Quota dovuta per questo ragazzo">
                               <span className="text-[9px] text-slate-400 font-semibold">€</span>
                               <Input
@@ -853,6 +848,90 @@ export default function UsciteClient({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Vista Card Mobile */}
+      <div className="md:hidden space-y-4">
+        {ragazziFiltrati.map((r) => {
+          const rowParts = partecipazioni.filter(p => p.ragazzo_id === r.id && p.riscosso)
+          const totalRow = rowParts.reduce((acc, p) => {
+            const ev = eventi.find(e => e.id === p.evento_id)
+            const quotaEffettiva = (p.quota_dovuta !== null && p.quota_dovuta !== undefined) 
+              ? Number(p.quota_dovuta) 
+              : (ev?.quota_standard || 0)
+            return acc + quotaEffettiva
+          }, 0)
+
+          return (
+            <div key={r.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs space-y-3">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">{r.nome} {r.cognome}</h3>
+                  <span className="text-xs text-slate-500 font-medium">{r.pattuglia || 'Senza Pattuglia'}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Tot. Versato</span>
+                  <span className="text-sm font-bold text-emerald-600 tabular-nums">€{totalRow}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                {eventi.map(e => {
+                  const p = partecipazioni.find(part => part.ragazzo_id === r.id && part.evento_id === e.id)
+                  const isPresent = p?.stato_presenza === 'Presente' || p?.stato_presenza === 'Pendolare' || p?.stato_presenza === 'PRESENTE' || p?.stato_presenza === 'PENDOLARE'
+                  const isPendolare = p?.stato_presenza === 'Pendolare' || p?.stato_presenza === 'PENDOLARE'
+                  const isPaid = p?.riscosso === true
+
+                  return (
+                    <div key={e.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-xs text-slate-800">{e.nome_evento}</span>
+                        <span className="text-xs font-bold text-blue-600 tabular-nums">€{p?.quota_dovuta ?? e.quota_standard}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {/* Selettore Presenza Tattile */}
+                        <Select
+                          value={p?.stato_presenza || 'Assente'}
+                          onValueChange={(val) => updatePartecipazione(r.id, e.id, 'stato_presenza', val)}
+                        >
+                          <SelectTrigger className={cn("h-10 text-xs px-2.5 rounded-xl font-bold transition-all border min-h-[44px]", 
+                            isPresent 
+                              ? isPendolare
+                                ? "bg-amber-500 text-white border-amber-600"
+                                : "bg-emerald-600 text-white border-emerald-700"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                          )}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Presente" className="text-xs text-emerald-700 font-semibold">🟢 Presente</SelectItem>
+                            <SelectItem value="Pendolare" className="text-xs text-amber-700 font-semibold">🟡 Pendolare</SelectItem>
+                            <SelectItem value="Assente" className="text-xs text-rose-700 font-semibold">🔴 Assente</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        {/* Pulsante Quota Pagata Tattile */}
+                        <button
+                          type="button"
+                          onClick={() => updatePartecipazione(r.id, e.id, 'riscosso', !isPaid)}
+                          className={cn(
+                            "flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border min-h-[44px] transition-all touch-min",
+                            isPaid
+                              ? "bg-blue-600 text-white border-blue-700 shadow-2xs"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                          )}
+                        >
+                          {isPaid ? '✓ Pagato' : 'Non Pagato'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

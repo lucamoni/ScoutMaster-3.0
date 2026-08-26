@@ -345,16 +345,25 @@ export default function QuoteClient({
               </div>
 
               <div className="grid grid-cols-4 gap-2 pt-1">
-                {MONTHS.map(m => (
-                  <div key={m} className="flex flex-col items-center gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
-                    <span className="text-[10px] font-bold text-slate-600 capitalize">{String(m).substring(0, 3)}</span>
-                    <Checkbox
-                      checked={isMonthPaid(m)}
-                      onCheckedChange={(checked) => updateQuota(ragazzo.id, m, checked === true)}
-                      className="h-4 w-4 touch-min"
-                    />
-                  </div>
-                ))}
+                {MONTHS.map(m => {
+                  const paid = isMonthPaid(m)
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => updateQuota(ragazzo.id, m, !paid)}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-2.5 rounded-xl transition-all min-h-[48px] touch-min select-none active:scale-95 border",
+                        paid 
+                          ? "bg-emerald-600 text-white border-emerald-700 shadow-2xs font-bold" 
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 font-medium"
+                      )}
+                    >
+                      <span className="text-[11px] uppercase tracking-wide">{String(m).substring(0, 3)}</span>
+                      <span className="text-[10px] opacity-90 mt-0.5">{paid ? '✓ €' + quotaStandard : '€' + quotaStandard}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )

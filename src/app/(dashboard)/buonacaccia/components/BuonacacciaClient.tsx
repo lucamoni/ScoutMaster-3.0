@@ -475,44 +475,40 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   }, [isLinkModalOpen, linkModalTab])
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      {/* Header Responsive */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* ... header ... */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <Compass className="w-7 h-7 sm:w-8 sm:h-8 text-agesci-blue" />
+          <h1 className="text-3xl font-bold text-primary flex items-center gap-2">
+            <Compass className="w-8 h-8" />
             Monitoraggio BuonaCaccia
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">Gestisci le iscrizioni agli eventi formativi e ai campi di specialità/competenza.</p>
+          <p className="text-muted-foreground">Gestisci le iscrizioni agli eventi formativi e ai campi di specialità/competenza.</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" onClick={() => { setIsLinkModalOpen(true); fetchEventList(activeTab === 'capi' ? 'CAPI' : 'EG'); }} className="w-full sm:w-auto h-11 sm:h-10 text-xs sm:text-sm font-semibold rounded-xl gap-2 shadow-2xs">
-            <ExternalLink className="w-4 h-4 text-blue-600" /> Esplora BuonaCaccia
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => { setIsLinkModalOpen(true); fetchEventList(activeTab === 'capi' ? 'CAPI' : 'EG'); }} className="gap-2">
+            <ExternalLink className="w-4 h-4" /> Esplora BuonaCaccia
           </Button>
           <Button onClick={() => { 
             setEditingEvento(activeTab === 'capi' ? { branca: 'CAPI', categoria: 'CFT' } : { branca: 'EG', categoria: 'Specialita' }); 
             setImportUrl(''); 
             setIsEventoModalOpen(true); 
-          }} className="w-full sm:w-auto h-11 sm:h-10 text-xs sm:text-sm font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-2xs">
+          }} className="gap-2">
             <Plus className="w-4 h-4" /> Nuovo Evento
           </Button>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'eg' | 'capi')} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 p-1.5 bg-slate-100/90 rounded-2xl h-auto gap-1 mb-4 sm:mb-6">
-          <TabsTrigger value="eg" className="py-2.5 sm:py-2 px-3 text-xs sm:text-sm font-bold gap-1.5 sm:gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-            <Compass className="w-4 h-4"/> Eventi Ragazzi E/G
-          </TabsTrigger>
-          <TabsTrigger value="capi" className="py-2.5 sm:py-2 px-3 text-xs sm:text-sm font-bold gap-1.5 sm:gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-            <Users className="w-4 h-4"/> Formazione Capi
-          </TabsTrigger>
+        <TabsList className="mb-4">
+          <TabsTrigger value="eg" className="flex items-center gap-2"><Compass className="w-4 h-4"/> Eventi Ragazzi E/G</TabsTrigger>
+          <TabsTrigger value="capi" className="flex items-center gap-2"><Users className="w-4 h-4"/> Formazione Capi</TabsTrigger>
         </TabsList>
 
         <TabsContent value="eg" className="mt-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {eventi.filter(e => e.branca === 'EG').length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-500 text-xs sm:text-sm border border-dashed rounded-2xl bg-slate-50">Nessun evento E/G monitorato.</div>
+              <div className="col-span-full py-12 text-center text-muted-foreground border border-dashed rounded-lg">Nessun evento E/G monitorato.</div>
             )}
             {eventi.filter(e => e.branca === 'EG').map(evento => (
               <EventCard key={evento.id} evento={evento} getStatus={getEventStatus} onSelect={() => setSelectedEvento(evento)} onEdit={() => {setEditingEvento(evento); setIsEventoModalOpen(true);}} />
@@ -521,9 +517,9 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         </TabsContent>
 
         <TabsContent value="capi" className="mt-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {eventi.filter(e => e.branca === 'CAPI').length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-500 text-xs sm:text-sm border border-dashed rounded-2xl bg-slate-50">Nessun corso formazione capi monitorato.</div>
+              <div className="col-span-full py-12 text-center text-muted-foreground border border-dashed rounded-lg">Nessun corso formazione capi monitorato.</div>
             )}
             {eventi.filter(e => e.branca === 'CAPI').map(evento => (
               <EventCard key={evento.id} evento={evento} getStatus={getEventStatus} onSelect={() => setSelectedEvento(evento)} onEdit={() => {setEditingEvento(evento); setIsEventoModalOpen(true);}} />
@@ -738,9 +734,8 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
               </Button>
             </div>
 
-            {/* DESKTOP TABLE */}
-            <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
-              <div className="grid grid-cols-12 bg-slate-100 p-3 text-xs font-bold text-slate-600">
+            <div className="border rounded-md overflow-hidden">
+              <div className="grid grid-cols-12 bg-muted p-3 text-xs font-semibold text-muted-foreground">
                 <div className="col-span-3">Candidato</div>
                 <div className="col-span-2">Stato</div>
                 <div className="col-span-3">Specialità / Note</div>
@@ -749,11 +744,11 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
               </div>
               <div className="divide-y max-h-[40vh] overflow-y-auto">
                 {candidature.filter(c => c.evento_id === selectedEvento?.id).length === 0 && (
-                  <div className="p-8 text-center text-slate-500 text-sm">Nessun iscritto a questo evento.</div>
+                  <div className="p-8 text-center text-muted-foreground">Nessun iscritto a questo evento.</div>
                 )}
                 {candidature.filter(c => c.evento_id === selectedEvento?.id).map(cand => (
-                  <div key={cand.id} className="grid grid-cols-12 p-3 items-center gap-2 text-sm hover:bg-slate-50 transition-colors">
-                    <div className="col-span-3 font-semibold text-slate-900 truncate" title={`${cand.ragazzi?.nome} ${cand.ragazzi?.cognome}`}>
+                  <div key={cand.id} className="grid grid-cols-12 p-3 items-center gap-2 text-sm hover:bg-muted/10 transition-colors">
+                    <div className="col-span-3 font-medium truncate" title={`${cand.ragazzi?.nome} ${cand.ragazzi?.cognome}`}>
                       {cand.ragazzi?.nome} {cand.ragazzi?.cognome}
                     </div>
                     <div className="col-span-2">
@@ -784,7 +779,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                       />
                     </div>
                     <div className="col-span-3 flex items-center justify-center gap-1.5">
-                      <div className={`flex items-center space-x-1.5 border px-2 py-1 rounded-lg text-xs transition-colors ${cand.quota_pagata ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'}`}>
+                      <div className={`flex items-center space-x-1.5 border px-2 py-1 rounded text-xs transition-colors ${cand.quota_pagata ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'}`}>
                         <Checkbox 
                           id={`quota-${cand.id}`} 
                           checked={cand.quota_pagata || false} 
@@ -810,98 +805,13 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                           <MessageCircle className="w-4 h-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCandidatura(cand.id)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteCandidatura(cand.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* MOBILE CARDS LIST */}
-            <div className="md:hidden space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-              {candidature.filter(c => c.evento_id === selectedEvento?.id).length === 0 && (
-                <div className="p-8 text-center text-slate-500 text-xs border border-dashed rounded-2xl bg-slate-50">Nessun iscritto a questo evento.</div>
-              )}
-              {candidature.filter(c => c.evento_id === selectedEvento?.id).map(cand => {
-                const waLink = getWhatsAppLink(cand)
-                return (
-                  <div key={cand.id} className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-extrabold text-base text-slate-900">{cand.ragazzi?.nome} {cand.ragazzi?.cognome}</div>
-                        <div className="text-[11px] text-slate-500 font-medium">Scout Iscritto</div>
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-red-600" onClick={() => handleDeleteCandidatura(cand.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-[11px] text-slate-500 font-semibold mb-1 block">Stato Iscrizione</Label>
-                        <Select value={cand.stato_iscrizione || ''} onValueChange={v => updateCandidatura(cand.id, 'stato_iscrizione', v)}>
-                          <SelectTrigger className="h-10 text-xs font-bold rounded-xl">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Interessato">Interessato</SelectItem>
-                            <SelectItem value="Iscritto">Iscritto</SelectItem>
-                            <SelectItem value="In Lista Attesa">In Lista Attesa</SelectItem>
-                            <SelectItem value="Accettato">Accettato</SelectItem>
-                            <SelectItem value="Rinunciato">Rinunciato</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-[11px] text-slate-500 font-semibold mb-1 block">Specialità / Note</Label>
-                        <Input 
-                          placeholder="Es. Elettricista / Note" 
-                          className="h-10 text-xs rounded-xl" 
-                          value={cand.specialita_competenza_scelta || ''} 
-                          onChange={e => updateCandidatura(cand.id, 'specialita_competenza_scelta', e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className={`flex items-center space-x-2 border px-3 py-2 rounded-xl text-xs flex-1 ${cand.quota_pagata ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold' : 'bg-amber-50 border-amber-300 text-amber-800 font-bold'}`}>
-                          <Checkbox 
-                            id={`quota-mob-${cand.id}`} 
-                            checked={cand.quota_pagata || false} 
-                            onCheckedChange={c => updateCandidatura(cand.id, 'quota_pagata', !!c)}
-                          />
-                          <Label htmlFor={`quota-mob-${cand.id}`} className="text-xs cursor-pointer">
-                            {cand.quota_pagata ? '✅ Rimborsato' : '❌ Da Rimborsare'}
-                          </Label>
-                        </div>
-                        <Select value={cand.metodo_pagamento || ''} onValueChange={v => updateCandidatura(cand.id, 'metodo_pagamento', v)}>
-                          <SelectTrigger className="h-9 text-xs w-[120px] rounded-xl"><SelectValue placeholder="Metodo..."/></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Bonifico">Bonifico Bancario</SelectItem>
-                            <SelectItem value="PayPal">PayPal</SelectItem>
-                            <SelectItem value="Satispay">Satispay</SelectItem>
-                            <SelectItem value="Contanti">Contanti</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {waLink && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full h-10 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 rounded-xl border-none shadow-xs mt-1" 
-                          onClick={() => window.open(waLink, '_blank')}
-                        >
-                          <MessageCircle className="w-4 h-4" /> Promemoria WhatsApp Rimborso
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
             </div>
           </div>
         </DialogContent>

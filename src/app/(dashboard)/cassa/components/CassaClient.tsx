@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -79,10 +79,7 @@ export default function CassaClient({
     tipo_movimento: 'USCITA'
   })
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const searchParams = useSearchParams()
 
@@ -850,7 +847,8 @@ export default function CassaClient({
           )}
         </div>
 
-        <div className="rounded-md border bg-card overflow-hidden">
+        {/* Vista Tabellare Desktop */}
+        <div className="hidden md:block rounded-md border bg-card overflow-hidden">
           <Table className="table-fixed text-xs">
             <TableHeader className="bg-muted text-muted-foreground border-b">
               <TableRow className="h-8">
@@ -957,6 +955,68 @@ export default function CassaClient({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Vista Card Mobile */}
+      <div className="md:hidden space-y-3">
+        {speseFiltrate.map((spesa) => {
+          const isEntrata = spesa.tipo_movimento === 'ENTRATA'
+          return (
+            <div key={spesa.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs space-y-2.5">
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex flex-col">
+                  <span className="font-bold text-slate-900 text-sm">{spesa.voce_spesa}</span>
+                  <span className="text-xs text-slate-500">{spesa.data} • {spesa.momento_anno}</span>
+                </div>
+                <span className={`text-base font-extrabold tabular-nums ${isEntrata ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {isEntrata ? '+' : '-'}€{spesa.importo.toFixed(2)}
+                </span>
+              </div>
+
+              {spesa.note && (
+                <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 font-medium">
+                  {spesa.note}
+                </p>
+              )}
+
+              <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                  {normalizeMetodoDisplay(spesa.metodo)}
+                </span>
+
+                <div className="flex items-center gap-1">
+                  {spesa.foto_scontrino_url && (
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => viewSecureScontrino(spesa.foto_scontrino_url!)}>
+                      <Paperclip className="w-3.5 h-3.5" /> Allegato
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 touch-min" onClick={() => {
+                    setEditingSpesa(spesa)
+                    setFormData({
+                      voce_spesa: spesa.voce_spesa || '',
+                      importo: spesa.importo.toString(),
+                      metodo: toCanonicalMetodo(spesa.metodo),
+                      momento_anno: spesa.momento_anno || 'ANNO',
+                      note: spesa.note || '',
+                      tipo_movimento: spesa.tipo_movimento || 'USCITA'
+                    })
+                    setIsOpen(true)
+                  }}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 touch-min" onClick={() => deleteSpesa(spesa.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        {speseFiltrate.length === 0 && (
+          <div className="p-6 text-center text-xs text-slate-500 border border-dashed rounded-xl">
+            Nessun movimento registrato.
+          </div>
+        )}
       </div>
       </Tabs>
     </div>
