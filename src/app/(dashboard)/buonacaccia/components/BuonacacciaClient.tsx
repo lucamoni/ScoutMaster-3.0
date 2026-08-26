@@ -108,7 +108,74 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
   }
 
-  // Auto-import via URL (Gemini API)
+  // Helper parsing date string da italiano (es: "17-20 Aprile 2026")
+  const parseDateRangeString = (dateStr?: string) => {
+    if (!dateStr) return {}
+    const months: Record<string, string> = {
+      'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04',
+      'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
+      'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12'
+    }
+
+    const yearMatch = dateStr.match(/20\d\d/)
+    const year = yearMatch ? yearMatch[0] : '2026'
+
+    const foundMonths: { month: string; index: number }[] = []
+    const lower = dateStr.toLowerCase()
+    Object.keys(months).forEach(m => {
+      const idx = lower.indexOf(m)
+      if (idx !== -1) foundMonths.push({ month: months[m], index: idx })
+    })
+    foundMonths.sort((a, b) => a.index - b.index)
+
+    const numbers = dateStr.match(/\b\d{1,2}\b/g)
+    if (!numbers || numbers.length === 0 || foundMonths.length === 0) return {}
+
+    const startDay = numbers[0].padStart(2, '0')
+    const endDay = numbers.length > 1 ? numbers[1].padStart(2, '0') : startDay
+    const startMonth = foundMonths[0].month
+    const endMonth = foundMonths.length > 1 ? foundMonths[1].month : startMonth
+
+    const data_inizio = `${year}-${startMonth}-${startDay}`
+    const data_fine = `${year}-${endMonth}-${endDay}`
+
+    const startDateObj = new Date(data_inizio)
+    const aperturaObj = new Date(startDateObj.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const chiusuraObj = new Date(startDateObj.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+    return {
+      data_inizio,
+      data_fine,
+      apertura_iscrizioni: aperturaObj.toISOString(),
+      chiusura_iscrizioni: chiusuraObj.toISOString()
+    }
+  }
+
+  const deriveEventMetadata = (title: string) => {
+    const upper = title.toUpperCase()
+    let branca = 'EG'
+    let categoria = 'Specialita'
+    let costo = 35
+
+    if (upper.includes('CFT') || upper.includes('CFM') || upper.includes('CFA') || upper.includes('ROSS') || upper.includes('CAPI') || upper.includes('FORMAZIONE')) {
+      branca = 'CAPI'
+      if (upper.includes('CFT')) categoria = 'CFT'
+      else if (upper.includes('CFM')) categoria = 'CFM'
+      else if (upper.includes('CFA')) categoria = 'CFA'
+      else categoria = 'Altro'
+      costo = 60
+    } else {
+      branca = 'EG'
+      if (upper.includes('COMPETENZA')) categoria = 'Competenza'
+      else if (upper.includes('ORME') || upper.includes('PICCOLE')) categoria = 'Piccole Orme'
+      else if (upper.includes('ESTIVO')) { categoria = 'Specialita'; costo = 150; }
+      else categoria = 'Specialita'
+    }
+
+    return { branca, categoria, costo }
+  }
+
+  // Auto-import via URL o Catalogo
   const handleImport = useCallback(async (urlParam?: string, directTitle?: string, directDate?: string, directLuogo?: string) => {
     const targetUrl = typeof urlParam === 'string' ? urlParam : importUrl
     if (!targetUrl) {
@@ -117,12 +184,17 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
     setIsImporting(true)
     try {
+      const derivedMeta = deriveEventMetadata(directTitle || 'Evento BuonaCaccia')
+      const parsedDates = parseDateRangeString(directDate)
+
       let eventPayload: Partial<Evento> = {
         titolo: directTitle || 'Evento BuonaCaccia',
-        categoria: 'Specialita',
-        branca: 'EG',
+        categoria: derivedMeta.categoria,
+        branca: derivedMeta.branca,
         luogo: directLuogo || null,
-        url_evento: targetUrl
+        costo_evento: derivedMeta.costo,
+        url_evento: targetUrl,
+        ...parsedDates
       }
 
       try {
@@ -141,15 +213,15 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
 
       const insertData = {
         titolo: eventPayload.titolo || directTitle || 'Evento BuonaCaccia',
-        categoria: eventPayload.categoria || 'Specialita',
-        branca: eventPayload.branca || 'EG',
+        categoria: eventPayload.categoria || derivedMeta.categoria,
+        branca: eventPayload.branca || derivedMeta.branca,
         regione: eventPayload.regione || null,
         luogo: eventPayload.luogo || directLuogo || null,
         data_inizio: eventPayload.data_inizio || null,
         data_fine: eventPayload.data_fine || null,
         apertura_iscrizioni: eventPayload.apertura_iscrizioni || null,
         chiusura_iscrizioni: eventPayload.chiusura_iscrizioni || null,
-        costo_evento: eventPayload.costo_evento || 0,
+        costo_evento: eventPayload.costo_evento || derivedMeta.costo,
         url_evento: targetUrl,
         note: eventPayload.note || null
       }
@@ -160,9 +232,10 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
 
       if (insertErr) {
         console.error('Errore salvataggio evento BuonaCaccia:', insertErr)
+        throw insertErr
       }
 
-      toast.success(`🎉 Evento "${eventPayload.titolo || directTitle}" importato con successo!`)
+      toast.success(`🎉 Evento "${insertData.titolo}" importato nella scheda di monitoraggio!`)
       setIsLinkModalOpen(false)
       setIsEventoModalOpen(false)
       fetchData()
