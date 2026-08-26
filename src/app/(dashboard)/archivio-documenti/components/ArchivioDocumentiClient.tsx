@@ -23,13 +23,15 @@ import {
   HeartPulse, 
   FileCheck,
   File,
-  Plus
+  Plus,
+  Paperclip
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/types/database.types'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
+type PrivacyField = 'foglio_privacy_firmato' | 'partecipazione_ci' | 'scheda_medica_ci' | 'partecipazione_ce' | 'scheda_medica_ce' | 'quota_censimento' | 'ricevuta_censimento'
 
 interface ArchivedDocumentFile {
   id: string
@@ -56,8 +58,9 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   // Modale Caricamento File
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [uploadRagazzoId, setUploadRagazzoId] = useState<string>('')
+  const [selectedFileObj, setSelectedFileObj] = useState<File | null>(null)
   const [uploadTitolo, setUploadTitolo] = useState('')
-  const [uploadTipoDoc, setUploadTipoDoc] = useState('Modulo Privacy')
+  const [uploadTipoDoc, setUploadTipoDoc] = useState('foglio_privacy_firmato')
   const [isUploading, setIsUploading] = useState(false)
 
   const supabase = createBrowserClient<Database>(
@@ -86,9 +89,24 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
     ])
   }
 
-  const handleUploadFile = async (file: File) => {
-    if (!uploadRagazzoId) {
-      toast.error('Seleziona l\'esploratore a cui associare il documento')
+  // Pulisce il nome file eliminando estensione e tratti
+  const cleanFileNameToTitle = (fileName: string) => {
+    return fileName
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[_-]/g, " ")
+      .trim()
+  }
+
+  const handleFileSelection = (file: File) => {
+    setSelectedFileObj(file)
+    if (!uploadTitolo.trim()) {
+      setUploadTitolo(cleanFileNameToTitle(file.name))
+    }
+  }
+
+  const handleUploadFile = async () => {
+    if (!uploadRagazzoId || !selectedFileObj) {
+      toast.error('Seleziona sia l\'esploratore che il file da archiviare')
       return
     }
     const targetScout = ragazzi.find(r => r.id === uploadRagazzoId)
@@ -96,14 +114,17 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
     setIsUploading(true)
     try {
+      const file = selectedFileObj
       const reader = new FileReader()
       reader.onload = async (e) => {
         const base64Url = e.target?.result as string
+        const finalTitle = uploadTitolo.trim() || cleanFileNameToTitle(file.name)
+
         const newArchivedItem: ArchivedDocumentFile = {
           id: 'arch_' + Date.now(),
           ragazzo_id: targetScout.id,
           ragazzo_nome: `${targetScout.nome} ${targetScout.cognome}`,
-          titolo_documento: uploadTitolo.trim() || file.name,
+          titolo_documento: finalTitle,
           tipo_documento: uploadTipoDoc,
           file_name: file.name,
           file_url: base64Url,
@@ -113,9 +134,17 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
         const updated = [newArchivedItem, ...archivedFiles]
         await saveArchivedFilesToDb(updated)
-        toast.success(`Documento salvato in Archivio per ${targetScout.nome}!`)
+
+        // AUTOMATICO: Imposta spunta presente (true) in anagrafica ragazzi
+        if (uploadTipoDoc in targetScout) {
+          const field = uploadTipoDoc as PrivacyField
+          await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetScout.id)
+        }
+
+        toast.success(`Documento caricato ed AUTOMATICAMENTE SPUNTATO per ${targetScout.nome}!`)
         setIsUploading(false)
         setIsUploadOpen(false)
+        setSelectedFileObj(null)
         setUploadTitolo('')
       }
       reader.readAsDataURL(file)
@@ -145,8 +174,8 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
   // KPI summary
   const totalFiles = archivedFiles.length
-  const totalPrivacy = archivedFiles.filter(f => f.tipo_documento === 'Modulo Privacy').length
-  const totalSanitari = archivedFiles.filter(f => f.tipo_documento === 'Scheda Medica' || f.tipo_documento === 'Certificato Medico').length
+  const totalPrivacy = archivedFiles.filter(f => f.tipo_documento === 'foglio_privacy_firmato' || f.tipo_documento === 'Modulo Privacy').length
+  const totalSanitari = archivedFiles.filter(f => f.tipo_documento.includes('medica') || f.tipo_documento.includes('Medica')).length
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
@@ -158,12 +187,12 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
             Archivio Documenti Digitali
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Consultazione e visualizzazione rapida dei file scansionati e salvati per tutti i ragazzi del Reparto.
+            Visualizzazione rapida in anteprima, auto-compilazione nomi file e sincronizzazione automatiche delle spunte.
           </p>
         </div>
 
         <Button onClick={() => setIsUploadOpen(true)} className="bg-purple-700 hover:bg-purple-800 text-white font-semibold gap-2 shadow-sm">
-          <Upload className="w-4 h-4" /> 📤 Carica Nuovo File in Archivio
+          <Upload className="w-4 h-4" /> 📤 Carica Nuovo File (Auto-Spunta)
         </Button>
       </div>
 
@@ -226,11 +255,11 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="TUTTI">TUTTI I TIPI</SelectItem>
-                <SelectItem value="Modulo Privacy">Modulo Privacy</SelectItem>
-                <SelectItem value="Scheda Medica">Scheda Medica</SelectItem>
-                <SelectItem value="Ricevuta Censimento">Ricevuta Censimento</SelectItem>
+                <SelectItem value="foglio_privacy_firmato">Modulo Privacy</SelectItem>
+                <SelectItem value="scheda_medica_ci">Scheda Medica CI</SelectItem>
+                <SelectItem value="scheda_medica_ce">Scheda Medica CE</SelectItem>
+                <SelectItem value="ricevuta_censimento">Ricevuta Censimento</SelectItem>
                 <SelectItem value="Certificato Medico">Certificato Medico</SelectItem>
-                <SelectItem value="Altro Documento">Altro Documento</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -254,7 +283,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
           <FolderArchive className="w-12 h-12 text-slate-300 mx-auto" />
           <h3 className="font-bold text-slate-800 text-base">Nessun file presente nell'Archivio</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Utilizza il pulsante "Carica Nuovo File in Archivio" oppure scansiona i moduli con lo Scanner IA in Documenti & Privacy per popolare l'archivio digitale.
+            Utilizza il pulsante "Carica Nuovo File (Auto-Spunta)" per aggiungere file che verranno immediatamente contrassegnati come presenti.
           </p>
         </div>
       ) : (
@@ -348,15 +377,15 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
         </DialogContent>
       </Dialog>
 
-      {/* MODALE CARICAMENTO FILE IN ARCHIVIO */}
+      {/* MODALE CARICAMENTO FILE IN ARCHIVIO CON AUTO-SPUNTA */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-purple-900 flex items-center gap-2">
-              <Upload className="w-5 h-5" /> Carica Nuovo Documento in Archivio
+              <Upload className="w-5 h-5" /> Carica Documento in Archivio
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Seleziona l'esploratore ed il file PDF/foto da archiviare nel sistema.
+              Seleziona file ed esploratore: il nome verrà compilato automaticamente ed il documento risulterà spuntato in lista!
             </DialogDescription>
           </DialogHeader>
 
@@ -376,36 +405,32 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
             </div>
 
             <div className="space-y-1">
-              <Label>Titolo del Documento</Label>
-              <Input 
-                placeholder="es. Scheda Medica Firmata Campo 2026"
-                value={uploadTitolo}
-                onChange={e => setUploadTitolo(e.target.value)}
-                className="h-9"
-              />
-            </div>
-
-            <div className="space-y-1">
               <Label>Tipo Documento</Label>
               <Select value={uploadTipoDoc} onValueChange={setUploadTipoDoc}>
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Tipo" />
+                  <SelectValue placeholder="Tipo Documento" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Modulo Privacy">Modulo Privacy AGESCI</SelectItem>
-                  <SelectItem value="Scheda Medica">Scheda Medica</SelectItem>
-                  <SelectItem value="Ricevuta Censimento">Ricevuta Censimento</SelectItem>
+                  <SelectItem value="foglio_privacy_firmato">Modulo Privacy AGESCI</SelectItem>
+                  <SelectItem value="scheda_medica_ci">Scheda Medica Campo Invernale</SelectItem>
+                  <SelectItem value="scheda_medica_ce">Scheda Medica Campo Estivo</SelectItem>
+                  <SelectItem value="ricevuta_censimento">Ricevuta Censimento</SelectItem>
                   <SelectItem value="Certificato Medico">Certificato Medico / Agonistico</SelectItem>
-                  <SelectItem value="Altro Documento">Altro Documento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="border-2 border-dashed border-purple-200 rounded-xl p-6 text-center hover:border-purple-500 transition-colors bg-purple-50/50">
-              {isUploading ? (
-                <div className="flex flex-col items-center justify-center space-y-2 py-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-purple-700" />
-                  <span className="text-xs font-semibold text-purple-900">Salvataggio in corso...</span>
+              {selectedFileObj ? (
+                <div className="bg-purple-100/80 p-3 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-left overflow-hidden">
+                    <File className="w-5 h-5 text-purple-700 shrink-0" />
+                    <div>
+                      <div className="font-bold text-purple-900 truncate">{selectedFileObj.name}</div>
+                      <div className="text-[10px] text-purple-700 font-medium">Nome Titolo Assegnato Automaticamente</div>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedFileObj(null)} className="h-7 text-xs text-rose-600">Cambia</Button>
                 </div>
               ) : (
                 <label className="cursor-pointer flex flex-col items-center justify-center space-y-2">
@@ -416,16 +441,39 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
                     accept="image/*,application/pdf" 
                     className="hidden" 
                     onChange={e => {
-                      if (e.target.files?.[0]) handleUploadFile(e.target.files[0])
+                      if (e.target.files?.[0]) handleFileSelection(e.target.files[0])
                     }} 
                   />
                 </label>
               )}
             </div>
+
+            {selectedFileObj && (
+              <div className="space-y-1">
+                <Label>Titolo Personalizzato Documento</Label>
+                <Input 
+                  value={uploadTitolo}
+                  onChange={e => setUploadTitolo(e.target.value)}
+                  placeholder="Nome Titolo"
+                  className="h-9"
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsUploadOpen(false)}>Annulla</Button>
+            {selectedFileObj && (
+              <Button 
+                size="sm" 
+                onClick={handleUploadFile}
+                disabled={isUploading}
+                className="bg-purple-700 hover:bg-purple-800 text-white font-medium text-xs gap-1.5"
+              >
+                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                Carica ed Spunta in Automatico
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
