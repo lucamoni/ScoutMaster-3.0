@@ -248,14 +248,6 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
             {isSyncing ? <Plus className="mr-1.5 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-1.5 h-4 w-4 text-emerald-600" />}
             Sync Sheets
           </Button>
-
-          <Button 
-            variant="outline" 
-            onClick={() => setIsScannerOpen(true)} 
-            className="border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 text-xs h-9 px-3 rounded-xl touch-min font-medium gap-1.5"
-          >
-            <Sparkles className="h-4 w-4 text-amber-600" /> Scanner IA Documento
-          </Button>
         </div>
       </div>
 
@@ -700,62 +692,6 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
           )
         })}
       </div>
-
-      {/* MODALE SCANNER IA ANAGRAFICA & DOCUMENTI */}
-      <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg text-agesci-blue">
-              <Sparkles className="w-5 h-5 text-amber-500" /> Scanner IA Documenti & Anagrafica
-            </DialogTitle>
-            <DialogDescription>
-              Fotografa o carica un documento (Modulo Privacy, Scheda Medica, Tessera AGESCI o Modulo Iscrizione). Gemini Vision IA estrarrà automaticamente i dati anagrafici ed aggiornerà il Reparto!
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3">
-            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-agesci-blue/50 transition-colors bg-slate-50">
-              {isScanning ? (
-                <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                  <Loader2 className="w-8 h-8 animate-spin text-agesci-blue" />
-                  <span className="text-sm font-semibold text-slate-700">Analisi Gemini Vision IA in corso...</span>
-                  <span className="text-xs text-slate-400">Estrazione automatica dati anagrafici e documento...</span>
-                </div>
-              ) : (
-                <label className="cursor-pointer flex flex-col items-center justify-center space-y-2">
-                  <Camera className="w-10 h-10 text-agesci-blue" />
-                  <span className="text-sm font-semibold text-slate-800">Scatta foto o carica documento</span>
-                  <span className="text-xs text-slate-400">Supporta JPG, PNG, PDF (Moduli Privacy, Tessere, Schede Mediche)</span>
-                  <input 
-                    type="file" 
-                    accept="image/*,application/pdf" 
-                    className="hidden" 
-                    onChange={e => {
-                      if (e.target.files?.[0]) handleDocumentScan(e.target.files[0])
-                    }} 
-                  />
-                </label>
-              )}
-            </div>
-
-            {scanResult && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2 text-xs text-emerald-900">
-                <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Risultato Scansione Anagrafica:
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <div><strong>Nome:</strong> {scanResult.nome} {scanResult.cognome}</div>
-                  <div><strong>Pattuglia:</strong> {scanResult.pattuglia || 'Non specificata'}</div>
-                  <div><strong>Codice Fiscale:</strong> {scanResult.codice_fiscale || 'N.D.'}</div>
-                  <div><strong>Genitore 1:</strong> {scanResult.genitore_1_nome || 'N.D.'}</div>
-                  <div><strong>Telefono:</strong> {scanResult.genitore_1_telefono || scanResult.telefono_ragazzo || 'N.D.'}</div>
-                  <div><strong>Azione DB:</strong> {scanResult.db_status === 'updated' ? 'Anagrafica Aggiornata' : 'Nuovo Ragazzo Creato'}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

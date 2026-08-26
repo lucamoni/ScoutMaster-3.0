@@ -114,13 +114,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ]
     },
     {
+      groupLabel: 'DOCUMENTI & MODULI',
+      links: [
+        { name: 'Documenti & Privacy', href: '/privacy', icon: FileText },
+        { name: 'Modelli Vuoti', href: '/modelli-vuoti', icon: FileCheck },
+      ]
+    },
+    {
       groupLabel: 'STRUMENTI',
       links: [
-        { name: 'Modelli Vuoti', href: '/modelli-vuoti', icon: FileCheck },
         { name: 'Strumenti & Link', href: '/strumenti-link', icon: Globe },
         { name: 'Raccordo Bilancio AGESCI', href: '/report/bilancio-agesci', icon: FileSpreadsheet },
         { name: 'Report Completi', href: '/report', icon: Download },
-        { name: 'Documenti & Privacy', href: '/privacy', icon: FileText },
         { name: 'Reminder', href: '/reminder', icon: Bell },
         { name: 'Impostazioni', href: '/impostazioni', icon: Settings },
       ]

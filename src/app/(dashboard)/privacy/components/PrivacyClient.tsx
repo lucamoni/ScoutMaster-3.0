@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
-import { Check, X, Search, FileText, ShieldCheck, HeartPulse, FileCheck, MessageCircle, Sparkles, Upload, Loader2, Camera, CheckCircle2 } from 'lucide-react'
+import { Check, X, Search, FileText, ShieldCheck, HeartPulse, FileCheck, MessageCircle, Sparkles, Upload, Loader2, Camera, CheckCircle2, Users, CheckSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -23,6 +25,13 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState<any>(null)
+
+  // Stato per Azione di Gruppo / Squadriglia
+  const [isBulkOpen, setIsBulkOpen] = useState(false)
+  const [bulkSquadriglia, setBulkSquadriglia] = useState<string>('TUTTE')
+  const [bulkField, setBulkField] = useState<PrivacyField>('foglio_privacy_firmato')
+  const [bulkValue, setBulkValue] = useState<boolean>(true)
+  const [isApplyingBulk, setIsApplyingBulk] = useState(false)
 
   const toggleStatus = async (
     id: string,
@@ -56,13 +65,42 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
       setScanResult(result.data)
       toast.success(`Documento analizzato! ${result.data.db_status === 'updated' ? 'Anagrafica e documenti aggiornati!' : result.data.db_status === 'created' ? 'Nuovo ragazzo inserito in anagrafica!' : 'Dati estratti con successo!'}`)
 
-      // Ricarica la lista aggiornata dal database Supabase
       const { data } = await supabase.from('ragazzi').select('*').order('nome')
       if (data) setRagazzi(data)
     } catch (err: any) {
       toast.error(err.message || 'Impossibile estrarre i dati dal documento')
     } finally {
       setIsScanning(false)
+    }
+  }
+
+  // Applica aggiornamento di gruppo (es. intera squadriglia)
+  const handleApplyBulk = async () => {
+    setIsApplyingBulk(true)
+    try {
+      const targetRagazzi = ragazzi.filter(r => bulkSquadriglia === 'TUTTE' || r.pattuglia === bulkSquadriglia)
+      const targetIds = targetRagazzi.map(r => r.id)
+
+      if (targetIds.length === 0) {
+        toast.error('Nessun ragazzo trovato per la squadriglia selezionata')
+        return
+      }
+
+      setRagazzi(prev => prev.map(r => targetIds.includes(r.id) ? { ...r, [bulkField]: bulkValue } : r))
+
+      const { error } = await supabase
+        .from('ragazzi')
+        .update({ [bulkField]: bulkValue } as Database['public']['Tables']['ragazzi']['Update'])
+        .in('id', targetIds)
+
+      if (error) throw error
+
+      toast.success(`Aggiornati ${targetIds.length} ragazzi per la squadriglia ${bulkSquadriglia}!`)
+      setIsBulkOpen(false)
+    } catch (err: any) {
+      toast.error(err.message || 'Errore durante l\'aggiornamento di gruppo')
+    } finally {
+      setIsApplyingBulk(false)
     }
   }
 
@@ -86,6 +124,8 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     const name = `${r.nome || ''} ${r.cognome || ''} ${r.pattuglia || ''}`.toLowerCase()
     return name.includes(searchTerm.toLowerCase())
   })
+
+  const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]
 
   // Calcoli KPI
   const totale = ragazzi.length || 1
@@ -126,9 +166,16 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
             Gestisci la consegna dei moduli privacy, autorizzazioni genitori e schede mediche dei ragazzi.
           </p>
         </div>
-        <Button onClick={() => setIsScannerOpen(true)} className="bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 font-semibold gap-2 shadow-sm">
-          <Sparkles className="w-4 h-4" /> 📸 Scanner IA Documenti
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setIsBulkOpen(true)} variant="outline" className="border-slate-300 text-slate-800 hover:bg-slate-50 gap-2 font-medium text-xs">
+            <Users className="w-4 h-4 text-agesci-blue" /> Azione Squadriglia
+          </Button>
+
+          <Button onClick={() => setIsScannerOpen(true)} className="bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 font-semibold gap-2 shadow-sm text-xs">
+            <Sparkles className="w-4 h-4" /> 📸 Scanner IA Documenti
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards Bento Summary */}
@@ -252,6 +299,76 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           </table>
         </div>
       </div>
+
+      {/* MODALE AZIONE SQUADRIGLIA / GRUPPO */}
+      <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-agesci-blue">
+              <Users className="w-5 h-5 text-agesci-blue" />
+              Aggiornamento Documenti per Squadriglia
+            </DialogTitle>
+            <DialogDescription>
+              Segna rapidamente uno specifico documento come consegnato o mancante per un'intera squadriglia o per tutti i ragazzi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="space-y-1.5">
+              <Label>Seleziona Squadriglia / Pattuglia</Label>
+              <Select value={bulkSquadriglia} onValueChange={setBulkSquadriglia}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Seleziona squadriglia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TUTTE">TUTTE LE SQUADRIGLIE</SelectItem>
+                  {pattuglie.map(p => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Documento da Modificare</Label>
+              <Select value={bulkField} onValueChange={(v: any) => setBulkField(v)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Seleziona documento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="foglio_privacy_firmato">Modulo Privacy AGESCI</SelectItem>
+                  <SelectItem value="partecipazione_ci">Autorizzazione Campo Invernale</SelectItem>
+                  <SelectItem value="scheda_medica_ci">Scheda Medica Campo Invernale</SelectItem>
+                  <SelectItem value="partecipazione_ce">Autorizzazione Campo Estivo</SelectItem>
+                  <SelectItem value="scheda_medica_ce">Scheda Medica Campo Estivo</SelectItem>
+                  <SelectItem value="quota_censimento">Quota Censimento Pagata</SelectItem>
+                  <SelectItem value="ricevuta_censimento">Ricevuta Censimento Consegnata</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Stato da Impostare</Label>
+              <Select value={bulkValue ? 'true' : 'false'} onValueChange={v => setBulkValue(v === 'true')}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Seleziona stato" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">✅ Segna come CONSEGNATO / PAGATO</SelectItem>
+                  <SelectItem value="false">❌ Segna come MANCANTE / NON PAGATO</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" size="sm" onClick={() => setIsBulkOpen(false)}>Annulla</Button>
+            <Button size="sm" onClick={handleApplyBulk} disabled={isApplyingBulk} className="bg-agesci-blue hover:bg-agesci-blue-light text-white">
+              {isApplyingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Applica a Squadriglia'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* MODALE SCANNER IA DOCUMENTI */}
       <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
