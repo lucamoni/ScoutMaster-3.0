@@ -23,7 +23,8 @@ import {
   Compass,
   Landmark,
   Banknote,
-  Sparkles
+  Sparkles,
+  FileText
 } from 'lucide-react'
 import { CassaBot } from '@/components/CassaBot'
 import { cn } from '@/lib/utils'
@@ -117,7 +118,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         { name: 'Report Completi', href: '/report', icon: Download },
         { name: 'Link & Fogli Google', href: '/impostazioni', icon: FileSpreadsheet },
         { name: 'Reminder', href: '/reminder', icon: Bell },
-        { name: 'Privacy', href: '/privacy', icon: Lock },
+        { name: 'Documenti & Privacy', href: '/privacy', icon: FileText },
         { name: 'Impostazioni', href: '/impostazioni', icon: Settings },
       ]
     }
