@@ -22,7 +22,11 @@ import {
   AlertTriangle,
   UserPlus,
   RefreshCw,
-  Trash2
+  Trash2,
+  FolderArchive,
+  Download,
+  Eye,
+  File
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -32,6 +36,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -42,6 +47,18 @@ interface CustomDocPerRagazzo {
   doc_id: string
   titolo: string
   consegnato: boolean
+}
+
+interface ArchivedDocumentFile {
+  id: string
+  ragazzo_id: string
+  ragazzo_nome: string
+  titolo_documento: string
+  tipo_documento: string
+  file_name: string
+  file_url: string
+  mime_type: string
+  created_at: string
 }
 
 export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] }) {
@@ -55,11 +72,20 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const [targetRagazzoForDoc, setTargetRagazzoForDoc] = useState<Ragazzo | null>(null)
   const [newCustomDocTitolo, setNewCustomDocTitolo] = useState('')
 
+  // Archivio File Documenti Salvati (PDF / Immagini)
+  const [archivedFiles, setArchivedFiles] = useState<ArchivedDocumentFile[]>([])
+  const [isArchivioModalOpen, setIsArchivioModalOpen] = useState(false)
+  const [targetRagazzoForArchivio, setTargetRagazzoForArchivio] = useState<Ragazzo | null>(null)
+  const [isUploadingToArchivio, setIsUploadingToArchivio] = useState(false)
+  const [uploadTitoloDoc, setUploadTitoloDoc] = useState('')
+  const [uploadTipoDoc, setUploadTipoDoc] = useState('Modulo Privacy')
+
   // Stato per lo Scanner IA & Discrepanze
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState<any>(null)
   const [selectedDiscrepancies, setSelectedDiscrepancies] = useState<Record<string, boolean>>({})
+  const [scannedFileObj, setScannedFileObj] = useState<File | null>(null)
 
   // Stato per Azione di Gruppo / Squadriglia
   const [isBulkOpen, setIsBulkOpen] = useState(false)
@@ -68,24 +94,42 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const [bulkValue, setBulkValue] = useState<boolean>(true)
   const [isApplyingBulk, setIsApplyingBulk] = useState(false)
 
-  // Carica i documenti personalizzati singoli da Supabase
+  // Carica custom docs ed archivio file da Supabase
   useEffect(() => {
-    async function loadCustomDocs() {
-      const { data } = await supabase.from('impostazioni').select('valore').eq('chiave', 'custom_docs_ragazzi').maybeSingle()
-      if (data && data.valore) {
+    async function loadData() {
+      const [{ data: cDocs }, { data: aFiles }] = await Promise.all([
+        supabase.from('impostazioni').select('valore').eq('chiave', 'custom_docs_ragazzi').maybeSingle(),
+        supabase.from('impostazioni').select('valore').eq('chiave', 'archivio_documenti_digitale').maybeSingle()
+      ])
+
+      if (cDocs && cDocs.valore) {
         try {
-          const parsed = JSON.parse(data.valore)
+          const parsed = JSON.parse(cDocs.valore)
           if (Array.isArray(parsed)) setCustomDocs(parsed)
         } catch {}
       }
+
+      if (aFiles && aFiles.valore) {
+        try {
+          const parsed = JSON.parse(aFiles.valore)
+          if (Array.isArray(parsed)) setArchivedFiles(parsed)
+        } catch {}
+      }
     }
-    loadCustomDocs()
+    loadData()
   }, [])
 
   const saveCustomDocsToDb = async (newList: CustomDocPerRagazzo[]) => {
     setCustomDocs(newList)
     await supabase.from('impostazioni').upsert([
       { chiave: 'custom_docs_ragazzi', valore: JSON.stringify(newList) }
+    ])
+  }
+
+  const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
+    setArchivedFiles(newList)
+    await supabase.from('impostazioni').upsert([
+      { chiave: 'archivio_documenti_digitale', valore: JSON.stringify(newList) }
     ])
   }
 
@@ -120,6 +164,47 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     toast.success('Documento personalizzato rimosso')
   }
 
+  // Caricamento diretto di un file nell'Archivio Digitale
+  const handleUploadFileToArchivio = async (file: File) => {
+    if (!targetRagazzoForArchivio) return
+    setIsUploadingToArchivio(true)
+
+    try {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const base64Url = e.target?.result as string
+        const newArchivedItem: ArchivedDocumentFile = {
+          id: 'arch_' + Date.now(),
+          ragazzo_id: targetRagazzoForArchivio.id,
+          ragazzo_nome: `${targetRagazzoForArchivio.nome} ${targetRagazzoForArchivio.cognome}`,
+          titolo_documento: uploadTitoloDoc.trim() || file.name,
+          tipo_documento: uploadTipoDoc,
+          file_name: file.name,
+          file_url: base64Url,
+          mime_type: file.type,
+          created_at: new Date().toISOString()
+        }
+
+        const updated = [...archivedFiles, newArchivedItem]
+        await saveArchivedFilesToDb(updated)
+        toast.success(`File "${file.name}" salvato nell'Archivio Digitale per ${targetRagazzoForArchivio.nome}!`)
+        setIsUploadingToArchivio(false)
+        setUploadTitoloDoc('')
+      }
+      reader.readAsDataURL(file)
+    } catch {
+      toast.error('Impossibile salvare il file nell\'archivio')
+      setIsUploadingToArchivio(false)
+    }
+  }
+
+  const handleDeleteArchivedFile = async (fileId: string) => {
+    if (!confirm('Eliminare questo documento salvato dall\'archivio?')) return
+    const updated = archivedFiles.filter(af => af.id !== fileId)
+    await saveArchivedFilesToDb(updated)
+    toast.success('File rimosso dall\'Archivio Digitale')
+  }
+
   const toggleStatus = async (
     id: string,
     field: PrivacyField,
@@ -134,6 +219,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const handleFileUpload = async (file: File) => {
     setIsScanning(true)
     setScanResult(null)
+    setScannedFileObj(file)
     setSelectedDiscrepancies({})
 
     const formData = new FormData()
@@ -152,7 +238,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
       setScanResult(result)
       
-      // Se ci sono discrepanze, selezionale tutte di default per aggiornare
       if (result.discrepancies && result.discrepancies.length > 0) {
         const initialDiscState: Record<string, boolean> = {}
         result.discrepancies.forEach((d: any) => {
@@ -167,6 +252,29 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     } finally {
       setIsScanning(false)
     }
+  }
+
+  // Salva automaticamente il file scansionato nell'archivio digitale
+  const autoArchiveScannedFile = async (ragazzoId: string, ragazzoNome: string, tipoDoc: string) => {
+    if (!scannedFileObj) return
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const base64Url = e.target?.result as string
+      const newArchivedItem: ArchivedDocumentFile = {
+        id: 'arch_' + Date.now(),
+        ragazzo_id: ragazzoId,
+        ragazzo_nome: ragazzoNome,
+        titolo_documento: `${tipoDoc} (Scansionato IA)`,
+        tipo_documento: tipoDoc,
+        file_name: scannedFileObj.name,
+        file_url: base64Url,
+        mime_type: scannedFileObj.type,
+        created_at: new Date().toISOString()
+      }
+      const updated = [...archivedFiles, newArchivedItem]
+      await saveArchivedFilesToDb(updated)
+    }
+    reader.readAsDataURL(scannedFileObj)
   }
 
   // Conferma aggiunta nuovo ragazzo da OCR
@@ -197,7 +305,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
       const { data, error } = await supabase.from('ragazzi').insert(newRagazzoPayload).select().single()
       if (error) throw error
 
-      toast.success(`Nuovo ragazzo ${data.nome} ${data.cognome} aggiunto in Anagrafica!`)
+      await autoArchiveScannedFile(data.id, `${data.nome} ${data.cognome}`, ext.tipo_documento_riconosciuto || 'Documento Scout')
+
+      toast.success(`Nuovo ragazzo ${data.nome} ${data.cognome} aggiunto ed archiviato!`)
       setRagazzi(prev => [...prev, data])
       setIsScannerOpen(false)
     } catch (err: any) {
@@ -213,13 +323,11 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
     const updatePayload: Record<string, any> = {}
 
-    // Spunte documenti sempre aggiornate dall'OCR se presenti
     if (ext.foglio_privacy_firmato) updatePayload.foglio_privacy_firmato = true
     if (ext.scheda_medica_ci) updatePayload.scheda_medica_ci = true
     if (ext.scheda_medica_ce) updatePayload.scheda_medica_ce = true
     if (ext.ricevuta_censimento) updatePayload.ricevuta_censimento = true
 
-    // Aggiorna solo i campi selezionati nella tendina delle discrepanze
     if (scanResult.discrepancies) {
       scanResult.discrepancies.forEach((d: any) => {
         if (selectedDiscrepancies[d.field]) {
@@ -232,7 +340,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
       const { error } = await supabase.from('ragazzi').update(updatePayload).eq('id', scout.id)
       if (error) throw error
 
-      toast.success(`Dati ed anagrafica di ${scout.nome} ${scout.cognome} aggiornati!`)
+      await autoArchiveScannedFile(scout.id, `${scout.nome} ${scout.cognome}`, ext.tipo_documento_riconosciuto || 'Documento Scout')
+
+      toast.success(`Dati e documento di ${scout.nome} ${scout.cognome} salvati nell'Archivio!`)
       setRagazzi(prev => prev.map(r => r.id === scout.id ? { ...r, ...updatePayload } : r))
       setIsScannerOpen(false)
     } catch (err: any) {
@@ -329,11 +439,15 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
             Documenti & Privacy Reparto
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestisci la consegna dei moduli privacy, autorizzazioni genitori e schede mediche dei ragazzi.
+            Gestisci le consegne, salva i file nell'archivio digitale ed utilizza lo scanner IA.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => { setTargetRagazzoForArchivio(null); setIsArchivioModalOpen(true); }} variant="outline" className="border-slate-300 text-slate-800 hover:bg-slate-50 gap-2 font-medium text-xs">
+            <FolderArchive className="w-4 h-4 text-purple-600" /> Archivio Digitale ({archivedFiles.length})
+          </Button>
+
           <Button onClick={() => setIsBulkOpen(true)} variant="outline" className="border-slate-300 text-slate-800 hover:bg-slate-50 gap-2 font-medium text-xs">
             <Users className="w-4 h-4 text-agesci-blue" /> Azione Squadriglia
           </Button>
@@ -424,7 +538,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Medica CE</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Quota Cens.</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Ricevuta</th>
-                <th className="px-3 py-3 border-r border-slate-200/80">Documenti Specifici Singoli</th>
+                <th className="px-3 py-3 border-r border-slate-200/80">Documenti Personalizzati / File Archiviati</th>
                 <th className="px-3 py-3 text-center w-16">WA</th>
               </tr>
             </thead>
@@ -432,6 +546,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
               {filteredRagazzi.map((r, i) => {
                 const waLink = getWhatsAppReminder(r)
                 const ragazzoCustomDocs = customDocs.filter(cd => cd.ragazzo_id === r.id)
+                const ragazzoArchivedFiles = archivedFiles.filter(af => af.ragazzo_id === r.id)
 
                 return (
                   <tr key={r.id} className={cn("hover:bg-slate-50/80 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/40")}>
@@ -447,9 +562,10 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                     <td className="p-0">{renderCell(r, 'quota_censimento')}</td>
                     <td className="p-0">{renderCell(r, 'ricevuta_censimento')}</td>
 
-                    {/* Colonna Documenti Personalizzati Specifici per il Singolo Ragazzo */}
+                    {/* Colonna Documenti Personalizzati & Archivio File */}
                     <td className="px-3 py-2 border-r border-slate-100">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Spunte Custom */}
                         {ragazzoCustomDocs.map(cd => (
                           <Badge 
                             key={cd.doc_id}
@@ -471,6 +587,19 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                           </Badge>
                         ))}
 
+                        {/* File PDF/Immagini Archiviati */}
+                        {ragazzoArchivedFiles.map(af => (
+                          <Badge 
+                            key={af.id} 
+                            variant="secondary"
+                            className="bg-purple-50 text-purple-800 border border-purple-200 text-[11px] font-medium gap-1 py-1 px-2 cursor-pointer hover:bg-purple-100"
+                            onClick={() => { setTargetRagazzoForArchivio(r); setIsArchivioModalOpen(true); }}
+                          >
+                            <File className="w-3 h-3 text-purple-600" />
+                            <span className="truncate max-w-[120px]">{af.titolo_documento}</span>
+                          </Badge>
+                        ))}
+
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -478,6 +607,15 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                           className="h-7 text-[11px] text-agesci-blue hover:bg-sky-50 px-2 font-medium border border-dashed border-sky-300"
                         >
                           <Plus className="w-3 h-3 mr-1" /> Doc Specifico
+                        </Button>
+
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => { setTargetRagazzoForArchivio(r); setIsArchivioModalOpen(true); }}
+                          className="h-7 text-[11px] text-purple-700 hover:bg-purple-50 px-2 font-medium border border-dashed border-purple-300"
+                        >
+                          <Upload className="w-3 h-3 mr-1" /> Carica File
                         </Button>
                       </div>
                     </td>
@@ -504,6 +642,121 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           </table>
         </div>
       </div>
+
+      {/* MODALE ARCHIVIO DIGITALE FILE SALVATI */}
+      <Dialog open={isArchivioModalOpen} onOpenChange={setIsArchivioModalOpen}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-purple-900">
+              <FolderArchive className="w-5 h-5 text-purple-600" />
+              Archivio Digitale Documenti {targetRagazzoForArchivio ? `di ${targetRagazzoForArchivio.nome} ${targetRagazzoForArchivio.cognome}` : 'Reparto (Tutti i File)'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Visualizza e scarica i file originali (PDF/foto scansionate) salvati in archivio.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2 text-xs">
+            {/* Form Caricamento File */}
+            <div className="bg-purple-50/60 border border-purple-200 rounded-xl p-4 space-y-3">
+              <div className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                <Upload className="w-4 h-4 text-purple-600" /> Carica un Nuovo Documento PDF/Immagine in Archivio
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Nome / Titolo del Documento</Label>
+                  <Input 
+                    placeholder="es. Scheda Sanitaria Firmata 2026"
+                    value={uploadTitoloDoc}
+                    onChange={e => setUploadTitoloDoc(e.target.value)}
+                    className="h-9 bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Tipo Documento</Label>
+                  <Select value={uploadTipoDoc} onValueChange={setUploadTipoDoc}>
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Modulo Privacy">Modulo Privacy AGESCI</SelectItem>
+                      <SelectItem value="Scheda Medica">Scheda Medica</SelectItem>
+                      <SelectItem value="Ricevuta Censimento">Ricevuta Censimento</SelectItem>
+                      <SelectItem value="Certificato Medico">Certificato Medico / Agonistico</SelectItem>
+                      <SelectItem value="Altro Documento">Altro Documento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-medium text-xs shadow-2xs">
+                  {isUploadingToArchivio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  <span>Seleziona e Salva File PDF/Foto</span>
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf" 
+                    className="hidden" 
+                    onChange={e => {
+                      if (e.target.files?.[0]) handleUploadFileToArchivio(e.target.files[0])
+                    }} 
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Lista File Archiviati */}
+            <div className="space-y-2">
+              <h3 className="font-bold text-slate-800 text-xs">File Salvati in Archivio ({targetRagazzoForArchivio ? archivedFiles.filter(a => a.ragazzo_id === targetRagazzoForArchivio.id).length : archivedFiles.length}):</h3>
+
+              {(targetRagazzoForArchivio ? archivedFiles.filter(a => a.ragazzo_id === targetRagazzoForArchivio.id) : archivedFiles).length === 0 ? (
+                <div className="p-6 text-center text-slate-400 border border-dashed rounded-xl">
+                  Nessun file salvato in archivio per questo ragazzo.
+                </div>
+              ) : (
+                <div className="divide-y border border-slate-200 rounded-xl overflow-hidden bg-white">
+                  {(targetRagazzoForArchivio ? archivedFiles.filter(a => a.ragazzo_id === targetRagazzoForArchivio.id) : archivedFiles).map(af => (
+                    <div key={af.id} className="p-3 flex items-center justify-between hover:bg-slate-50">
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <File className="w-4 h-4 text-purple-600 shrink-0" />
+                          {af.titolo_documento}
+                          <Badge variant="outline" className="text-[10px] bg-slate-50">{af.tipo_documento}</Badge>
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {af.ragazzo_nome} • {af.file_name} • {new Date(af.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            const win = window.open()
+                            win?.document.write(`<iframe src="${af.file_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`)
+                          }}
+                          className="h-8 text-xs gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Apri File
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => handleDeleteArchivedFile(af.id)}
+                          className="h-8 text-rose-600 hover:bg-rose-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* MODALE AGGIUNGI DOCUMENTO SPECIFICO SINGOLO RAGAZZO */}
       <Dialog open={isAddCustomDocOpen} onOpenChange={setIsAddCustomDocOpen}>
@@ -666,7 +919,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                     </div>
                     <div className="pt-1 flex gap-2">
                       <Button onClick={handleConfirmNewScoutFromOcr} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs gap-1.5 w-full">
-                        <UserPlus className="w-4 h-4" /> Aggiungi {scanResult.extracted.nome} in Anagrafica
+                        <UserPlus className="w-4 h-4" /> Aggiungi {scanResult.extracted.nome} in Anagrafica e Salva in Archivio
                       </Button>
                     </div>
                   </div>
@@ -677,7 +930,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                       <div>
                         <strong>Ragazzo Riconosciuto:</strong> {scanResult.matchedScout.nome} {scanResult.matchedScout.cognome} ({scanResult.matchedScout.pattuglia || 'Nessuna Sq.'})
                       </div>
-                      <Badge className="bg-emerald-600 text-white text-[10px]">Documento Verificato</Badge>
+                      <Badge className="bg-emerald-600 text-white text-[10px]">Verificato & Archiviato</Badge>
                     </div>
 
                     {scanResult.discrepancies && scanResult.discrepancies.length > 0 ? (
@@ -709,14 +962,14 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                         </div>
 
                         <Button onClick={handleConfirmDiscrepanciesUpdate} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 w-full">
-                          <RefreshCw className="w-4 h-4" /> Conferma ed Aggiorna Anagrafica
+                          <RefreshCw className="w-4 h-4" /> Aggiorna Anagrafica e Salva in Archivio
                         </Button>
                       </div>
                     ) : (
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-center justify-between">
                         <span>Nessuna discrepanza trovata. L'anagrafica è già perfettamente allineata!</span>
                         <Button onClick={handleConfirmDiscrepanciesUpdate} size="sm" className="bg-agesci-blue text-white text-xs">
-                          Aggiorna Spunte Documento
+                          Salva File in Archivio
                         </Button>
                       </div>
                     )}
