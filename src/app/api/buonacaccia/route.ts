@@ -8,6 +8,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'URL mancante' }, { status: 400 })
     }
 
+    let rawHtml = ''
     let cleanText = url
 
     try {
@@ -20,8 +21,8 @@ export async function POST(req: Request) {
       })
       
       if (response.ok) {
-        const html = await response.text()
-        cleanText = html
+        rawHtml = await response.text()
+        cleanText = rawHtml
           .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
           .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
           .replace(/<[^>]+>/g, ' ')
@@ -33,8 +34,18 @@ export async function POST(req: Request) {
       console.warn('Impossibile scaricare direttamente l\'URL, procedo con l\'analisi del testo:', fetchErr)
     }
 
+    // Direct regex extraction fallback from HTML
+    let extractedTitle: string | null = null
+    if (rawHtml) {
+      const titleMatch = rawHtml.match(/<title>([^<]+)<\/title>/i) || rawHtml.match(/<h[12][^>]*>([^<]+)<\/h[12]>/i)
+      if (titleMatch && titleMatch[1]) {
+        let t = titleMatch[1].replace(/- Buona\s?Caccia/i, '').replace(/BuonaCaccia/i, '').trim()
+        if (t.length > 3) extractedTitle = t
+      }
+    }
+
     let eventData = {
-      titolo: 'Evento BuonaCaccia',
+      titolo: extractedTitle || 'Evento BuonaCaccia',
       categoria: 'Specialita',
       branca: 'EG',
       regione: null,
@@ -54,23 +65,24 @@ export async function POST(req: Request) {
           model: 'gemini-2.0-flash',
           contents: [
             {
-              text: `Sei un assistente per lo scoutismo AGESCI. Analizza il seguente testo ed estrai i dati richiesti.
+              text: `Sei un assistente per lo scoutismo AGESCI. Analizza il seguente testo dell'evento BuonaCaccia ed estrai i dati richiesti.
 RESTITUISCI SOLO UN OGGETTO JSON.
 Se non trovi un'informazione, imposta il valore a null.
 Le date devono essere nel formato YYYY-MM-DD.
+Le date di iscrizione se presenti devono essere nel formato YYYY-MM-DDTHH:mm:00Z.
 
 I campi JSON attesi sono:
 {
-  "titolo": string, (titolo completo dell'evento)
+  "titolo": string, (titolo completo dell'evento compreso di regione e tipo se presente, es. '[Campania] CFM L/C - Ottobre - Dicembre mod. B')
   "categoria": string, (uno tra: 'Specialita', 'Competenza', 'CFT', 'CFM', 'CFA', 'Piccole Orme', 'Altro')
   "branca": string, (uno tra: 'EG', 'CAPI')
   "regione": string, (regione dell'evento se specificata)
-  "luogo": string, (località/indirizzo esatto dell'evento)
+  "luogo": string, (località/indirizzo esatto dell'evento, es. 'Aiello del Sabato (AV)')
   "data_inizio": string, (YYYY-MM-DD)
   "data_fine": string, (YYYY-MM-DD)
-  "apertura_iscrizioni": string, (YYYY-MM-DDTHH:mm:00Z)
-  "chiusura_iscrizioni": string, (YYYY-MM-DDTHH:mm:00Z)
-  "costo_evento": number, (il costo in euro, solo numero)
+  "apertura_iscrizioni": string, (ISO string)
+  "chiusura_iscrizioni": string, (ISO string)
+  "costo_evento": number, (il costo in euro come numero decimale, es. 51.50)
   "note": string
 }
 

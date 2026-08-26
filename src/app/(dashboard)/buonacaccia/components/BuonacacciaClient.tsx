@@ -224,8 +224,16 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
           body: JSON.stringify({ url: targetUrl })
         })
         const { data } = await res.json()
-        if (data && data.titolo) {
-          eventPayload = { ...eventPayload, ...data }
+        if (data) {
+          if (data.titolo && data.titolo !== 'Evento BuonaCaccia') eventPayload.titolo = data.titolo
+          if (data.categoria) eventPayload.categoria = data.categoria
+          if (data.branca) eventPayload.branca = data.branca
+          if (data.luogo) eventPayload.luogo = data.luogo
+          if (data.costo_evento) eventPayload.costo_evento = data.costo_evento
+          if (data.data_inizio) eventPayload.data_inizio = data.data_inizio
+          if (data.data_fine) eventPayload.data_fine = data.data_fine
+          if (data.apertura_iscrizioni) eventPayload.apertura_iscrizioni = data.apertura_iscrizioni
+          if (data.chiusura_iscrizioni) eventPayload.chiusura_iscrizioni = data.chiusura_iscrizioni
         }
       } catch (err) {
         console.warn('Fallback estrazione BuonaCaccia:', err)
@@ -552,53 +560,51 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
             <div className="space-y-2 col-span-full">
               <div className="flex items-center justify-between">
                 <Label>Link Evento BuonaCaccia</Label>
-                {editingEvento.url_evento && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-7 text-xs text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 gap-1 font-medium"
-                    disabled={isImporting}
-                    onClick={async () => {
-                      if (!editingEvento.url_evento) return
-                      setIsImporting(true)
-                      try {
-                        const res = await fetch('/api/buonacaccia', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ url: editingEvento.url_evento })
-                        })
-                        const { data } = await res.json()
-                        if (data && data.titolo) {
-                          setEditingEvento(prev => ({
-                            ...prev,
-                            titolo: data.titolo || prev.titolo,
-                            luogo: data.luogo || prev.luogo,
-                            costo_evento: data.costo_evento || prev.costo_evento,
-                            data_inizio: data.data_inizio || prev.data_inizio,
-                            data_fine: data.data_fine || prev.data_fine,
-                            apertura_iscrizioni: data.apertura_iscrizioni || prev.apertura_iscrizioni,
-                            chiusura_iscrizioni: data.chiusura_iscrizioni || prev.chiusura_iscrizioni,
-                            categoria: data.categoria || prev.categoria,
-                            branca: data.branca || prev.branca
-                          }))
-                          toast.success(`✨ Dati dell'evento "${data.titolo}" estratti con successo!`)
-                        } else {
-                          toast.error('Nessun dato aggiuntivo trovato dal link')
-                        }
-                      } catch (err: any) {
-                        toast.error(err.message || 'Errore estrazione dati')
-                      } finally {
-                        setIsImporting(false)
-                      }
-                    }}
-                  >
-                    {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                    ✨ Estrai Dati da Link (AI)
-                  </Button>
+                {isImporting && (
+                  <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Estrazione IA in corso...
+                  </span>
                 )}
               </div>
-              <Input type="url" placeholder="https://buonacaccia.net/Event.aspx?e=..." value={editingEvento.url_evento || ''} onChange={e => setEditingEvento({...editingEvento, url_evento: e.target.value})} />
+              <Input 
+                type="url" 
+                placeholder="https://buonacaccia.net/Event.aspx?e=..." 
+                value={editingEvento.url_evento || ''} 
+                onChange={async (e) => {
+                  const val = e.target.value
+                  setEditingEvento(prev => ({ ...prev, url_evento: val }))
+                  if (val && val.includes('buonacaccia.net/Event.aspx?e=') && val.length > 25) {
+                    try {
+                      setIsImporting(true)
+                      const res = await fetch('/api/buonacaccia', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: val })
+                      })
+                      const { data } = await res.json()
+                      if (data && data.titolo && data.titolo !== 'Evento BuonaCaccia') {
+                        setEditingEvento(prev => ({
+                          ...prev,
+                          titolo: data.titolo || prev.titolo,
+                          luogo: data.luogo || prev.luogo,
+                          costo_evento: data.costo_evento || prev.costo_evento,
+                          data_inizio: data.data_inizio || prev.data_inizio,
+                          data_fine: data.data_fine || prev.data_fine,
+                          apertura_iscrizioni: data.apertura_iscrizioni || prev.apertura_iscrizioni,
+                          chiusura_iscrizioni: data.chiusura_iscrizioni || prev.chiusura_iscrizioni,
+                          categoria: data.categoria || prev.categoria,
+                          branca: data.branca || prev.branca
+                        }))
+                        toast.success(`✨ Dati dell'evento "${data.titolo}" compilati automaticamente!`)
+                      }
+                    } catch (err) {
+                      console.warn('Auto estrazione link err:', err)
+                    } finally {
+                      setIsImporting(false)
+                    }
+                  }
+                }} 
+              />
             </div>
           </div>
           <DialogFooter className="mt-4">
