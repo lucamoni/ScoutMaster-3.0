@@ -477,10 +477,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           <Button onClick={() => setIsBulkOpen(true)} variant="outline" className="border-slate-300 text-slate-800 hover:bg-slate-50 gap-2 font-medium text-xs">
             <Users className="w-4 h-4 text-agesci-blue" /> Azione Squadriglia
           </Button>
-
-          <Button onClick={() => { setTargetScoutForAi(null); setIsAiUploadOpen(true); }} className="bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 font-semibold gap-2 shadow-sm text-xs">
-            <Sparkles className="w-4 h-4" /> 📄 Inserisci Documento Generale (AI)
-          </Button>
         </div>
       </div>
 
@@ -595,9 +591,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                         <Button 
                           size="sm" 
                           onClick={() => { setTargetScoutForAi(r); setIsAiUploadOpen(true); }}
-                          className="h-7 text-[11px] bg-purple-700 hover:bg-purple-800 text-amber-300 font-semibold px-2.5 shadow-2xs gap-1"
+                          className="h-7 text-[11px] bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium px-2.5 shadow-2xs gap-1"
                         >
-                          <Sparkles className="w-3 h-3 text-amber-400" /> ⚡ Carica / Modifica Doc (AI)
+                          <Sparkles className="w-3 h-3 text-amber-400" /> Carica / Modifica Doc (AI)
                         </Button>
 
                         {ragazzoCustomDocs.map(cd => (
@@ -774,7 +770,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                 <Button 
                   onClick={targetScoutForAi ? handleSaveDocForTargetScout : (scanResult.isNewScout ? handleConfirmNewScoutFromOcr : handleSaveDocForTargetScout)} 
                   size="sm" 
-                  className="bg-purple-700 hover:bg-purple-800 text-white font-semibold text-xs gap-1.5 w-full py-2.5 shadow-sm"
+                  className="bg-agesci-blue hover:bg-agesci-blue-light text-white font-semibold text-xs gap-1.5 w-full py-2.5 shadow-sm"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   Salva Documento in "{getCategoryLabel(selectedCategory)}" ed Spunta Consegnato
