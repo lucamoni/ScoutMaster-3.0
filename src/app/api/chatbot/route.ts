@@ -31,21 +31,25 @@ export async function POST(request: Request) {
       },
     })
 
-    const [ragazziRes, eventiRes, speseRes, quoteRes, partecipazioniRes] = await Promise.all([
+    // Fetch completo di ragazzi, eventi, partecipazioni (con join ragazzi), spese, quote e Buonacaccia
+    const [ragazziRes, eventiRes, partecipazioniRes, speseRes, quoteRes, bcEventiRes, bcCandRes] = await Promise.all([
       supabase.from('ragazzi').select('id, nome, cognome, sesso, pattuglia, attivo').limit(100),
-      supabase.from('eventi').select('id, nome_evento, quota_standard, data_inizio').limit(20),
-      supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data').order('data', { ascending: false }).limit(30),
-      supabase.from('quote_mensili').select('ragazzo_id, gennaio, febbraio, marzo, aprile, maggio, giugno, luglio, agosto, settembre, ottobre, novembre, dicembre').limit(50),
-      supabase.from('partecipazioni_eventi').select('ragazzo_id, evento_id, riscosso, quota_dovuta').limit(50)
+      supabase.from('eventi').select('id, nome_evento, quota_standard, data_inizio, tipo_evento').limit(50),
+      supabase.from('partecipazioni_eventi').select('id, evento_id, ragazzo_id, presente, riscosso, quota_dovuta, ragazzi(nome, cognome, pattuglia)').limit(200),
+      supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data, descrizione').order('data', { ascending: false }).limit(50),
+      supabase.from('quote_mensili').select('ragazzo_id, gennaio, febbraio, marzo, aprile, maggio, giugno, luglio, agosto, settembre, ottobre, novembre, dicembre').limit(100),
+      supabase.from('eventi_buonacaccia' as any).select('id, titolo, categoria, branca, data_inizio, luogo, costo_evento').limit(50),
+      supabase.from('candidature_buonacaccia' as any).select('id, evento_id, ragazzo_id, stato_iscrizione, quota_pagata, ragazzi(nome, cognome, pattuglia)').limit(200)
     ])
 
     const allRagazzi = ragazziRes.data || []
-    // Considera attivi tutti i ragazzi tranne quelli esplicitamente disattivati (attivo === false)
     const ragazzi = allRagazzi.filter(r => r.attivo !== false)
     const eventi = eventiRes.data || []
+    const partecipazioni = partecipazioniRes.data || []
     const spese = speseRes.data || []
     const quote = quoteRes.data || []
-    const partecipazioni = partecipazioniRes.data || []
+    const bcEventi = bcEventiRes.data || []
+    const bcCandidature = bcCandRes.data || []
 
     let totaleEntrate = 0
     let totaleUscite = 0
@@ -55,6 +59,21 @@ export async function POST(request: Request) {
     })
     const saldoAttuale = totaleEntrate - totaleUscite
 
+    // Mappa eventi con il conteggio e lista nomi dei presenti
+    const eventiDettaglio = eventi.map(e => {
+      const partEv = partecipazioni.filter(p => p.evento_id === e.id)
+      const presenti = partEv.filter(p => p.presente !== false)
+      const nomiPresenti = presenti.map((p: any) => `${p.ragazzi?.nome || ''} ${p.ragazzi?.cognome || ''} (${p.ragazzi?.pattuglia || 'Senza Sq.'})`).filter(Boolean)
+      return {
+        id: e.id,
+        nome_evento: e.nome_evento,
+        data_inizio: e.data_inizio,
+        totale_iscritti: partEv.length,
+        totale_presenti: presenti.length,
+        nomi_presenti: nomiPresenti
+      }
+    })
+
     const dbContext = {
       riassunto_cassa: {
         totale_entrate: totaleEntrate,
@@ -63,10 +82,11 @@ export async function POST(request: Request) {
         totale_ragazzi: ragazzi.length
       },
       ragazzi,
-      eventi,
+      eventi: eventiDettaglio,
+      eventi_buonacaccia: bcEventi,
+      candidature_buonacaccia: bcCandidature,
       ultime_spese: spese,
-      quote_mensili: quote,
-      partecipazioni_eventi: partecipazioni
+      quote_mensili: quote
     }
 
     const systemPrompt = `Sei "ScoutBot", l'assistente IA ufficiale del Reparto Scout per ScoutMaster 3.0.
@@ -74,11 +94,11 @@ Rispondi alle domande dei Capi Reparto utilizzando le seguenti informazioni estr
 ${JSON.stringify(dbContext)}
 
 Regole di risposta:
+- Usa sempre formattazione Markdown pulita (es. **grassetto** per numeri e nomi, elenchi con - o *).
 - Sii chiaro, sintetico e amichevole, a tema scoutismo AGESCI.
-- Rispondi in italiano preciso.
+- Se ti chiedono delle presenze ad un evento (es. campo estivo, campo invernale, uscita), indica il numero esatto dei presenti ed elenca i nomi se disponibili.
 - Se ti chiedono del saldo o della cassa, usa 'riassunto_cassa'.
-- Se ti chiedono dei ragazzi o presenze/quote, consulta 'ragazzi', 'quote_mensili' o 'partecipazioni_eventi'.
-- Se non conosci una risposta non inventare dati.`
+- Se non trovi i dati per rispondere dillo con cortesia senza inventare.`
 
     // 1. Prova prima con Gemini API (se presente GEMINI_API_KEY)
     if (process.env.GEMINI_API_KEY) {
@@ -132,16 +152,26 @@ Regole di risposta:
       }
     }
 
-    // 3. Fallback locale automatico pulito se nessuna API key è impostata
+    // 3. Fallback locale intelligente se le API esterne non sono ancora configurate su Vercel
     const lowerMsg = message.toLowerCase()
     let fallbackReply = ''
 
-    if (lowerMsg.includes('cassa') || lowerMsg.includes('saldo') || lowerMsg.includes('totale') || lowerMsg.includes('bilancio')) {
-      fallbackReply = `⚜️ **Stato Cassa ScoutMaster**:\n- **Saldo Attuale**: €${saldoAttuale.toFixed(2)}\n- **Totale Entrate**: €${totaleEntrate.toFixed(2)}\n- **Totale Uscite**: €${totaleUscite.toFixed(2)}\n- **Ragazzi iscritti**: ${ragazzi.length}`
-    } else if (lowerMsg.includes('ragazz') || lowerMsg.includes('quanti') || lowerMsg.includes('iscritt')) {
-      fallbackReply = `⚜️ Nel Reparto ci sono attualmente **${ragazzi.length} ragazzi attivi** censiti su ScoutMaster.`
+    // Cerca corrispondenza su eventi o presenze
+    const eventMatch = eventiDettaglio.find(e => lowerMsg.includes(e.nome_evento.toLowerCase()) || (lowerMsg.includes('estivo') && e.nome_evento.toLowerCase().includes('estivo')) || (lowerMsg.includes('invernale') && e.nome_evento.toLowerCase().includes('invernale')) || (lowerMsg.includes('uscita') && e.nome_evento.toLowerCase().includes('uscita')))
+
+    if (eventMatch) {
+      if (eventMatch.totale_presenti > 0) {
+        const lista = eventMatch.nomi_presenti.slice(0, 15).map(n => `- **${n}**`).join('\n')
+        fallbackReply = `⚜️ **Presenze per ${eventMatch.nome_evento}**:\nRisultano **${eventMatch.totale_presenti} ragazzi presenti** su ${eventMatch.totale_iscritti} iscritti.\n\n${lista}${eventMatch.nomi_presenti.length > 15 ? '\n- ...ed altri' : ''}`
+      } else {
+        fallbackReply = `⚜️ **${eventMatch.nome_evento}**: Risultano **${eventMatch.totale_iscritti} ragazzi iscritti** al momento.`
+      }
+    } else if (lowerMsg.includes('cassa') || lowerMsg.includes('saldo') || lowerMsg.includes('totale') || lowerMsg.includes('bilancio')) {
+      fallbackReply = `⚜️ **Stato Cassa ScoutMaster**:\n- **Saldo Attuale**: **€${saldoAttuale.toFixed(2)}**\n- **Totale Entrate**: €${totaleEntrate.toFixed(2)}\n- **Totale Uscite**: €${totaleUscite.toFixed(2)}\n- **Ragazzi iscritti**: **${ragazzi.length}**`
+    } else if (lowerMsg.includes('ragazz') || lowerMsg.includes('quanti') || lowerMsg.includes('iscritt') || lowerMsg.includes('presenti')) {
+      fallbackReply = `⚜️ Nel Reparto ci sono attualmente **${ragazzi.length} ragazzi attivi** censiti. Per gli eventi specifica il nome dell'uscita (es. *"quanti al Campo Invernale?"*).`
     } else {
-      fallbackReply = `⚜️ **ScoutBot**: Ciao! Il Reparto ha un saldo cassa attuale di **€${saldoAttuale.toFixed(2)}** con **${ragazzi.length} ragazzi attivi** censiti.`
+      fallbackReply = `⚜️ **ScoutBot**: Ciao! Il Reparto ha **${ragazzi.length} ragazzi attivi** ed un saldo cassa attuale di **€${saldoAttuale.toFixed(2)}**.`
     }
 
     return NextResponse.json({ reply: fallbackReply })

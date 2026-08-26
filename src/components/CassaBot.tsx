@@ -6,6 +6,37 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MessageSquare, X, Send, Loader2, Compass } from 'lucide-react'
 
+function renderMarkdownMessage(text: string) {
+  const lines = text.split('\n')
+  return (
+    <div className="space-y-1 text-slate-800">
+      {lines.map((line, lIdx) => {
+        if (!line.trim()) return <div key={lIdx} className="h-1" />
+
+        // Parse **grassetto**
+        const parts = line.split(/(\*\*[^*]+\*\*)/g)
+        const parsedLine = parts.map((part, pIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={pIdx} className="font-bold text-slate-950">{part.slice(2, -2)}</strong>
+          }
+          return part
+        })
+
+        if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+          return (
+            <div key={lIdx} className="flex items-start gap-1.5 pl-1 my-0.5">
+              <span className="text-amber-500 font-bold shrink-0">•</span>
+              <span>{parsedLine}</span>
+            </div>
+          )
+        }
+
+        return <div key={lIdx}>{parsedLine}</div>
+      })}
+    </div>
+  )
+}
+
 export function CassaBot() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<{ role: 'user' | 'bot', text: string }[]>([
@@ -51,7 +82,7 @@ export function CassaBot() {
       )}
 
       {isOpen && (
-        <Card className="w-80 md:w-96 shadow-2xl border-agesci-blue/20 flex flex-col h-[420px] rounded-xl overflow-hidden">
+        <Card className="w-80 md:w-96 shadow-2xl border-agesci-blue/20 flex flex-col h-[440px] rounded-xl overflow-hidden bg-white">
           <CardHeader className="p-3 bg-agesci-blue text-white flex flex-row justify-between items-center">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
               <Compass className="h-4 w-4 text-amber-400" /> ScoutBot ⚜️
@@ -64,20 +95,20 @@ export function CassaBot() {
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div 
-                  className={`px-3 py-2 rounded-xl max-w-[85%] text-xs md:text-sm shadow-sm whitespace-pre-line ${
+                  className={`px-3.5 py-2.5 rounded-xl max-w-[88%] text-xs md:text-sm shadow-2xs leading-relaxed ${
                     msg.role === 'user' 
                       ? 'bg-agesci-blue text-white rounded-br-none' 
-                      : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
+                      : 'bg-white text-slate-800 border border-slate-200/90 rounded-bl-none'
                   }`}
                 >
-                  {msg.text}
+                  {msg.role === 'user' ? msg.text : renderMarkdownMessage(msg.text)}
                 </div>
               </div>
             ))}
             {loading && (
               <div className="flex justify-start">
                 <div className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 rounded-bl-none flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-agesci-blue" /> <span>ScoutBot sta elaborando...</span>
+                  <Loader2 className="h-4 w-4 animate-spin text-agesci-blue" /> <span>ScoutBot sta consultando i dati...</span>
                 </div>
               </div>
             )}
