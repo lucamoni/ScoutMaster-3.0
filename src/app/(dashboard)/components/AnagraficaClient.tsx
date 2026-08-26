@@ -81,7 +81,18 @@ const ALLOWED_RAGAZZI_COLUMNS = new Set([
   'partecipazione_ci',
   'scheda_medica_ci',
   'partecipazione_ce',
-  'scheda_medica_ce'
+  'scheda_medica_ce',
+  'sesso',
+  'codice_censimento',
+  'data_nascita',
+  'residenza',
+  'codice_fiscale',
+  'telefono_ragazzo',
+  'genitore_1_nome',
+  'genitore_1_telefono',
+  'genitore_2_nome',
+  'genitore_2_telefono',
+  'note_sanitarie'
 ])
 
 export default function AnagraficaClient({ initialData, initialPattuglie, initialCandidature }: { initialData: Ragazzo[], initialPattuglie: Pattuglia[], initialCandidature?: Candidatura[] }) {
