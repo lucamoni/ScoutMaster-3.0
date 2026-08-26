@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { Database } from '@/types/database.types'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import {
   Table,
   TableBody,
