@@ -32,14 +32,16 @@ export async function POST(request: Request) {
     })
 
     const [ragazziRes, eventiRes, speseRes, quoteRes, partecipazioniRes] = await Promise.all([
-      supabase.from('ragazzi').select('id, nome, cognome, sesso, pattuglia, attivo').eq('attivo', true).limit(50),
+      supabase.from('ragazzi').select('id, nome, cognome, sesso, pattuglia, attivo').limit(100),
       supabase.from('eventi').select('id, nome_evento, quota_standard, data_inizio').limit(20),
       supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data').order('data', { ascending: false }).limit(30),
       supabase.from('quote_mensili').select('ragazzo_id, gennaio, febbraio, marzo, aprile, maggio, giugno, luglio, agosto, settembre, ottobre, novembre, dicembre').limit(50),
       supabase.from('partecipazioni_eventi').select('ragazzo_id, evento_id, riscosso, quota_dovuta').limit(50)
     ])
 
-    const ragazzi = ragazziRes.data || []
+    const allRagazzi = ragazziRes.data || []
+    // Considera attivi tutti i ragazzi tranne quelli esplicitamente disattivati (attivo === false)
+    const ragazzi = allRagazzi.filter(r => r.attivo !== false)
     const eventi = eventiRes.data || []
     const spese = speseRes.data || []
     const quote = quoteRes.data || []
@@ -130,7 +132,7 @@ Regole di risposta:
       }
     }
 
-    // 3. Fallback intelligente locale se nessuna API key è configurata o se le API esterne sono offline
+    // 3. Fallback locale automatico pulito se nessuna API key è impostata
     const lowerMsg = message.toLowerCase()
     let fallbackReply = ''
 
@@ -139,7 +141,7 @@ Regole di risposta:
     } else if (lowerMsg.includes('ragazz') || lowerMsg.includes('quanti') || lowerMsg.includes('iscritt')) {
       fallbackReply = `⚜️ Nel Reparto ci sono attualmente **${ragazzi.length} ragazzi attivi** censiti su ScoutMaster.`
     } else {
-      fallbackReply = `⚜️ **ScoutBot**: Ciao! Il Reparto ha un saldo cassa di **€${saldoAttuale.toFixed(2)}** con **${ragazzi.length} ragazzi attivi**.\nPer risposte IA avanzate, configura \`GEMINI_API_KEY\` o \`GROQ_API_KEY\` nelle variabili di ambiente.`
+      fallbackReply = `⚜️ **ScoutBot**: Ciao! Il Reparto ha un saldo cassa attuale di **€${saldoAttuale.toFixed(2)}** con **${ragazzi.length} ragazzi attivi** censiti.`
     }
 
     return NextResponse.json({ reply: fallbackReply })
