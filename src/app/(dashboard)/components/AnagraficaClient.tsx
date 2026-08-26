@@ -104,6 +104,21 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
   const [isSquadriglieOpen, setIsSquadriglieOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [dbColumns, setDbColumns] = useState<Set<string>>(new Set())
+
+  const supabase = createClient()
+
+  useEffect(() => {
+    if (initialData && initialData.length > 0) {
+      setDbColumns(new Set(Object.keys(initialData[0])))
+    } else {
+      supabase.from('ragazzi').select('*').limit(1).then(({ data }) => {
+        if (data && data.length > 0) {
+          setDbColumns(new Set(Object.keys(data[0])))
+        }
+      })
+    }
+  }, [initialData, supabase])
   
   const defaultForm = {
     nome: '', cognome: '', sesso: '', pattuglia: '', 
@@ -142,12 +157,11 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     }
   }
 
-  const supabase = createClient()
-
   const safeUpsertRagazzoDB = async (payload: Record<string, unknown>, id?: string) => {
     const sanitized: Record<string, unknown> = {}
     Object.keys(payload).forEach(key => {
-      if (payload[key] !== undefined && payload[key] !== '' && ALLOWED_RAGAZZI_COLUMNS.has(key)) {
+      const isAllowed = dbColumns.size > 0 ? dbColumns.has(key) : ALLOWED_RAGAZZI_COLUMNS.has(key)
+      if (payload[key] !== undefined && payload[key] !== '' && isAllowed) {
         sanitized[key] = payload[key]
       }
     })
