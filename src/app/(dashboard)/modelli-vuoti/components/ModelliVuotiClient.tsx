@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import jsPDF from 'jspdf'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
 
 interface CustomModello {
@@ -47,10 +47,7 @@ export function ModelliVuotiClient() {
   const [formDescrizione, setFormDescrizione] = useState('')
   const [formObbligatorio, setFormObbligatorio] = useState(false)
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const defaultModelli: CustomModello[] = [
     {

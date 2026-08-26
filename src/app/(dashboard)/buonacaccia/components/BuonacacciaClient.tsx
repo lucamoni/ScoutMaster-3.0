@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Compass, Calendar, MapPin, ExternalLink, Plus, Users, Search, Loader2, MessageCircle, AlertCircle, Clock, Trash2, Edit, Banknote } from 'lucide-react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
 import { toast } from 'sonner'
 import { format, isBefore, isAfter, differenceInDays } from 'date-fns'
@@ -55,10 +55,7 @@ interface EventStatus {
 }
 
 export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }: { initialEventi: Evento[], initialCandidature: Candidatura[], ragazzi: Ragazzo[] }) {
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const [eventi, setEventi] = useState<Evento[]>(initialEventi)
   const [candidature, setCandidature] = useState<Candidatura[]>(initialCandidature)

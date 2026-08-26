@@ -22,7 +22,7 @@ import {
   Bookmark
 } from 'lucide-react'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Database } from '@/types/database.types'
 
@@ -107,10 +107,7 @@ export function StrumentiLinkClient() {
   const [formIsExternal, setFormIsExternal] = useState<boolean>(true)
   const [formBadge, setFormBadge] = useState('')
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   // Carica i link dinamici salvati su Supabase
   useEffect(() => {

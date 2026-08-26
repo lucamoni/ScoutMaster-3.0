@@ -29,7 +29,7 @@ import {
   Paperclip
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -64,10 +64,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   const [uploadTipoDoc, setUploadTipoDoc] = useState('foglio_privacy_firmato')
   const [isUploading, setIsUploading] = useState(false)
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   useEffect(() => {
     async function loadArchivio() {
