@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
-import { Check, X, Search, FileText, ShieldCheck, HeartPulse, FileCheck, MessageCircle, AlertTriangle } from 'lucide-react'
+import { Check, X, Search, FileText, ShieldCheck, HeartPulse, FileCheck, MessageCircle, Sparkles, Upload, Loader2, Camera, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { toast } from 'sonner'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type PrivacyField = 'foglio_privacy_firmato' | 'partecipazione_ci' | 'scheda_medica_ci' | 'partecipazione_ce' | 'scheda_medica_ce' | 'quota_censimento' | 'ricevuta_censimento'
@@ -16,6 +18,11 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const supabase = createClient()
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Stato per lo Scanner IA
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<any>(null)
 
   const toggleStatus = async (
     id: string,
@@ -26,6 +33,37 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     setRagazzi(prev => prev.map(r => r.id === id ? { ...r, [field]: newValue } : r))
     
     await supabase.from('ragazzi').update({ [field]: newValue } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+  }
+
+  const handleFileUpload = async (file: File) => {
+    setIsScanning(true)
+    setScanResult(null)
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch('/api/ocr/documento', {
+        method: 'POST',
+        body: formData
+      })
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        throw new Error(result.error || 'Errore durante la scansione IA')
+      }
+
+      setScanResult(result.data)
+      toast.success(`Documento analizzato! ${result.data.db_status === 'updated' ? 'Anagrafica e documenti aggiornati!' : result.data.db_status === 'created' ? 'Nuovo ragazzo inserito in anagrafica!' : 'Dati estratti con successo!'}`)
+
+      // Ricarica la lista aggiornata dal database Supabase
+      const { data } = await supabase.from('ragazzi').select('*').order('nome')
+      if (data) setRagazzi(data)
+    } catch (err: any) {
+      toast.error(err.message || 'Impossibile estrarre i dati dal documento')
+    } finally {
+      setIsScanning(false)
+    }
   }
 
   const renderCell = (r: Ragazzo, field: PrivacyField) => {
@@ -88,6 +126,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
             Gestisci la consegna dei moduli privacy, autorizzazioni genitori e schede mediche dei ragazzi.
           </p>
         </div>
+        <Button onClick={() => setIsScannerOpen(true)} className="bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 font-semibold gap-2 shadow-sm">
+          <Sparkles className="w-4 h-4" /> 📸 Scanner IA Documenti
+        </Button>
       </div>
 
       {/* KPI Cards Bento Summary */}
@@ -211,6 +252,60 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           </table>
         </div>
       </div>
+
+      {/* MODALE SCANNER IA DOCUMENTI */}
+      <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-agesci-blue">
+              <Sparkles className="w-5 h-5 text-amber-500" /> Scanner IA Documenti & Privacy
+            </DialogTitle>
+            <DialogDescription>
+              Carica una foto o PDF (Modulo Privacy, Scheda Medica, Tessera AGESCI). Gemini IA estrarrà automaticamente i dati anagrafici ed aggiornerà lo stato dei documenti!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-agesci-blue/50 transition-colors bg-slate-50">
+              {isScanning ? (
+                <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-agesci-blue" />
+                  <span className="text-sm font-semibold text-slate-700">Analisi Gemini Vision IA in corso...</span>
+                  <span className="text-xs text-slate-400">Estrazione dati anagrafici e spunte privacy...</span>
+                </div>
+              ) : (
+                <label className="cursor-pointer flex flex-col items-center justify-center space-y-2">
+                  <Camera className="w-10 h-10 text-agesci-blue" />
+                  <span className="text-sm font-semibold text-slate-800">Scatta foto o seleziona un file</span>
+                  <span className="text-xs text-slate-400">Supporta JPG, PNG, PDF (Privacy, Schede Mediche, Tessere)</span>
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf" 
+                    className="hidden" 
+                    onChange={e => {
+                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0])
+                    }} 
+                  />
+                </label>
+              )}
+            </div>
+
+            {scanResult && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2 text-xs text-emerald-900">
+                <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Dati Estratti & Sincronizzati:
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div><strong>Nome:</strong> {scanResult.nome} {scanResult.cognome}</div>
+                  <div><strong>Pattuglia:</strong> {scanResult.pattuglia || 'Non specificata'}</div>
+                  <div><strong>Tipo Doc:</strong> {scanResult.tipo_documento_riconosciuto}</div>
+                  <div><strong>Stato DB:</strong> {scanResult.db_status === 'updated' ? 'Aggiornato in Anagrafica' : scanResult.db_status === 'created' ? 'Creato Nuovo Ragazzo' : 'Estratto'}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
