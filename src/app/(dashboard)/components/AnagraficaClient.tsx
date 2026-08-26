@@ -144,13 +144,17 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
   const safeUpsertRagazzoDB = async (payload: Record<string, unknown>, id?: string) => {
     const sanitized: Record<string, unknown> = {}
     Object.keys(payload).forEach(key => {
-      if (payload[key] !== undefined && ALLOWED_RAGAZZI_COLUMNS.has(key)) {
-        sanitized[key] = payload[key] === '' ? null : payload[key]
+      if (payload[key] !== undefined && payload[key] !== '' && ALLOWED_RAGAZZI_COLUMNS.has(key)) {
+        sanitized[key] = payload[key]
       }
     })
 
+    if (Object.keys(sanitized).length === 0) {
+      return { data: null, error: null, sanitized: {} }
+    }
+
     let res = id
-      ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+      ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
       : await supabase.from('ragazzi').insert(sanitized as any).select().single()
 
     // 1. Se Supabase restituisce PGRST204 (colonna non trovata nella schema cache), rimuovi la colonna non esistente e riprova
@@ -161,8 +165,9 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
       const badCol = match ? match[1] : null
       if (badCol && badCol in sanitized) {
         delete sanitized[badCol]
+        if (Object.keys(sanitized).length === 0) break
         res = id
-          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
           : await supabase.from('ragazzi').insert(sanitized as any).select().single()
       } else {
         break
@@ -175,17 +180,22 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
         // Tentativo A: Prova con il nome in MAIUSCOLO (es. "AQUILE")
         sanitized.pattuglia = String(sanitized.pattuglia).toUpperCase()
         res = id
-          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
           : await supabase.from('ragazzi').insert(sanitized as any).select().single()
 
-        // Tentativo B: Se ancora viola il check, imposta pattuglia a null per completare comunque il salvataggio
+        // Tentativo B: Se ancora viola il check, rimuovi la pattuglia per completare comunque l'update
         if (res.error && res.error.code === '23514') {
-          sanitized.pattuglia = null
+          delete sanitized.pattuglia
           res = id
-            ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+            ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
             : await supabase.from('ragazzi').insert(sanitized as any).select().single()
         }
       }
+    }
+
+    if (res.error) {
+      console.error('SAFE_UPSERT_RAGAZZO_ERROR:', res.error)
+      toast.error(`Errore DB (${res.error.code}): ${res.error.message}`)
     }
 
     return { data: res.data, error: res.error, sanitized }
