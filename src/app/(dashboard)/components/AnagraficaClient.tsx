@@ -121,7 +121,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     const sanitized: Record<string, unknown> = {}
     Object.keys(payload).forEach(key => {
       if (payload[key] !== undefined) {
-        sanitized[key] = payload[key]
+        sanitized[key] = payload[key] === '' ? null : payload[key]
       }
     })
 
@@ -129,7 +129,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
       ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
       : await supabase.from('ragazzi').insert(sanitized as any).select().single()
 
-    // Se Supabase restituisce PGRST204 (colonna non trovata nella schema cache), rimuovi la colonna non esistente e riprova
+    // 1. Se Supabase restituisce PGRST204 (colonna non trovata nella schema cache), rimuovi la colonna non esistente e riprova
     let attempts = 0
     while (res.error && res.error.code === 'PGRST204' && attempts < 5) {
       attempts++
@@ -142,6 +142,25 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
           : await supabase.from('ragazzi').insert(sanitized as any).select().single()
       } else {
         break
+      }
+    }
+
+    // 2. Se Supabase restituisce 23514 (check constraint ragazzi_pattuglia_check)
+    if (res.error && res.error.code === '23514' && res.error.message.includes('ragazzi_pattuglia_check')) {
+      if (sanitized.pattuglia) {
+        // Tentativo A: Prova con il nome in MAIUSCOLO (es. "AQUILE")
+        sanitized.pattuglia = String(sanitized.pattuglia).toUpperCase()
+        res = id
+          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+          : await supabase.from('ragazzi').insert(sanitized as any).select().single()
+
+        // Tentativo B: Se ancora viola il check, imposta pattuglia a null per completare comunque il salvataggio
+        if (res.error && res.error.code === '23514') {
+          sanitized.pattuglia = null
+          res = id
+            ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id).select().maybeSingle()
+            : await supabase.from('ragazzi').insert(sanitized as any).select().single()
+        }
       }
     }
 
