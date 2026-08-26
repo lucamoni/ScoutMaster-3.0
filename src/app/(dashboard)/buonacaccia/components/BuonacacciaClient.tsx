@@ -292,6 +292,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
       if (error) throw error
       toast.success('Evento eliminato')
       if (selectedEvento?.id === id) setSelectedEvento(null)
+      setIsEventoModalOpen(false)
       fetchData()
     } catch (error: unknown) {
       const err = error as Error
@@ -737,36 +738,53 @@ function EventCard({ evento, getStatus, onSelect, onEdit }: { evento: Evento, ge
   const StatusIcon = status.icon
   
   return (
-    <Card className="flex flex-col hover:border-primary/50 transition-colors shadow-sm cursor-pointer" onClick={onSelect}>
+    <Card className="flex flex-col hover:border-primary/50 transition-all shadow-xs hover:shadow-md cursor-pointer rounded-xl bg-white border border-slate-200/80" onClick={onSelect}>
       <CardHeader className="p-4 pb-2 relative">
-        <div className="flex justify-between items-start">
-          <Badge variant="outline" className="bg-primary/5">{evento.categoria}</Badge>
-          <Button variant="ghost" size="icon" className="h-6 w-6 absolute top-3 right-3 text-muted-foreground" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-            <Edit className="w-3.5 h-3.5" />
+        <div className="flex justify-between items-start gap-2">
+          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-xs font-semibold">{evento.categoria || 'Evento'}</Badge>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-700" onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Modifica Evento">
+            <Edit className="w-4 h-4" />
           </Button>
         </div>
-        <CardTitle className="text-lg mt-2 line-clamp-2 leading-tight">{evento.titolo}</CardTitle>
+        <CardTitle className="text-base font-bold mt-2 text-slate-900 leading-snug">{evento.titolo}</CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-2 flex-1 space-y-3">
-        {(evento.data_inizio || evento.luogo) && (
-          <div className="space-y-1">
-            {evento.data_inizio && (
-              <div className="flex items-center text-sm text-muted-foreground gap-2">
-                <Calendar className="w-3.5 h-3.5 shrink-0" />
-                <span>{format(new Date(evento.data_inizio), 'dd MMM yyyy', { locale: it })}</span>
-              </div>
-            )}
-            {evento.luogo && (
-              <div className="flex items-center text-sm text-muted-foreground gap-2">
-                <MapPin className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{evento.luogo}</span>
-              </div>
-            )}
+      <CardContent className="p-4 pt-2 flex-1 space-y-2 text-xs text-slate-600">
+        {evento.data_inizio && (
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary shrink-0" />
+            <span>
+              {format(new Date(evento.data_inizio), 'dd MMM yyyy', { locale: it })}
+              {evento.data_fine && ` - ${format(new Date(evento.data_fine), 'dd MMM yyyy', { locale: it })}`}
+            </span>
+          </div>
+        )}
+        {evento.apertura_iscrizioni && (
+          <div className="flex items-center gap-2 text-slate-500">
+            <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span>Apertura: {format(new Date(evento.apertura_iscrizioni), 'dd MMM yyyy', { locale: it })}</span>
+          </div>
+        )}
+        {evento.chiusura_iscrizioni && (
+          <div className="flex items-center gap-2 text-slate-500">
+            <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+            <span>Chiusura: {format(new Date(evento.chiusura_iscrizioni), 'dd MMM yyyy', { locale: it })}</span>
+          </div>
+        )}
+        {evento.luogo && (
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">{evento.luogo}</span>
+          </div>
+        )}
+        {evento.costo_evento !== undefined && evento.costo_evento !== null && (
+          <div className="flex items-center gap-2 font-semibold text-slate-800">
+            <Banknote className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Quota: €{Number(evento.costo_evento).toFixed(2)}</span>
           </div>
         )}
       </CardContent>
-      <CardFooter className="p-0 mt-auto border-t">
-        <div className={`w-full py-2 px-4 flex items-center justify-center gap-2 text-xs font-semibold text-white rounded-b-lg ${status.color}`}>
+      <CardFooter className="p-0 mt-auto border-t border-slate-100">
+        <div className={`w-full py-2.5 px-4 flex items-center justify-center gap-2 text-xs font-semibold text-white rounded-b-xl ${status.color}`}>
           <StatusIcon className="w-4 h-4" /> {status.label}
         </div>
       </CardFooter>

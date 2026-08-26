@@ -104,6 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       groupLabel: 'AMMINISTRAZIONE',
       links: [
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
+        { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: Sparkles },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
         { name: 'Censimento', href: '/censimento', icon: ShieldCheck },
         { name: 'Panoramica Mancanti', href: '/panoramica-mancanti', icon: AlertTriangle },
@@ -114,6 +115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       links: [
         { name: 'Raccordo Bilancio AGESCI', href: '/report/bilancio-agesci', icon: FileSpreadsheet },
         { name: 'Report Completi', href: '/report', icon: Download },
+        { name: 'Link & Fogli Google', href: '/impostazioni', icon: FileSpreadsheet },
         { name: 'Reminder', href: '/reminder', icon: Bell },
         { name: 'Privacy', href: '/privacy', icon: Lock },
         { name: 'Impostazioni', href: '/impostazioni', icon: Settings },
