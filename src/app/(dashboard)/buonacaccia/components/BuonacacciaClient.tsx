@@ -410,10 +410,17 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     return { label: 'Nessuna Scadenza', color: 'bg-muted-foreground', icon: Calendar }
   }
 
-  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
+  const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
+
+  useEffect(() => {
+    if (isLinkModalOpen) {
+      fetchEventList(linkModalTab)
+    }
+  }, [isLinkModalOpen, linkModalTab])
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* ... header ... */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-primary flex items-center gap-2">
@@ -423,7 +430,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
           <p className="text-muted-foreground">Gestisci le iscrizioni agli eventi formativi e ai campi di specialità/competenza.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setIsLinkModalOpen(true)} className="gap-2">
+          <Button variant="outline" onClick={() => { setIsLinkModalOpen(true); fetchEventList(activeTab === 'capi' ? 'CAPI' : 'EG'); }} className="gap-2">
             <ExternalLink className="w-4 h-4" /> Esplora BuonaCaccia
           </Button>
           <Button onClick={() => { 
@@ -764,51 +771,49 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="eg_links" className="w-full mt-4" onValueChange={() => setFetchedEvents([])}>
+          <Tabs value={linkModalTab} onValueChange={(v) => { const newT = v === 'capi_links' ? 'CAPI' : 'EG'; setLinkModalTab(newT); fetchEventList(newT); }} className="w-full mt-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="eg_links">Eventi Ragazzi E/G</TabsTrigger>
               <TabsTrigger value="capi_links">Formazione Capi</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="eg_links" className="space-y-3 mt-4">
-              <div className="flex justify-between items-center bg-muted/30 p-4 rounded-md">
-                <div className="text-sm">Scarica gli eventi attivi (Specialità, Competenza)</div>
-                <Button onClick={() => fetchEventList('EG')} disabled={isFetchingList} size="sm">
-                  {isFetchingList ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Ricerca in corso...</> : <><Search className="w-4 h-4 mr-2" /> Cerca Eventi E/G</>}
-                </Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="capi_links" className="space-y-3 mt-4">
-              <div className="flex justify-between items-center bg-muted/30 p-4 rounded-md">
-                <div className="text-sm">Scarica gli eventi per Capi (CFT, CFM, CFA)</div>
-                <Button onClick={() => fetchEventList('CAPI')} disabled={isFetchingList} size="sm">
-                  {isFetchingList ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Ricerca in corso...</> : <><Search className="w-4 h-4 mr-2" /> Cerca Corsi</>}
-                </Button>
-              </div>
-            </TabsContent>
-
-            {fetchedEvents.length > 0 && (
-              <div className="mt-4 border rounded-md divide-y max-h-96 overflow-y-auto">
-                {fetchedEvents.map((ev, idx) => (
-                  <div key={idx} className="p-3 flex justify-between items-center hover:bg-muted/10 transition-colors">
-                    <div className="flex-1 pr-4">
-                      <div className="font-semibold text-sm text-primary">{ev.titolo}</div>
-                      <div className="text-xs text-muted-foreground flex gap-3 mt-1">
-                        {ev.date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {ev.date}</span>}
-                        {ev.luogo && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {ev.luogo}</span>}
+            <div className="mt-4">
+              {isFetchingList ? (
+                <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center justify-center space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  <span>Ricerca eventi ufficiali BuonaCaccia in corso...</span>
+                </div>
+              ) : fetchedEvents.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 border border-dashed rounded-lg">
+                  Nessun evento disponibile al momento per la categoria selezionata.
+                </div>
+              ) : (
+                <div className="border rounded-md divide-y max-h-[50vh] overflow-y-auto bg-white">
+                  {fetchedEvents.map((ev, idx) => (
+                    <div key={idx} className="p-3.5 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                      <div className="flex-1 pr-4">
+                        <div className="font-bold text-sm text-slate-900">{ev.titolo}</div>
+                        <div className="text-xs text-slate-500 flex flex-wrap gap-3 mt-1.5 font-medium">
+                          {ev.date && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-blue-600" /> {ev.date}</span>}
+                          {ev.luogo && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {ev.luogo}</span>}
+                        </div>
                       </div>
+                      <Button 
+                        size="sm" 
+                        className="whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs gap-1.5 shadow-2xs" 
+                        disabled={isImporting} 
+                        onClick={() => {
+                          handleImport(`https://buonacaccia.net/Event.aspx?e=${ev.id}`, ev.titolo, ev.date, ev.luogo)
+                        }}
+                      >
+                        {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        📥 Importa in ScoutMaster
+                      </Button>
                     </div>
-                    <Button size="sm" variant="secondary" className="whitespace-nowrap bg-blue-50 text-blue-700 hover:bg-blue-100" disabled={isImporting} onClick={() => {
-                      handleImport(`https://buonacaccia.net/Event.aspx?e=${ev.id}`, ev.titolo, ev.date, ev.luogo)
-                    }}>
-                      {isImporting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                      📥 Importa
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </Tabs>
         </DialogContent>
       </Dialog>
