@@ -361,7 +361,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     const cleanPhone = telefono.replace(/\D/g, '')
     const finalPhone = cleanPhone.startsWith('39') ? cleanPhone : '39' + cleanPhone
 
-    const testo = `Ciao! Ti scrivo per l'evento scout "${selectedEvento?.titolo}".\nLo stato attuale dell'iscrizione di ${c.ragazzi?.nome} è: *${c.stato_iscrizione}*.\n\nLink evento: ${selectedEvento?.url_evento || 'Non disponibile'}\nCosto previsto: ${selectedEvento?.costo_evento ? '€'+selectedEvento.costo_evento : 'Da definire'}\n${c.quota_pagata ? '✅ Quota già saldata.' : '⚠️ Quota da saldare.'}`
+    const testo = `Ciao! Ti scriviamo per l'evento scout "${selectedEvento?.titolo}".\nLo stato della candidatura di ${c.ragazzi?.nome} è: *${c.stato_iscrizione}*.\n\nLink evento: ${selectedEvento?.url_evento || 'Non disponibile'}\nCosto previsto: ${selectedEvento?.costo_evento ? '€'+selectedEvento.costo_evento : 'Da definire'}\n${c.quota_pagata ? '✅ Quota già rimborsata allo Staff Capi.' : '⚠️ Quota da rimborsare allo Staff Capi (via Bonifico / PayPal / Satispay / Contanti).'}`
     return `https://wa.me/${finalPhone}?text=${encodeURIComponent(testo)}`
   }
 
@@ -523,8 +523,55 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
             </div>
 
             <div className="space-y-2 col-span-full">
-              <Label>Link Evento BuonaCaccia</Label>
-              <Input type="url" value={editingEvento.url_evento || ''} onChange={e => setEditingEvento({...editingEvento, url_evento: e.target.value})} />
+              <div className="flex items-center justify-between">
+                <Label>Link Evento BuonaCaccia</Label>
+                {editingEvento.url_evento && (
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 gap-1 font-medium"
+                    disabled={isImporting}
+                    onClick={async () => {
+                      if (!editingEvento.url_evento) return
+                      setIsImporting(true)
+                      try {
+                        const res = await fetch('/api/buonacaccia', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ url: editingEvento.url_evento })
+                        })
+                        const { data } = await res.json()
+                        if (data && data.titolo) {
+                          setEditingEvento(prev => ({
+                            ...prev,
+                            titolo: data.titolo || prev.titolo,
+                            luogo: data.luogo || prev.luogo,
+                            costo_evento: data.costo_evento || prev.costo_evento,
+                            data_inizio: data.data_inizio || prev.data_inizio,
+                            data_fine: data.data_fine || prev.data_fine,
+                            apertura_iscrizioni: data.apertura_iscrizioni || prev.apertura_iscrizioni,
+                            chiusura_iscrizioni: data.chiusura_iscrizioni || prev.chiusura_iscrizioni,
+                            categoria: data.categoria || prev.categoria,
+                            branca: data.branca || prev.branca
+                          }))
+                          toast.success(`✨ Dati dell'evento "${data.titolo}" estratti con successo!`)
+                        } else {
+                          toast.error('Nessun dato aggiuntivo trovato dal link')
+                        }
+                      } catch (err: any) {
+                        toast.error(err.message || 'Errore estrazione dati')
+                      } finally {
+                        setIsImporting(false)
+                      }
+                    }}
+                  >
+                    {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    ✨ Estrai Dati da Link (AI)
+                  </Button>
+                )}
+              </div>
+              <Input type="url" placeholder="https://buonacaccia.net/Event.aspx?e=..." value={editingEvento.url_evento || ''} onChange={e => setEditingEvento({...editingEvento, url_evento: e.target.value})} />
             </div>
           </div>
           <DialogFooter className="mt-4">
@@ -596,7 +643,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                 <div className="col-span-3">Candidato</div>
                 <div className="col-span-2">Stato</div>
                 <div className="col-span-3">Specialità / Note</div>
-                <div className="col-span-3 text-center">Quota e Metodo</div>
+                <div className="col-span-3 text-center">Rimborso ai Capi & Metodo</div>
                 <div className="col-span-1 text-center">Azioni</div>
               </div>
               <div className="divide-y max-h-[40vh] overflow-y-auto">
@@ -629,27 +676,30 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                     </div>
                     <div className="col-span-3">
                       <Input 
-                        placeholder="Es. Elettricista" 
+                        placeholder="Es. Elettricista / Note" 
                         className="h-8 text-xs" 
                         value={cand.specialita_competenza_scelta || ''} 
                         onChange={e => updateCandidatura(cand.id, 'specialita_competenza_scelta', e.target.value)}
                       />
                     </div>
-                    <div className="col-span-3 flex items-center justify-center gap-2">
-                      <div className="flex items-center space-x-2 bg-background border px-2 py-1 rounded">
+                    <div className="col-span-3 flex items-center justify-center gap-1.5">
+                      <div className={`flex items-center space-x-1.5 border px-2 py-1 rounded text-xs transition-colors ${cand.quota_pagata ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold' : 'bg-amber-50 border-amber-300 text-amber-800 font-medium'}`}>
                         <Checkbox 
                           id={`quota-${cand.id}`} 
                           checked={cand.quota_pagata || false} 
                           onCheckedChange={c => updateCandidatura(cand.id, 'quota_pagata', !!c)}
                         />
-                        <Label htmlFor={`quota-${cand.id}`} className="text-xs cursor-pointer">Pagato</Label>
+                        <Label htmlFor={`quota-${cand.id}`} className="text-xs cursor-pointer">
+                          {cand.quota_pagata ? 'Rimborsato' : 'Da Rimborsare'}
+                        </Label>
                       </div>
                       <Select value={cand.metodo_pagamento || ''} onValueChange={v => updateCandidatura(cand.id, 'metodo_pagamento', v)}>
-                        <SelectTrigger className="h-8 text-xs w-[100px]"><SelectValue placeholder="Metodo..."/></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs w-[110px]"><SelectValue placeholder="Metodo..."/></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Contanti">Contanti</SelectItem>
-                          <SelectItem value="Bonifico">Bonifico</SelectItem>
+                          <SelectItem value="Bonifico">Bonifico Bancario</SelectItem>
+                          <SelectItem value="PayPal">PayPal</SelectItem>
                           <SelectItem value="Satispay">Satispay</SelectItem>
+                          <SelectItem value="Contanti">Contanti</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
