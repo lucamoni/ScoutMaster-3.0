@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       try {
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
         const response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
+          model: 'gemini-2.0-flash',
           contents: [
             {
               text: `Sei un assistente per lo scoutismo AGESCI. Analizza il seguente testo ed estrai i dati richiesti.

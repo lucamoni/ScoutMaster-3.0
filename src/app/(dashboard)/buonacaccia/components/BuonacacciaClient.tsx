@@ -381,6 +381,8 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     return { label: 'Nessuna Scadenza', color: 'bg-muted-foreground', icon: Calendar }
   }
 
+  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -395,13 +397,17 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
           <Button variant="outline" onClick={() => setIsLinkModalOpen(true)} className="gap-2">
             <ExternalLink className="w-4 h-4" /> Esplora BuonaCaccia
           </Button>
-          <Button onClick={() => { setEditingEvento({ branca: 'EG', categoria: 'Specialita' }); setImportUrl(''); setIsEventoModalOpen(true); }} className="gap-2">
+          <Button onClick={() => { 
+            setEditingEvento(activeTab === 'capi' ? { branca: 'CAPI', categoria: 'CFT' } : { branca: 'EG', categoria: 'Specialita' }); 
+            setImportUrl(''); 
+            setIsEventoModalOpen(true); 
+          }} className="gap-2">
             <Plus className="w-4 h-4" /> Nuovo Evento
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="eg" className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'eg' | 'capi')} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="eg" className="flex items-center gap-2"><Compass className="w-4 h-4"/> Eventi Ragazzi E/G</TabsTrigger>
           <TabsTrigger value="capi" className="flex items-center gap-2"><Users className="w-4 h-4"/> Formazione Capi</TabsTrigger>

@@ -16,7 +16,9 @@ export async function GET(req: Request) {
 
     // 1. Prova web scraping in tempo reale da buonacaccia.net
     try {
-      const targetUrl = 'https://www.buonacaccia.net/Events.aspx'
+      const targetUrl = type === 'CAPI' 
+        ? 'https://buonacaccia.net/Events.aspx?RID=&CID=4000000'
+        : 'https://buonacaccia.net/Events.aspx?RID=&CID=2000000'
       const response = await fetch(targetUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
