@@ -27,7 +27,8 @@ import {
   Download,
   Eye,
   File,
-  Paperclip
+  Paperclip,
+  FileUp
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -81,8 +82,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const [uploadTitoloDoc, setUploadTitoloDoc] = useState('')
   const [uploadTipoDoc, setUploadTipoDoc] = useState('foglio_privacy_firmato')
 
-  // Stato per lo Scanner IA & Discrepanze
-  const [isScannerOpen, setIsScannerOpen] = useState(false)
+  // Stato per Caricamento ed Analisi AI per Singolo Ragazzo o Generale
+  const [isAiUploadOpen, setIsAiUploadOpen] = useState(false)
+  const [targetScoutForAi, setTargetScoutForAi] = useState<Ragazzo | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState<any>(null)
   const [selectedDiscrepancies, setSelectedDiscrepancies] = useState<Record<string, boolean>>({})
@@ -134,15 +136,13 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     ])
   }
 
-  // Pulisce il nome file eliminando estensione e tratti per un titolo automatico elegante
   const cleanFileNameToTitle = (fileName: string) => {
     return fileName
-      .replace(/\.[^/.]+$/, "") // Rimuove estensione
-      .replace(/[_-]/g, " ")     // Sostituisce _ e - con spazi
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[_-]/g, " ")
       .trim()
   }
 
-  // Quando un file viene selezionato nell'upload, imposta in automatico il titolo dal file
   const handleFileSelection = (file: File) => {
     setSelectedFileToUpload(file)
     if (!uploadTitoloDoc.trim()) {
@@ -181,7 +181,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     toast.success('Documento personalizzato rimosso')
   }
 
-  // Caricamento Semplificato & Sincronizzato nell'Archivio Digitale + Spunta Automatica Lista!
+  // Caricamento Semplificato & Sincronizzato con Auto-Spunta
   const handleConfirmUploadToArchivio = async () => {
     if (!targetRagazzoForArchivio || !selectedFileToUpload) {
       toast.error('Seleziona un file prima di salvare')
@@ -211,14 +211,13 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         const updatedFiles = [newArchivedItem, ...archivedFiles]
         await saveArchivedFilesToDb(updatedFiles)
 
-        // AUTOMATICO: Segna come presente/consegnato (✅) nella lista del ragazzo!
         if (uploadTipoDoc in targetRagazzoForArchivio) {
           const field = uploadTipoDoc as PrivacyField
           setRagazzi(prev => prev.map(r => r.id === targetRagazzoForArchivio.id ? { ...r, [field]: true } : r))
           await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetRagazzoForArchivio.id)
         }
 
-        toast.success(`File "${file.name}" caricato ed AUTOMATICAMENTE SPUNTATO come consegnato per ${targetRagazzoForArchivio.nome}!`)
+        toast.success(`File "${file.name}" caricato ed SPUNTATO in lista per ${targetRagazzoForArchivio.nome}!`)
         setIsUploadingToArchivio(false)
         setSelectedFileToUpload(null)
         setUploadTitoloDoc('')
@@ -247,8 +246,8 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     await supabase.from('ragazzi').update({ [field]: newValue } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
   }
 
-  // Scansione IA con estrazione ed individuazione discrepanze
-  const handleFileUpload = async (file: File) => {
+  // Scansione ed Analisi IA Documento (Generale o per Singolo Ragazzo)
+  const handleFileUploadWithAi = async (file: File) => {
     setIsScanning(true)
     setScanResult(null)
     setScannedFileObj(file)
@@ -265,7 +264,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
       const result = await res.json()
 
       if (!res.ok || result.error) {
-        throw new Error(result.error || 'Errore durante la scansione IA')
+        throw new Error(result.error || 'Errore durante l\'analisi del documento')
       }
 
       setScanResult(result)
@@ -278,7 +277,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         setSelectedDiscrepancies(initialDiscState)
       }
 
-      toast.success('Documento analizzato! Controlla i dati estratti.')
+      toast.success('Documento analizzato con successo dall\'IA!')
     } catch (err: any) {
       toast.error(err.message || 'Impossibile estrarre i dati dal documento')
     } finally {
@@ -286,7 +285,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     }
   }
 
-  // Salva automaticamente il file scansionato nell'archivio digitale e spunta la lista
   const autoArchiveScannedFile = async (ragazzoId: string, ragazzoNome: string, tipoDoc: string) => {
     if (!scannedFileObj) return
     const reader = new FileReader()
@@ -310,7 +308,41 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     reader.readAsDataURL(scannedFileObj)
   }
 
-  // Conferma aggiunta nuovo ragazzo da OCR
+  // Salva Documento per Singolo Ragazzo Selezionato
+  const handleSaveDocForTargetScout = async () => {
+    const scout = targetScoutForAi || scanResult?.matchedScout
+    if (!scout || !scanResult || !scanResult.extracted) return
+    const ext = scanResult.extracted
+
+    const updatePayload: Record<string, any> = {}
+
+    if (ext.foglio_privacy_firmato) updatePayload.foglio_privacy_firmato = true
+    if (ext.scheda_medica_ci) updatePayload.scheda_medica_ci = true
+    if (ext.scheda_medica_ce) updatePayload.scheda_medica_ce = true
+    if (ext.ricevuta_censimento) updatePayload.ricevuta_censimento = true
+
+    if (scanResult.discrepancies) {
+      scanResult.discrepancies.forEach((d: any) => {
+        if (selectedDiscrepancies[d.field]) {
+          updatePayload[d.field] = d.extractedValue
+        }
+      })
+    }
+
+    try {
+      const { error } = await supabase.from('ragazzi').update(updatePayload).eq('id', scout.id)
+      if (error) throw error
+
+      await autoArchiveScannedFile(scout.id, `${scout.nome} ${scout.cognome}`, ext.tipo_documento_riconosciuto || 'Documento Scout')
+
+      toast.success(`Documento ed anagrafica di ${scout.nome} ${scout.cognome} salvati ed aggiornati!`)
+      setRagazzi(prev => prev.map(r => r.id === scout.id ? { ...r, ...updatePayload } : r))
+      setIsAiUploadOpen(false)
+    } catch (err: any) {
+      toast.error(err.message || 'Impossibile aggiornare l\'anagrafica')
+    }
+  }
+
   const handleConfirmNewScoutFromOcr = async () => {
     if (!scanResult || !scanResult.extracted) return
     const ext = scanResult.extracted
@@ -342,44 +374,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
       toast.success(`Nuovo ragazzo ${data.nome} ${data.cognome} aggiunto ed archiviato!`)
       setRagazzi(prev => [...prev, data])
-      setIsScannerOpen(false)
+      setIsAiUploadOpen(false)
     } catch (err: any) {
       toast.error(err.message || 'Impossibile creare il nuovo ragazzo')
-    }
-  }
-
-  // Conferma aggiornamento discrepanze per ragazzo esistente da OCR
-  const handleConfirmDiscrepanciesUpdate = async () => {
-    if (!scanResult || !scanResult.matchedScout) return
-    const scout = scanResult.matchedScout
-    const ext = scanResult.extracted
-
-    const updatePayload: Record<string, any> = {}
-
-    if (ext.foglio_privacy_firmato) updatePayload.foglio_privacy_firmato = true
-    if (ext.scheda_medica_ci) updatePayload.scheda_medica_ci = true
-    if (ext.scheda_medica_ce) updatePayload.scheda_medica_ce = true
-    if (ext.ricevuta_censimento) updatePayload.ricevuta_censimento = true
-
-    if (scanResult.discrepancies) {
-      scanResult.discrepancies.forEach((d: any) => {
-        if (selectedDiscrepancies[d.field]) {
-          updatePayload[d.field] = d.extractedValue
-        }
-      })
-    }
-
-    try {
-      const { error } = await supabase.from('ragazzi').update(updatePayload).eq('id', scout.id)
-      if (error) throw error
-
-      await autoArchiveScannedFile(scout.id, `${scout.nome} ${scout.cognome}`, ext.tipo_documento_riconosciuto || 'Modulo Privacy')
-
-      toast.success(`Dati e documento di ${scout.nome} ${scout.cognome} salvati nell'Archivio e spuntati!`)
-      setRagazzi(prev => prev.map(r => r.id === scout.id ? { ...r, ...updatePayload } : r))
-      setIsScannerOpen(false)
-    } catch (err: any) {
-      toast.error(err.message || 'Impossibile aggiornare l\'anagrafica')
     }
   }
 
@@ -413,12 +410,10 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     }
   }
 
-  // Verifica se esiste un file reale in archivio per quel ragazzo ed quel tipo documento
   const hasArchivedFile = (ragazzoId: string, fieldType: PrivacyField) => {
     return archivedFiles.some(af => af.ragazzo_id === ragazzoId && (af.tipo_documento === fieldType || af.tipo_documento.includes(fieldType)))
   }
 
-  // Render Cella Registro con Segnalazione "Mancato Caricamento File" se la spunta c'è ma il file manca!
   const renderCell = (r: Ragazzo, field: PrivacyField) => {
     const value = r[field] as boolean | null
     const hasFile = hasArchivedFile(r.id, field)
@@ -432,7 +427,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         )}
         title={
           value 
-            ? (hasFile ? "Consegnato + File presente in Archivio (clicca per modificare)" : "⚠️ CONSEGNATO MA FILE NON ANCORA CARICATO (clicca per modificare)") 
+            ? (hasFile ? "Consegnato + File in Archivio (clicca per modificare)" : "⚠️ CONSEGNATO MA FILE NON ANCORA CARICATO (clicca per modificare)") 
             : "Mancante (clicca per consegnare)"
         }
       >
@@ -440,7 +435,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           <>
             <Check className="h-5 w-5 stroke-[2.5]" />
             {!hasFile ? (
-              <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1 rounded flex items-center gap-0.5 mt-0.5" title="Mancato caricamento del file originale">
+              <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1 rounded flex items-center gap-0.5 mt-0.5">
                 <AlertTriangle className="w-2.5 h-2.5 text-amber-600" /> No File
               </span>
             ) : (
@@ -463,7 +458,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
   const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]
 
-  // Calcoli KPI
   const totale = ragazzi.length || 1
   const privacyFirmati = ragazzi.filter(r => r.foglio_privacy_firmato).length
   const schedeMedicheCI = ragazzi.filter(r => r.scheda_medica_ci).length
@@ -499,7 +493,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
             Documenti & Privacy Reparto
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestisci le consegne, carica i file con auto-spunta ed avviso di mancato caricamento.
+            Gestisci le consegne e carica i documenti con IA sia in generale che per ogni singola persona.
           </p>
         </div>
 
@@ -512,8 +506,8 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
             <Users className="w-4 h-4 text-agesci-blue" /> Azione Squadriglia
           </Button>
 
-          <Button onClick={() => setIsScannerOpen(true)} className="bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 font-semibold gap-2 shadow-sm text-xs">
-            <Sparkles className="w-4 h-4" /> 📸 Scanner IA Documenti
+          <Button onClick={() => { setTargetScoutForAi(null); setIsAiUploadOpen(true); }} className="bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 font-semibold gap-2 shadow-sm text-xs">
+            <Sparkles className="w-4 h-4" /> 📄 Inserisci Documento Generale (AI)
           </Button>
         </div>
       </div>
@@ -573,14 +567,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         </div>
       </div>
 
-      {/* Legenda Avviso Mancato Caricamento File */}
-      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 flex items-center justify-between text-xs text-amber-900">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span><strong>Legenda Spunte:</strong> Le caselle <span className="text-emerald-700 font-bold bg-emerald-100 px-1 rounded">✅ PDF</span> indicano che il file è presente in archivio. Se vedi <span className="text-amber-800 font-bold bg-amber-200 px-1 rounded">✅ No File</span> la spunta è inserita ma il file originale non è ancora stato caricato!</span>
-        </div>
-      </div>
-
       {/* Barra di ricerca */}
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -606,7 +592,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Medica CE</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Quota Cens.</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Ricevuta</th>
-                <th className="px-3 py-3 border-r border-slate-200/80">Documenti Personalizzati / File Archiviati</th>
+                <th className="px-3 py-3 border-r border-slate-200/80">Documenti Specifici / Caricamento AI Singolo</th>
                 <th className="px-3 py-3 text-center w-16">WA</th>
               </tr>
             </thead>
@@ -630,10 +616,18 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                     <td className="p-0">{renderCell(r, 'quota_censimento')}</td>
                     <td className="p-0">{renderCell(r, 'ricevuta_censimento')}</td>
 
-                    {/* Colonna Documenti Personalizzati & Archivio File */}
+                    {/* Colonna Documenti Personalizzati & Azioni Caricamento AI per Persona */}
                     <td className="px-3 py-2 border-r border-slate-100">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {/* Spunte Custom */}
+                        {/* PULSANTE DEDICATO CARICAMENTO AI PER SINGOLO RAGAZZO */}
+                        <Button 
+                          size="sm" 
+                          onClick={() => { setTargetScoutForAi(r); setIsAiUploadOpen(true); }}
+                          className="h-7 text-[11px] bg-purple-700 hover:bg-purple-800 text-amber-300 font-semibold px-2.5 shadow-2xs gap-1"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-400" /> ⚡ Carica / Modifica Doc (AI)
+                        </Button>
+
                         {ragazzoCustomDocs.map(cd => (
                           <Badge 
                             key={cd.doc_id}
@@ -655,7 +649,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                           </Badge>
                         ))}
 
-                        {/* File PDF/Immagini Archiviati */}
                         {ragazzoArchivedFiles.map(af => (
                           <Badge 
                             key={af.id} 
@@ -664,7 +657,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                             onClick={() => { setTargetRagazzoForArchivio(r); setIsArchivioModalOpen(true); }}
                           >
                             <File className="w-3 h-3 text-purple-600" />
-                            <span className="truncate max-w-[120px]">{af.titolo_documento}</span>
+                            <span className="truncate max-w-[110px]">{af.titolo_documento}</span>
                           </Badge>
                         ))}
 
@@ -675,15 +668,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                           className="h-7 text-[11px] text-agesci-blue hover:bg-sky-50 px-2 font-medium border border-dashed border-sky-300"
                         >
                           <Plus className="w-3 h-3 mr-1" /> Doc Specifico
-                        </Button>
-
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => { setTargetRagazzoForArchivio(r); setIsArchivioModalOpen(true); }}
-                          className="h-7 text-[11px] text-purple-700 hover:bg-purple-50 px-2 font-medium border border-dashed border-purple-300"
-                        >
-                          <Upload className="w-3 h-3 mr-1" /> Carica File
                         </Button>
                       </div>
                     </td>
@@ -711,7 +695,77 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         </div>
       </div>
 
-      {/* MODALE ARCHIVIO DIGITALE FILE SALVATI CON UPLOAD AUTO-SPUNTA */}
+      {/* MODALE CARICAMENTO ED ANALISI AI (PER PERSONA O GENERALE) */}
+      <Dialog open={isAiUploadOpen} onOpenChange={setIsAiUploadOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-purple-900">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              {targetScoutForAi ? `Carica / Modifica Documento AI per ${targetScoutForAi.nome} ${targetScoutForAi.cognome}` : 'Inserisci Documento Generale AI'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Carica una foto o PDF: Gemini Vision AI riconoscerà automaticamente il tipo di documento, spunterà la casella ed aggiornerà i dati!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="border-2 border-dashed border-purple-200 rounded-xl p-6 text-center hover:border-purple-500 transition-colors bg-purple-50/50">
+              {isScanning ? (
+                <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-700" />
+                  <span className="text-sm font-semibold text-purple-900">Analisi Gemini Vision IA in corso...</span>
+                  <span className="text-xs text-slate-500">Riconoscimento tipo documento e verifica anagrafica...</span>
+                </div>
+              ) : (
+                <label className="cursor-pointer flex flex-col items-center justify-center space-y-2">
+                  <Camera className="w-10 h-10 text-purple-600" />
+                  <span className="text-sm font-semibold text-purple-950">Scatta foto o seleziona un file</span>
+                  <span className="text-xs text-slate-400">Supporta JPG, PNG, PDF (Privacy, Schede Mediche, Tessere)</span>
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf" 
+                    className="hidden" 
+                    onChange={e => {
+                      if (e.target.files?.[0]) handleFileUploadWithAi(e.target.files[0])
+                    }} 
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* RISULTATO ANALISI AI ED AZIONE SALVATAGGIO */}
+            {scanResult && scanResult.extracted && (
+              <div className="space-y-4 pt-2">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-900 space-y-2">
+                  <div className="flex items-center justify-between font-bold text-sm text-emerald-950">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      Documento Riconosciuto: {scanResult.extracted.tipo_documento_riconosciuto}
+                    </span>
+                    <Badge className="bg-emerald-600 text-white text-[10px]">IA Verificato</Badge>
+                  </div>
+
+                  <div className="text-emerald-800">
+                    Documento associato a: <strong>{targetScoutForAi ? `${targetScoutForAi.nome} ${targetScoutForAi.cognome}` : `${scanResult.extracted.nome || 'Esploratore'} ${scanResult.extracted.cognome || ''}`}</strong>
+                  </div>
+                </div>
+
+                {/* BOTTONE SALVATAGGIO PER SINGOLO RAGAZZO O NUOVO */}
+                <Button 
+                  onClick={targetScoutForAi ? handleSaveDocForTargetScout : (scanResult.isNewScout ? handleConfirmNewScoutFromOcr : handleSaveDocForTargetScout)} 
+                  size="sm" 
+                  className="bg-purple-700 hover:bg-purple-800 text-white font-semibold text-xs gap-1.5 w-full py-2.5"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  Salva Documento in Archivio ed Spunta Consegnato
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODALE ARCHIVIO DIGITALE FILE SALVATI */}
       <Dialog open={isArchivioModalOpen} onOpenChange={setIsArchivioModalOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -720,93 +774,11 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
               Archivio Digitale Documenti {targetRagazzoForArchivio ? `di ${targetRagazzoForArchivio.nome} ${targetRagazzoForArchivio.cognome}` : 'Reparto'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Carica un file PDF o Foto: il nome del file verrà impostato automaticamente e la casella nella lista verrà SPUNTATA in automatico!
+              Carica un file PDF o Foto: la casella corrispondente risulterà spuntata in automatico.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-2 text-xs">
-            {/* Form Caricamento File Semplificato con Naming Automatico */}
-            <div className="bg-purple-50/60 border border-purple-200 rounded-xl p-4 space-y-3">
-              <div className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-purple-600" /> Carica un Nuovo Documento (Auto-Spunta)
-              </div>
-
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label>Quale Documento Stai Caricando?</Label>
-                  <Select value={uploadTipoDoc} onValueChange={setUploadTipoDoc}>
-                    <SelectTrigger className="h-9 bg-white">
-                      <SelectValue placeholder="Seleziona Tipo Documento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="foglio_privacy_firmato">Modulo Privacy AGESCI</SelectItem>
-                      <SelectItem value="scheda_medica_ci">Scheda Medica Campo Invernale</SelectItem>
-                      <SelectItem value="scheda_medica_ce">Scheda Medica Campo Estivo</SelectItem>
-                      <SelectItem value="ricevuta_censimento">Ricevuta Censimento</SelectItem>
-                      <SelectItem value="Certificato Medico">Certificato Medico / Agonistico</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Zona Selezione File */}
-                <div className="border-2 border-dashed border-purple-300 rounded-xl p-4 text-center bg-white">
-                  {selectedFileToUpload ? (
-                    <div className="flex items-center justify-between bg-purple-50 p-2.5 rounded-lg border border-purple-200">
-                      <div className="flex items-center gap-2 text-left overflow-hidden">
-                        <File className="w-5 h-5 text-purple-600 shrink-0" />
-                        <div>
-                          <div className="font-bold text-purple-900 truncate">{selectedFileToUpload.name}</div>
-                          <div className="text-[10px] text-purple-600">Nome Titolo Auto-compilato!</div>
-                        </div>
-                      </div>
-                      <Button size="sm" variant="ghost" onClick={() => setSelectedFileToUpload(null)} className="h-7 text-xs text-rose-600">Cambia</Button>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center justify-center space-y-1.5 py-2">
-                      <Upload className="w-7 h-7 text-purple-600" />
-                      <span className="text-xs font-semibold text-purple-900">Seleziona File PDF o Foto</span>
-                      <span className="text-[10px] text-slate-400">Il nome ed il flag consegnato verranno impostati in automatico</span>
-                      <input 
-                        type="file" 
-                        accept="image/*,application/pdf" 
-                        className="hidden" 
-                        onChange={e => {
-                          if (e.target.files?.[0]) handleFileSelection(e.target.files[0])
-                        }} 
-                      />
-                    </label>
-                  )}
-                </div>
-
-                {/* Titolo Auto-compilato */}
-                {selectedFileToUpload && (
-                  <div className="space-y-1">
-                    <Label>Titolo Assegnato al Documento</Label>
-                    <Input 
-                      value={uploadTitoloDoc}
-                      onChange={e => setUploadTitoloDoc(e.target.value)}
-                      placeholder="Nome documento"
-                      className="h-9 bg-white"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {selectedFileToUpload && (
-                <div className="pt-2">
-                  <Button 
-                    onClick={handleConfirmUploadToArchivio} 
-                    disabled={isUploadingToArchivio}
-                    className="w-full bg-purple-700 hover:bg-purple-800 text-white font-semibold text-xs gap-1.5"
-                  >
-                    {isUploadingToArchivio ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                    Salva File ed Spunta Automatica in Lista
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Lista File Archiviati */}
             <div className="space-y-2">
               <h3 className="font-bold text-slate-800 text-xs">File Salvati in Archivio ({targetRagazzoForArchivio ? archivedFiles.filter(a => a.ragazzo_id === targetRagazzoForArchivio.id).length : archivedFiles.length}):</h3>
 
@@ -959,126 +931,6 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
               {isApplyingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Applica a Squadriglia'}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODALE SCANNER IA DOCUMENTI CON CONFERMA E DISCREPANZE */}
-      <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg text-agesci-blue">
-              <Sparkles className="w-5 h-5 text-amber-500" /> Scanner IA Documenti & Privacy
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Carica una foto o PDF (Modulo Privacy, Scheda Medica, Tessera AGESCI). Gemini Vision IA analizzerà il documento ed individuerà eventuali discrepanze con l'Anagrafica!
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-agesci-blue/50 transition-colors bg-slate-50">
-              {isScanning ? (
-                <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                  <Loader2 className="w-8 h-8 animate-spin text-agesci-blue" />
-                  <span className="text-sm font-semibold text-slate-700">Analisi Gemini Vision IA in corso...</span>
-                  <span className="text-xs text-slate-400">Estrazione dati e confronto con l'Anagrafica...</span>
-                </div>
-              ) : (
-                <label className="cursor-pointer flex flex-col items-center justify-center space-y-2">
-                  <Camera className="w-10 h-10 text-agesci-blue" />
-                  <span className="text-sm font-semibold text-slate-800">Scatta foto o carica documento</span>
-                  <span className="text-xs text-slate-400">Supporta JPG, PNG, PDF (Privacy, Schede Mediche, Tessere)</span>
-                  <input 
-                    type="file" 
-                    accept="image/*,application/pdf" 
-                    className="hidden" 
-                    onChange={e => {
-                      if (e.target.files?.[0]) handleFileUpload(e.target.files[0])
-                    }} 
-                  />
-                </label>
-              )}
-            </div>
-
-            {/* RISULTATO ED OPERAZIONI TENDINA DISCREPANZE / CONFERMA */}
-            {scanResult && scanResult.extracted && (
-              <div className="space-y-4 pt-2">
-                {/* CASO 1: NUOVO RAGAZZO NON CENSITO */}
-                {scanResult.isNewScout ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
-                      <UserPlus className="w-5 h-5 text-amber-600 shrink-0" />
-                      Nuovo Ragazzo Rilevato dal Documento!
-                    </div>
-                    <p className="text-xs text-amber-800">
-                      L'IA ha trovato i dati di <strong>{scanResult.extracted.nome} {scanResult.extracted.cognome}</strong> che non risulta ancora censito nell'Anagrafica del Reparto.
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 text-xs bg-white p-3 rounded-lg border border-amber-200/80">
-                      <div><strong>Pattuglia:</strong> {scanResult.extracted.pattuglia || 'N.D.'}</div>
-                      <div><strong>Codice Fiscale:</strong> {scanResult.extracted.codice_fiscale || 'N.D.'}</div>
-                      <div><strong>Tel. Genitore 1:</strong> {scanResult.extracted.genitore_1_telefono || 'N.D.'}</div>
-                      <div><strong>Tipo Doc:</strong> {scanResult.extracted.tipo_documento_riconosciuto}</div>
-                    </div>
-                    <div className="pt-1 flex gap-2">
-                      <Button onClick={handleConfirmNewScoutFromOcr} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs gap-1.5 w-full">
-                        <UserPlus className="w-4 h-4" /> Aggiungi {scanResult.extracted.nome} in Anagrafica e Salva in Archivio
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  /* CASO 2: RAGAZZO ESISTENTE CON EVENTUALI DISCREPANZE */
-                  <div className="space-y-3">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-900 flex items-center justify-between">
-                      <div>
-                        <strong>Ragazzo Riconosciuto:</strong> {scanResult.matchedScout.nome} {scanResult.matchedScout.cognome} ({scanResult.matchedScout.pattuglia || 'Nessuna Sq.'})
-                      </div>
-                      <Badge className="bg-emerald-600 text-white text-[10px]">Verificato & Archiviato</Badge>
-                    </div>
-
-                    {scanResult.discrepancies && scanResult.discrepancies.length > 0 ? (
-                      <div className="border border-amber-300 bg-amber-50/70 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center gap-2 font-bold text-xs text-amber-950">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          Trovate {scanResult.discrepancies.length} Discrepanze con l'Anagrafica. Seleziona quali dati aggiornare:
-                        </div>
-
-                        <div className="space-y-2 bg-white p-3 rounded-lg border border-amber-200/80">
-                          {scanResult.discrepancies.map((disc: any) => (
-                            <div key={disc.field} className="flex items-start gap-2 text-xs border-b last:border-b-0 pb-2 last:pb-0">
-                              <Checkbox 
-                                id={`disc_${disc.field}`}
-                                checked={selectedDiscrepancies[disc.field] || false}
-                                onCheckedChange={(val) => setSelectedDiscrepancies(prev => ({ ...prev, [disc.field]: !!val }))}
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1">
-                                <Label htmlFor={`disc_${disc.field}`} className="font-semibold text-slate-900 cursor-pointer">{disc.label}</Label>
-                                <div className="text-[11px] text-slate-600 flex items-center gap-2 mt-0.5">
-                                  <span className="line-through text-slate-400">DB: {disc.dbValue}</span>
-                                  <span>➔</span>
-                                  <span className="font-bold text-emerald-700">Doc: {disc.extractedValue}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <Button onClick={handleConfirmDiscrepanciesUpdate} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 w-full">
-                          <RefreshCw className="w-4 h-4" /> Aggiorna Anagrafica e Salva in Archivio
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-center justify-between">
-                        <span>Nessuna discrepanza trovata. L'anagrafica è già perfettamente allineata!</span>
-                        <Button onClick={handleConfirmDiscrepanciesUpdate} size="sm" className="bg-agesci-blue text-white text-xs">
-                          Salva File in Archivio
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </DialogContent>
       </Dialog>
     </div>

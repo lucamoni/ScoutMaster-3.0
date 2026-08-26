@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   FolderArchive, 
   FileText, 
@@ -18,12 +19,13 @@ import {
   Upload, 
   Loader2, 
   CheckCircle2, 
-  Filter, 
   ShieldCheck, 
   HeartPulse, 
   FileCheck,
   File,
   Plus,
+  User,
+  Users,
   Paperclip
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -49,15 +51,14 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   const [ragazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [archivedFiles, setArchivedFiles] = useState<ArchivedDocumentFile[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedScout, setSelectedScout] = useState<string>('TUTTI')
-  const [selectedTipoDoc, setSelectedTipoDoc] = useState<string>('TUTTI')
+  const [selectedPattuglia, setSelectedPattuglia] = useState<string>('TUTTE')
   
   // Modale per Anteprima / Visualizzazione veloce file
   const [previewFile, setPreviewFile] = useState<ArchivedDocumentFile | null>(null)
 
-  // Modale Caricamento File
+  // Modale Caricamento File per Persona
   const [isUploadOpen, setIsUploadOpen] = useState(false)
-  const [uploadRagazzoId, setUploadRagazzoId] = useState<string>('')
+  const [targetScoutForUpload, setTargetScoutForUpload] = useState<Ragazzo | null>(null)
   const [selectedFileObj, setSelectedFileObj] = useState<File | null>(null)
   const [uploadTitolo, setUploadTitolo] = useState('')
   const [uploadTipoDoc, setUploadTipoDoc] = useState('foglio_privacy_firmato')
@@ -68,7 +69,6 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Carica i file dall'archivio digitale Supabase
   useEffect(() => {
     async function loadArchivio() {
       const { data } = await supabase.from('impostazioni').select('valore').eq('chiave', 'archivio_documenti_digitale').maybeSingle()
@@ -89,7 +89,6 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
     ])
   }
 
-  // Pulisce il nome file eliminando estensione e tratti
   const cleanFileNameToTitle = (fileName: string) => {
     return fileName
       .replace(/\.[^/.]+$/, "")
@@ -105,12 +104,10 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   }
 
   const handleUploadFile = async () => {
-    if (!uploadRagazzoId || !selectedFileObj) {
-      toast.error('Seleziona sia l\'esploratore che il file da archiviare')
+    if (!targetScoutForUpload || !selectedFileObj) {
+      toast.error('Seleziona sia il ragazzo che il file da archiviare')
       return
     }
-    const targetScout = ragazzi.find(r => r.id === uploadRagazzoId)
-    if (!targetScout) return
 
     setIsUploading(true)
     try {
@@ -122,8 +119,8 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
         const newArchivedItem: ArchivedDocumentFile = {
           id: 'arch_' + Date.now(),
-          ragazzo_id: targetScout.id,
-          ragazzo_nome: `${targetScout.nome} ${targetScout.cognome}`,
+          ragazzo_id: targetScoutForUpload.id,
+          ragazzo_nome: `${targetScoutForUpload.nome} ${targetScoutForUpload.cognome}`,
           titolo_documento: finalTitle,
           tipo_documento: uploadTipoDoc,
           file_name: file.name,
@@ -135,13 +132,12 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
         const updated = [newArchivedItem, ...archivedFiles]
         await saveArchivedFilesToDb(updated)
 
-        // AUTOMATICO: Imposta spunta presente (true) in anagrafica ragazzi
-        if (uploadTipoDoc in targetScout) {
+        if (uploadTipoDoc in targetScoutForUpload) {
           const field = uploadTipoDoc as PrivacyField
-          await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetScout.id)
+          await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetScoutForUpload.id)
         }
 
-        toast.success(`Documento caricato ed AUTOMATICAMENTE SPUNTATO per ${targetScout.nome}!`)
+        toast.success(`Documento salvato ed AUTOMATICAMENTE SPUNTATO per ${targetScoutForUpload.nome}!`)
         setIsUploading(false)
         setIsUploadOpen(false)
         setSelectedFileObj(null)
@@ -162,20 +158,15 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
     if (previewFile?.id === fileId) setPreviewFile(null)
   }
 
-  // Filtri avanzati
-  const filteredFiles = archivedFiles.filter(file => {
-    const matchesScout = selectedScout === 'TUTTI' || file.ragazzo_id === selectedScout
-    const matchesTipo = selectedTipoDoc === 'TUTTI' || file.tipo_documento === selectedTipoDoc
-    const matchesSearch = file.titolo_documento.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          file.ragazzo_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          file.file_name.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesScout && matchesTipo && matchesSearch
-  })
+  const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]
 
-  // KPI summary
-  const totalFiles = archivedFiles.length
-  const totalPrivacy = archivedFiles.filter(f => f.tipo_documento === 'foglio_privacy_firmato' || f.tipo_documento === 'Modulo Privacy').length
-  const totalSanitari = archivedFiles.filter(f => f.tipo_documento.includes('medica') || f.tipo_documento.includes('Medica')).length
+  // Filtra ragazzi in base alla ricerca ed alla squadriglia
+  const filteredRagazzi = ragazzi.filter(r => {
+    const name = `${r.nome || ''} ${r.cognome || ''} ${r.pattuglia || ''}`.toLowerCase()
+    const matchesSearch = name.includes(searchTerm.toLowerCase())
+    const matchesPattuglia = selectedPattuglia === 'TUTTE' || r.pattuglia === selectedPattuglia
+    return matchesSearch && matchesPattuglia
+  })
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
@@ -184,92 +175,38 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <FolderArchive className="w-8 h-8 text-purple-700" />
-            Archivio Documenti Digitali
+            Archivio Documenti Diviso per Esploratore
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Visualizzazione rapida in anteprima, auto-compilazione nomi file e sincronizzazione automatiche delle spunte.
+            Ogni persona ha la sua scheda con tutti i documenti salvati e consultabili in 1 clic.
           </p>
         </div>
-
-        <Button onClick={() => setIsUploadOpen(true)} className="bg-purple-700 hover:bg-purple-800 text-white font-semibold gap-2 shadow-sm">
-          <Upload className="w-4 h-4" /> 📤 Carica Nuovo File (Auto-Spunta)
-        </Button>
       </div>
 
-      {/* KPI Cards Bento Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Totale Documenti Archiviati</span>
-            <FolderArchive className="w-4 h-4 text-purple-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 tabular-nums">
-            {totalFiles} <span className="text-xs text-slate-400 font-normal">file salvati</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Moduli Privacy Archiviati</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 tabular-nums">
-            {totalPrivacy} <span className="text-xs text-slate-400 font-normal">file</span>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Schede Sanitarie & Certificati</span>
-            <HeartPulse className="w-4 h-4 text-sky-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 tabular-nums">
-            {totalSanitari} <span className="text-xs text-slate-400 font-normal">file</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Barra Filtri Avanzati */}
+      {/* Barra Filtri ed Ricerca Persone */}
       <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs">
         <div className="flex flex-wrap gap-2 flex-1">
-          {/* Filtro Ragazzo */}
-          <div className="w-full sm:w-48">
-            <Select value={selectedScout} onValueChange={setSelectedScout}>
+          {/* Filtro Squadriglia */}
+          <div className="w-full sm:w-56">
+            <Select value={selectedPattuglia} onValueChange={setSelectedPattuglia}>
               <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Tutti gli Esploratori" />
+                <SelectValue placeholder="Tutte le Squadriglie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="TUTTI">TUTTI GLI ESPLORATORI</SelectItem>
-                {ragazzi.map(r => (
-                  <SelectItem key={r.id} value={r.id}>{r.nome} {r.cognome}</SelectItem>
+                <SelectItem value="TUTTE">TUTTE LE SQUADRIGLIE</SelectItem>
+                {pattuglie.map(p => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          {/* Filtro Tipo Documento */}
-          <div className="w-full sm:w-44">
-            <Select value={selectedTipoDoc} onValueChange={setSelectedTipoDoc}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Tipo Documento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TUTTI">TUTTI I TIPI</SelectItem>
-                <SelectItem value="foglio_privacy_firmato">Modulo Privacy</SelectItem>
-                <SelectItem value="scheda_medica_ci">Scheda Medica CI</SelectItem>
-                <SelectItem value="scheda_medica_ce">Scheda Medica CE</SelectItem>
-                <SelectItem value="ricevuta_censimento">Ricevuta Censimento</SelectItem>
-                <SelectItem value="Certificato Medico">Certificato Medico</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
-        {/* Ricerca Testuale */}
+        {/* Ricerca Testuale Ragazzo */}
         <div className="relative max-w-xs w-full">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <Input 
-            placeholder="Cerca per titolo o nome..." 
+            placeholder="Cerca esploratore per nome..." 
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="pl-9 h-9 text-xs bg-white"
@@ -277,60 +214,99 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
         </div>
       </div>
 
-      {/* Visualizzazione Veloce Grid dei Documenti Archiviati */}
-      {filteredFiles.length === 0 ? (
-        <div className="border border-dashed border-slate-200 rounded-2xl p-12 text-center bg-white space-y-3">
-          <FolderArchive className="w-12 h-12 text-slate-300 mx-auto" />
-          <h3 className="font-bold text-slate-800 text-base">Nessun file presente nell'Archivio</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Utilizza il pulsante "Carica Nuovo File (Auto-Spunta)" per aggiungere file che verranno immediatamente contrassegnati come presenti.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {filteredFiles.map(file => (
-            <Card key={file.id} className="flex flex-col justify-between border-slate-200/90 shadow-2xs hover:shadow-md transition-all rounded-xl bg-white group">
-              <CardHeader className="p-4 pb-2">
+      {/* SCHEDE ESPLORATORI - DIVISO PER PERSONA */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {filteredRagazzi.map(r => {
+          const personFiles = archivedFiles.filter(f => f.ragazzo_id === r.id)
+
+          return (
+            <Card key={r.id} className="border-slate-200/90 shadow-2xs hover:shadow-md transition-all rounded-xl bg-white flex flex-col justify-between overflow-hidden">
+              <CardHeader className="p-4 bg-slate-50/80 border-b border-slate-100 pb-3">
                 <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
+                      {r.nome[0]}{r.cognome[0]}
+                    </div>
+                    <div>
+                      <CardTitle className="text-base font-bold text-slate-900">
+                        {r.nome} {r.cognome}
+                      </CardTitle>
+                      <div className="text-xs text-slate-500 font-normal">
+                        {r.pattuglia || 'Nessuna Squadriglia'}
+                      </div>
+                    </div>
+                  </div>
+
                   <Badge variant="outline" className="bg-purple-50 text-purple-800 border-purple-200 text-xs font-semibold">
-                    {file.tipo_documento}
+                    {personFiles.length} {personFiles.length === 1 ? 'file' : 'file'}
                   </Badge>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-7 w-7 text-slate-400 hover:text-rose-600" 
-                    onClick={() => handleDeleteFile(file.id)}
-                    title="Elimina File"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
                 </div>
-                <CardTitle className="text-base font-bold text-slate-900 mt-2 line-clamp-1 flex items-center gap-2">
-                  <File className="w-4 h-4 text-purple-600 shrink-0" />
-                  {file.titolo_documento}
-                </CardTitle>
               </CardHeader>
 
-              <CardContent className="px-4 py-2 flex-1 space-y-1 text-xs text-slate-500">
-                <div className="font-medium text-slate-800">Ragazzo: {file.ragazzo_nome}</div>
-                <div>File: {file.file_name}</div>
-                <div>Data: {new Date(file.created_at).toLocaleDateString()}</div>
+              <CardContent className="p-4 space-y-3 flex-1">
+                {personFiles.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                    Nessun documento salvato in archivio per {r.nome}.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Documenti In Archivio:</div>
+                    <div className="space-y-1.5">
+                      {personFiles.map(file => (
+                        <div 
+                          key={file.id} 
+                          className="flex items-center justify-between bg-purple-50/60 border border-purple-100 hover:border-purple-300 rounded-lg p-2.5 transition-colors cursor-pointer"
+                          onClick={() => setPreviewFile(file)}
+                        >
+                          <div className="flex items-center gap-2 overflow-hidden pr-2">
+                            <File className="w-4 h-4 text-purple-600 shrink-0" />
+                            <div className="truncate">
+                              <div className="font-semibold text-xs text-purple-950 truncate">{file.titolo_documento}</div>
+                              <div className="text-[10px] text-purple-600">{file.file_name}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7 text-purple-700 hover:bg-purple-100"
+                              onClick={(e) => { e.stopPropagation(); setPreviewFile(file); }}
+                              title="Visualizza Documento"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7 text-rose-600 hover:bg-rose-50"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.id); }}
+                              title="Elimina"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
 
-              <CardFooter className="p-4 pt-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between rounded-b-xl gap-2">
+              <CardFooter className="p-3 bg-slate-50/60 border-t border-slate-100">
                 <Button 
+                  onClick={() => { setTargetScoutForUpload(r); setIsUploadOpen(true); }}
+                  variant="outline" 
                   size="sm"
-                  variant="outline"
-                  onClick={() => setPreviewFile(file)}
-                  className="w-full border-purple-200 text-purple-800 hover:bg-purple-50 text-xs font-medium gap-1.5 rounded-xl"
+                  className="w-full border-purple-200 text-purple-800 hover:bg-purple-50 text-xs font-semibold gap-1.5 rounded-xl"
                 >
-                  <Eye className="w-3.5 h-3.5" /> Anteprima Veloce
+                  <Upload className="w-3.5 h-3.5" /> Aggiungi Documento a {r.nome}
                 </Button>
               </CardFooter>
             </Card>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
 
       {/* MODALE VISUALIZZATORE VELOCE ANTEPRIMA DOCUMENTO */}
       <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
@@ -370,40 +346,26 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
                 }}
                 className="bg-purple-700 hover:bg-purple-800 text-white font-medium text-xs gap-1.5"
               >
-                <Download className="w-4 h-4" /> Scarica File
+                <Download className="w-4 h-4" /> Scarica File Originale
               </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODALE CARICAMENTO FILE IN ARCHIVIO CON AUTO-SPUNTA */}
+      {/* MODALE CARICAMENTO DOCUMENTO DEDICATO ALLA PERSONA */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-purple-900 flex items-center gap-2">
-              <Upload className="w-5 h-5" /> Carica Documento in Archivio
+              <Upload className="w-5 h-5" /> Aggiungi Documento a {targetScoutForUpload?.nome} {targetScoutForUpload?.cognome}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Seleziona file ed esploratore: il nome verrà compilato automaticamente ed il documento risulterà spuntato in lista!
+              Carica un file PDF o Foto: la casella corrispondente risulterà spuntata in automatico.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
-            <div className="space-y-1">
-              <Label>Seleziona Esploratore / Guida</Label>
-              <Select value={uploadRagazzoId} onValueChange={setUploadRagazzoId}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Seleziona ragazzo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ragazzi.map(r => (
-                    <SelectItem key={r.id} value={r.id}>{r.nome} {r.cognome} ({r.pattuglia || 'Nessuna Sq.'})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-1">
               <Label>Tipo Documento</Label>
               <Select value={uploadTipoDoc} onValueChange={setUploadTipoDoc}>
@@ -427,7 +389,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
                     <File className="w-5 h-5 text-purple-700 shrink-0" />
                     <div>
                       <div className="font-bold text-purple-900 truncate">{selectedFileObj.name}</div>
-                      <div className="text-[10px] text-purple-700 font-medium">Nome Titolo Assegnato Automaticamente</div>
+                      <div className="text-[10px] text-purple-700 font-medium">Nome Auto-Impostato</div>
                     </div>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => setSelectedFileObj(null)} className="h-7 text-xs text-rose-600">Cambia</Button>
@@ -450,9 +412,9 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
             {selectedFileObj && (
               <div className="space-y-1">
-                <Label>Titolo Personalizzato Documento</Label>
+                <Label>Titolo Assegnato al Documento</Label>
                 <Input 
-                  value={uploadTitolo}
+                  value={uploadTipoDoc}
                   onChange={e => setUploadTitolo(e.target.value)}
                   placeholder="Nome Titolo"
                   className="h-9"
@@ -471,7 +433,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
                 className="bg-purple-700 hover:bg-purple-800 text-white font-medium text-xs gap-1.5"
               >
                 {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                Carica ed Spunta in Automatico
+                Salva File ed Spunta Automatica
               </Button>
             )}
           </DialogFooter>
