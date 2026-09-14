@@ -67,29 +67,15 @@ export async function GET(req: Request) {
       console.warn('Scraping dinamico non disponibile, uso catalogo di riserva:', fetchErr)
     }
 
-    // 2. Catalogo predefinito di riserva completo con dettagli reali
-    const fallbackEG: EventItem[] = [
-      { id: '2026-sp-01', titolo: 'Campo di Specialità: Elettricista e Pionierismo', date: '17-20 Aprile 2026', luogo: 'Base Scout Spettine (PC)', costo: 35.00, categoria: 'Specialita' },
-      { id: '2026-sp-02', titolo: 'Campo di Specialità: Trappeur e Topografo', date: '24-27 Aprile 2026', luogo: 'Base Scout Dupuis (IM)', costo: 35.00, categoria: 'Specialita' },
-      { id: '2026-sp-03', titolo: 'Campo di Competenza: Espressione e Animazione', date: '01-04 Maggio 2026', luogo: 'Base Scout Soriano (VT)', costo: 40.00, categoria: 'Competenza' },
-      { id: '2026-sp-04', titolo: 'Campo di Competenza: Nautico e Manovra a Vela', date: '15-18 Maggio 2026', luogo: 'Base Scout Bracciano (RM)', costo: 45.00, categoria: 'Competenza' },
-      { id: '2026-sg-01', titolo: 'San Giorgio di Distretto 2026 - Le Votazioni di Squadriglia', date: '23-25 Aprile 2026', luogo: 'Parco Regionale AGESCI', costo: 25.00, categoria: 'Specialita' },
-      { id: '2026-po-01', titolo: 'Piccole Orme: Sulle Tracce del Lupo', date: '12-14 Giugno 2026', luogo: 'Parco Nazionale d\'Abruzzo', costo: 30.00, categoria: 'Piccole Orme' },
-      { id: '2026-ce-01', titolo: 'Campo Estivo di Reparto 2026: La Grande Impresa', date: '15-26 Luglio 2026', luogo: 'Base Scout Val Rosandra', costo: 150.00, categoria: 'Specialita' }
-    ]
+    if (scrapedEvents.length === 0) {
+      return NextResponse.json({
+        data: [],
+        source: 'unavailable',
+        warning: 'BuonaCaccia non ha restituito eventi verificabili. Nessun dato dimostrativo è stato mostrato.',
+      })
+    }
 
-    const fallbackCAPI: EventItem[] = [
-      { id: '26554', titolo: '[Campania] CFM L/C - Ottobre - Dicembre mod. B', date: '16 ott 2026 - 08 dic 2026', luogo: 'Aiello del Sabato (AV)', costo: 51.50, categoria: 'CFM' },
-      { id: '2026-cft-01', titolo: 'CFT - Corso di Formazione Tirocinanti', date: '10-12 Aprile 2026', luogo: 'Base Regionale AGESCI', costo: 45.00, categoria: 'CFT' },
-      { id: '2026-cfm-eg-01', titolo: 'CFM Branca E/G - Corso Formazione Metodologica', date: '01-08 Maggio 2026', luogo: 'Base Nazionale Colico (LC)', costo: 75.00, categoria: 'CFM' },
-      { id: '2026-cfa-01', titolo: 'CFA - Corso Formazione Quadri e Capi Unità', date: '20-28 Luglio 2026', luogo: 'Base Nazionale Bracciano (RM)', costo: 90.00, categoria: 'CFA' },
-      { id: '2026-ross-01', titolo: 'ROSS - Route di Orientamento alle Scelte di Servizio', date: '28 Agosto - 04 Settembre 2026', luogo: 'Base Scout San Rossore (PI)', costo: 60.00, categoria: 'Altro' }
-    ]
-
-    const fallbackEvents = type === 'CAPI' ? fallbackCAPI : fallbackEG
-    const finalEvents = scrapedEvents.length > 0 ? scrapedEvents : fallbackEvents
-
-    return NextResponse.json({ data: finalEvents })
+    return NextResponse.json({ data: scrapedEvents, source: 'buonacaccia.net' })
   } catch (error: unknown) {
     const err = error as Error
     return NextResponse.json({ error: err.message || 'Errore durante la ricerca eventi' }, { status: 500 })
