@@ -35,9 +35,16 @@ UPDATE public.impostazioni
 SET chiave = regexp_replace(chiave, '(\\d{4})/(\\d{4})
   ON public.quote_mensili (ragazzo_id, anno_scout);
 
+ALTER TABLE public.registro_spese
+  ADD COLUMN IF NOT EXISTS riferimento_censimento_anno text;
+
 CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
   ON public.registro_spese (quota_mensile_id, riferimento_quota)
   WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_censimento_anno_uidx
+  ON public.registro_spese (ragazzo_id, riferimento_censimento_anno)
+  WHERE ragazzo_id IS NOT NULL AND riferimento_censimento_anno IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.get_current_anno_scout() RETURNS text AS $$
 DECLARE
