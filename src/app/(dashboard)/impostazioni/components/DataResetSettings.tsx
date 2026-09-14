@@ -21,7 +21,7 @@ export default function DataResetSettings() {
       const res = await fetch('/api/admin/reset-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: targetId })
+        body: JSON.stringify({ target: targetId, confirmation: `RESET ${targetId}` })
       })
 
       const data = await res.json()
