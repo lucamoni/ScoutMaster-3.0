@@ -262,7 +262,8 @@ export default function CassaClient({
           metodo: safeMetodo,
           momento_anno: formData.momento_anno,
           note: formData.note,
-          tipo_movimento: formData.tipo_movimento
+          tipo_movimento: formData.tipo_movimento,
+          data: formData.data || editingSpesa.data || new Date().toISOString().split('T')[0]
         })
         .eq('id', editingSpesa.id)
         .select()
@@ -277,7 +278,8 @@ export default function CassaClient({
             metodo: safeMetodo.toUpperCase(),
             momento_anno: formData.momento_anno,
             note: formData.note,
-            tipo_movimento: formData.tipo_movimento
+            tipo_movimento: formData.tipo_movimento,
+            data: formData.data || editingSpesa.data || new Date().toISOString().split('T')[0]
           })
           .eq('id', editingSpesa.id)
           .select()
@@ -311,7 +313,7 @@ export default function CassaClient({
           momento_anno: formData.momento_anno,
           note: formData.note,
           tipo_movimento: formData.tipo_movimento,
-          data: new Date().toISOString().split('T')[0],
+          data: formData.data || new Date().toISOString().split('T')[0],
         })
         .select()
         .single()
@@ -326,7 +328,7 @@ export default function CassaClient({
             momento_anno: formData.momento_anno,
             note: formData.note,
             tipo_movimento: formData.tipo_movimento,
-            data: new Date().toISOString().split('T')[0],
+            data: formData.data || new Date().toISOString().split('T')[0],
           })
           .select()
           .single()
@@ -414,7 +416,7 @@ export default function CassaClient({
       bodyData.append('file', fileToAnalyze)
       bodyData.append('categorie', categorie.map(c => c.nome).join(', '))
       
-      const res = await fetch('/api/ocr-scontrini', { method: 'POST', body: bodyData })
+      const res = await fetch('/api/ocr', { method: 'POST', body: bodyData })
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         throw new Error(errorData.details || errorData.error || 'Errore durante l\'analisi OCR')
@@ -427,11 +429,11 @@ export default function CassaClient({
       // Pre-compila formData per la revisione
       setFormData(prev => ({
         ...prev,
-        importo: data.importo_totale?.toString() || '',
+        importo: data.importo?.toString() || '',
         data: data.data || new Date().toISOString().split('T')[0],
-        metodo: ['Contanti', 'Carta', 'Bonifico'].includes(data.metodo_pagamento) ? data.metodo_pagamento : 'Contanti',
-        voce_spesa: categorie.find(c => c.nome === data.categoria_suggerita)?.nome || categorie[0]?.nome || '',
-        note: data.fornitore_voce || '',
+        metodo: 'Contanti',
+        voce_spesa: categorie.find(c => c.nome === data.voce_spesa)?.nome || categorie[0]?.nome || '',
+        note: data.fornitore || '',
         tipo_movimento: 'USCITA' // Assumiamo uscita per gli scontrini
       }))
 
