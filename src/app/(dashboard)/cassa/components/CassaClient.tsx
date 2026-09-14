@@ -27,14 +27,14 @@ import {
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
 
-export default function CassaClient({ 
+export default function CassaClient({
   initialSpese,
   initialCategorie,
-  saldi
-}: { 
+  initialBalances = { contanti: 0, banca: 0 },
+}: {
   initialSpese: Spesa[]
   initialCategorie: Categoria[]
-  saldi?: { entrateContanti: number, entrateBanca: number, usciteContanti: number, usciteBanca: number }
+  initialBalances?: { contanti: number; banca: number }
 }) {
   const [spese, setSpese] = useState<Spesa[]>(initialSpese)
   const [categorie, setCategorie] = useState<Categoria[]>(initialCategorie)
