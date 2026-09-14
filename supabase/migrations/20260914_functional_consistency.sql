@@ -77,11 +77,14 @@ $$ LANGUAGE plpgsql STABLE;
 CREATE OR REPLACE FUNCTION public.prevent_closed_period_changes()
 RETURNS trigger AS $
 DECLARE
-  movement_date date := COALESCE(NEW.data, OLD.data, CURRENT_DATE);
+  movement_date date;
   start_year int;
   accounting_year text;
   closed_value text;
 BEGIN
+  movement_date := CASE WHEN TG_OP = 'DELETE' THEN OLD.data ELSE NEW.data END;
+  movement_date := COALESCE(movement_date, CURRENT_DATE);
+
   start_year := CASE
     WHEN EXTRACT(MONTH FROM movement_date) >= 10 THEN EXTRACT(YEAR FROM movement_date)::int
     ELSE EXTRACT(YEAR FROM movement_date)::int - 1
@@ -97,7 +100,10 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  RETURN COALESCE(NEW, OLD);
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
 END;
 $ LANGUAGE plpgsql;
 
