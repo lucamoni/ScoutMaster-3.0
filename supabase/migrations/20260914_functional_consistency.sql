@@ -42,7 +42,7 @@ DECLARE
   current_month int := EXTRACT(MONTH FROM CURRENT_DATE);
   current_year int := EXTRACT(YEAR FROM CURRENT_DATE);
 BEGIN
-  IF current_month >= 9 THEN
+  IF current_month >= 10 THEN
     RETURN current_year || '-' || (current_year + 1);
   END IF;
 
