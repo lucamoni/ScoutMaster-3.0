@@ -219,6 +219,47 @@ export default function SaldaOraClient({
     }
   }
 
+  const syncQuotaMovement = async (
+    ragazzo: Ragazzo,
+    quotaId: string,
+    month: QuotaMonth,
+    paid: boolean
+  ) => {
+    if (!paid) {
+      const { error } = await supabase
+        .from('registro_spese')
+        .delete()
+        .eq('quota_mensile_id', quotaId)
+        .eq('riferimento_quota', month)
+      if (error) throw error
+      return
+    }
+
+    const { data: existing, error: lookupError } = await supabase
+      .from('registro_spese')
+      .select('id')
+      .eq('quota_mensile_id', quotaId)
+      .eq('riferimento_quota', month)
+      .maybeSingle()
+
+    if (lookupError) throw lookupError
+    if (existing) return
+
+    const { error } = await supabase.from('registro_spese').insert({
+      importo: quotaMensileNum,
+      metodo: 'Contanti',
+      voce_spesa: 'Quota Mensile',
+      tipo_movimento: 'ENTRATA',
+      data: new Date().toISOString().split('T')[0],
+      ragazzo_id: ragazzo.id,
+      quota_mensile_id: quotaId,
+      riferimento_quota: month,
+      note: `Quota ${MONTH_LABELS[month]} - ${ragazzo.nome} ${ragazzo.cognome}`,
+    })
+
+    if (error) throw error
+  }
+
   // Azione 1: Salda Tutto per un singolo ragazzo in 1-Click
   const handleSaldaTutto = async (ragazzo: Ragazzo) => {
     setLoadingBoyId(ragazzo.id)
@@ -239,21 +280,25 @@ export default function SaldaOraClient({
         const updatePayload: Record<string, boolean> = {}
         debtInfo.unpaidMonths.forEach(m => { updatePayload[m] = true })
 
-        const { data: existingQ } = await supabase.from('quote_mensili').select('id').eq('ragazzo_id', ragazzo.id).eq('anno_scout', normYear).maybeSingle()
-        if (existingQ?.id) {
-          await supabase.from('quote_mensili').update(updatePayload).eq('id', existingQ.id)
-        } else {
-          await supabase.from('quote_mensili').insert({ ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload })
+        const { data: savedQuote, error: quoteError } = await supabase
+          .from('quote_mensili')
+          .upsert(
+            { ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload },
+            { onConflict: 'ragazzo_id,anno_scout' }
+          )
+          .select('*')
+          .single()
+
+        if (quoteError || !savedQuote) throw quoteError || new Error('Quota mensile non salvata')
+
+        for (const month of debtInfo.unpaidMonths) {
+          await syncQuotaMovement(ragazzo, savedQuote.id, month, true)
         }
 
-        setQuote(prev => {
-          const filtered = prev.filter(q => !(q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear))
-          const existing = prev.find(q => q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)
-          const updatedObj = existing 
-            ? { ...existing, ...updatePayload }
-            : { id: existingQ?.id || 'temp', ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload } as Quota
-          return [...filtered, updatedObj]
-        })
+        setQuote(prev => [
+          ...prev.filter(q => !(q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)),
+          savedQuote,
+        ])
       }
 
       // C. Salda Eventi e crea i relativi movimenti di cassa
@@ -303,21 +348,25 @@ export default function SaldaOraClient({
         monthUpdatePayload[m] = !modalSelections.months.includes(m)
       })
 
-      const { data: existingQ } = await supabase.from('quote_mensili').select('id').eq('ragazzo_id', r.id).eq('anno_scout', normYear).maybeSingle()
-      if (existingQ?.id) {
-        await supabase.from('quote_mensili').update(monthUpdatePayload).eq('id', existingQ.id)
-      } else {
-        await supabase.from('quote_mensili').insert({ ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload })
+      const { data: savedQuote, error: quoteError } = await supabase
+        .from('quote_mensili')
+        .upsert(
+          { ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload },
+          { onConflict: 'ragazzo_id,anno_scout' }
+        )
+        .select('*')
+        .single()
+
+      if (quoteError || !savedQuote) throw quoteError || new Error('Quota mensile non salvata')
+
+      for (const month of activeMonths) {
+        await syncQuotaMovement(r, savedQuote.id, month, !modalSelections.months.includes(month))
       }
 
-      setQuote(prev => {
-        const filtered = prev.filter(q => !(q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear))
-        const existing = prev.find(q => q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear)
-        const updatedObj = existing 
-          ? { ...existing, ...monthUpdatePayload }
-          : { id: existingQ?.id || 'temp', ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload } as Quota
-        return [...filtered, updatedObj]
-      })
+      setQuote(prev => [
+        ...prev.filter(q => !(q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear)),
+        savedQuote,
+      ])
 
       // Eventi: usa il flusso centralizzato che mantiene coerente anche la cassa
       for (const evento of eventi) {
