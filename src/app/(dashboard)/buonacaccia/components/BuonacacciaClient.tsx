@@ -141,10 +141,11 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     setFetchedEvents([])
     try {
       const res = await fetch(`/api/buonacaccia/list?type=${type}`)
-      const { data, error } = await res.json()
+      const { data, error, warning } = await res.json()
       if (error) throw new Error(error)
-      setFetchedEvents(data)
-      toast.success(`Trovati ${data.length} eventi!`)
+      setFetchedEvents(data || [])
+      if (warning) toast.warning(warning)
+      else toast.success(`Trovati ${(data || []).length} eventi verificati!`)
     } catch (error: unknown) {
       const err = error as Error
       toast.error(err.message)
