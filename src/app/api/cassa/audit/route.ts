@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { Database } from '@/types/database.types'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 
 export const dynamic = 'force-dynamic'
@@ -9,9 +9,8 @@ const MONTHS_LIST = ['novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'ap
 
 export async function POST() {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+    await requireRole(['admin', 'tesoriere'])
+    const supabase = createAdminClient()
 
     // 1. Carica impostazioni
     const { data: settingsData } = await supabase.from('impostazioni').select('*')
@@ -221,6 +220,9 @@ export async function POST() {
       }
     })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
+
     console.error("Errore durante l'audit:", error)
     const msg = error instanceof Error ? error.message : 'Errore sconosciuto'
     return NextResponse.json({ success: false, error: msg }, { status: 500 })
