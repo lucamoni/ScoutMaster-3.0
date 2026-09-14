@@ -38,6 +38,21 @@ SET chiave = regexp_replace(chiave, '(\\d{4})/(\\d{4})
 ALTER TABLE public.registro_spese
   ADD COLUMN IF NOT EXISTS riferimento_censimento_anno text;
 
+WITH ranked_movements AS (
+  SELECT
+    id,
+    row_number() OVER (
+      PARTITION BY quota_mensile_id, riferimento_quota
+      ORDER BY data NULLS LAST, numero_operazione NULLS LAST, id
+    ) AS row_number
+  FROM public.registro_spese
+  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL
+)
+DELETE FROM public.registro_spese
+WHERE id IN (
+  SELECT id FROM ranked_movements WHERE row_number > 1
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
   ON public.registro_spese (quota_mensile_id, riferimento_quota)
   WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
@@ -58,6 +73,38 @@ BEGIN
   RETURN (current_year - 1) || '-' || current_year;
 END;
 $$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION public.prevent_closed_period_changes()
+RETURNS trigger AS $
+DECLARE
+  movement_date date := COALESCE(NEW.data, OLD.data, CURRENT_DATE);
+  start_year int;
+  accounting_year text;
+  closed_value text;
+BEGIN
+  start_year := CASE
+    WHEN EXTRACT(MONTH FROM movement_date) >= 10 THEN EXTRACT(YEAR FROM movement_date)::int
+    ELSE EXTRACT(YEAR FROM movement_date)::int - 1
+  END;
+  accounting_year := start_year || '-' || (start_year + 1);
+
+  SELECT valore INTO closed_value
+  FROM public.impostazioni
+  WHERE chiave = 'anno_chiuso_' || accounting_year;
+
+  IF closed_value = 'true' THEN
+    RAISE EXCEPTION 'Anno contabile % chiuso: movimento non modificabile', accounting_year
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS protect_closed_registro_spese ON public.registro_spese;
+CREATE TRIGGER protect_closed_registro_spese
+  BEFORE INSERT OR UPDATE OR DELETE ON public.registro_spese
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_closed_period_changes();
 
 COMMIT;
 , '\\1-\\2')
