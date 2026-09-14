@@ -272,7 +272,6 @@ export type Database = {
           ragazzo_id?: string | null
           riferimento_quota?: string | null
           riferimento_censimento_anno?: string | null
-          riferimento_censimento_anno?: string | null
           quota_mensile_id?: string | null
           partecipazione_evento_id?: string | null
         }
@@ -290,6 +289,7 @@ export type Database = {
           tipo_movimento?: string | null
           ragazzo_id?: string | null
           riferimento_quota?: string | null
+          riferimento_censimento_anno?: string | null
           quota_mensile_id?: string | null
           partecipazione_evento_id?: string | null
         }
