@@ -155,8 +155,8 @@ export default function CassaClient({
   // Integra con le entrate storiche calcolate a server se necessario, ma dato che ora tutto va in registro_spese 
   // e spese contiene tutti i record (il server li fetchava tutti), i saldi locali calcolati sono esatti per i dati presenti.
   // Tuttavia per sicurezza sommiamo il differenziale. In questo caso li calcoliamo ESCLUSIVAMENTE sulle spese.
-  const saldoContanti = saldoEntrateContanti - saldoUsciteContanti
-  const saldoBanca = saldoEntrateBanca - saldoUsciteBanca
+  const saldoContanti = initialBalances.contanti + saldoEntrateContanti - saldoUsciteContanti
+  const saldoBanca = initialBalances.banca + saldoEntrateBanca - saldoUsciteBanca
 
   // Helper per la sincronizzazione inversa da Cassa verso Eventi / Uscite / Partecipazioni
   const syncSpesaMetodoWithDB = async (spesa: Spesa, newMetodo: string) => {
