@@ -20,7 +20,7 @@ export function toCanonicalMetodo(
 
 export function getCurrentAnnoScout(referenceDate = new Date()): string {
   const year = referenceDate.getFullYear()
-  return referenceDate.getMonth() >= 8
+  return referenceDate.getMonth() >= 9
     ? `${year}-${year + 1}`
     : `${year - 1}-${year}`
 }
