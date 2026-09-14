@@ -145,8 +145,8 @@ export async function POST() {
       }
 
       // Duplicate Eventi
-      else if (s.partecipazione_evento_id || (s.voce_spesa && s.voce_spesa.startsWith('Evento: ') && s.ragazzo_id)) {
-        const key = `evento_${s.ragazzo_id}_${s.partecipazione_evento_id || s.voce_spesa}`
+      else if (s.partecipazione_evento_id) {
+        const key = `evento_${s.partecipazione_evento_id}`
         if (seenEventKeys.has(key)) {
           duplicateIdsToDelete.push(s.id)
         } else {
