@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
+import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
 
 export async function POST(request: Request) {
   try {
+    await requireAuthenticatedUser()
     const formData = await request.formData()
     const file = formData.get('file') as File
 
     if (!file) {
       return NextResponse.json({ error: 'Nessun file o documento fornito' }, { status: 400 })
+    }
+
+    const allowedTypes = new Set(["image/jpeg","image/png","image/heic","application/pdf"])
+    if (!allowedTypes.has(file.type)) {
+      return NextResponse.json({ error: 'Tipo di file non consentito' }, { status: 415 })
+    }
+
+    if (file.size > 5242880) {
+      return NextResponse.json({ error: 'File troppo grande (massimo 5 MB)' }, { status: 413 })
     }
 
     const bytes = await file.arrayBuffer()
@@ -181,6 +192,9 @@ RESTITUISCI UN JSON CON QUESTA STRUTTURA ESATTA:
       discrepancies
     })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
+
     const err = error as Error
     console.error('Errore Scanner Documenti OCR:', err)
     return NextResponse.json({ 
