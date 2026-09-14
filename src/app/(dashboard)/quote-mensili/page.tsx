@@ -1,50 +1,51 @@
 import { createClient } from '@/lib/supabase/server'
+import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 import QuoteClient from './components/QuoteClient'
+
+export const dynamic = 'force-dynamic'
 
 export default async function QuotePage() {
   const supabase = await createClient()
-  
-  const { data: ragazzi } = await supabase
-    .from('ragazzi')
-    .select('*')
-    .eq('attivo', true)
-    .order('pattuglia', { ascending: true })
 
-  // Current scout year (e.g., 2026-2027)
-  const currentYear = new Date().getMonth() >= 8 
-    ? `${new Date().getFullYear()}-${new Date().getFullYear() + 1}` 
-    : `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`
+  const [{ data: ragazzi, error: ragazziError }, { data: impostazioni, error: settingsError }] = await Promise.all([
+    supabase.from('ragazzi').select('*').eq('attivo', true).order('pattuglia', { ascending: true }),
+    supabase.from('impostazioni').select('*'),
+  ])
 
-  let { data: quote } = await supabase
+  if (ragazziError || settingsError) {
+    return <div>Errore nel caricamento delle quote mensili.</div>
+  }
+
+  const settings = new Map((impostazioni || []).map(item => [item.chiave, item.valore]))
+  const currentYear = normalizeAnnoScout(settings.get('anno_scout_corrente') || getCurrentAnnoScout())
+  const initialQuotaStandard = Number(settings.get('quota_mensile_standard') || 10)
+
+  let { data: quote, error: quoteError } = await supabase
     .from('quote_mensili')
     .select('*')
-    .eq('anno_scout', currentYear)
+    .in('anno_scout', annoScoutVariants(currentYear))
 
-  const { data: impostazioni } = await (supabase as unknown as { from: (t: string) => { select: (s: string) => { eq: (k: string, v: string) => { single: () => Promise<{ data: { valore: string } | null }> } } } })
-    .from('impostazioni')
-    .select('*')
-    .eq('chiave', 'quota_mensile_standard')
-    .single()
-    
-  const initialQuotaStandard = impostazioni?.valore ? Number(impostazioni.valore) : 15
+  if (quoteError) {
+    return <div>Errore nel caricamento delle quote mensili.</div>
+  }
 
-  // Auto-initialize rows for missing kids
-  if (ragazzi) {
-    const missingQuote = ragazzi
-      .filter(r => !quote?.find(q => q.ragazzo_id === r.id))
-      .map(r => ({
-        ragazzo_id: r.id,
-        anno_scout: currentYear,
-      }))
+  const activeRagazzi = ragazzi || []
+  const existingRagazzoIds = new Set((quote || []).map(item => item.ragazzo_id))
+  const missingQuote = activeRagazzi
+    .filter(ragazzo => !existingRagazzoIds.has(ragazzo.id))
+    .map(ragazzo => ({
+      ragazzo_id: ragazzo.id,
+      anno_scout: currentYear,
+    }))
 
-    if (missingQuote.length > 0) {
-      await supabase.from('quote_mensili').insert(missingQuote)
-      // Re-fetch
+  if (missingQuote.length > 0) {
+    const { error: insertError } = await supabase.from('quote_mensili').insert(missingQuote)
+
+    if (!insertError) {
       const { data: updatedQuote } = await supabase
         .from('quote_mensili')
         .select('*')
-        .eq('anno_scout', currentYear)
-      
+        .in('anno_scout', annoScoutVariants(currentYear))
       quote = updatedQuote
     }
   }
@@ -54,7 +55,12 @@ export default async function QuotePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Quote Mensili ({currentYear})</h1>
       </div>
-      <QuoteClient ragazzi={ragazzi || []} initialQuote={quote || []} currentYear={currentYear} initialQuotaStandard={initialQuotaStandard} />
+      <QuoteClient
+        ragazzi={activeRagazzi}
+        initialQuote={quote || []}
+        currentYear={currentYear}
+        initialQuotaStandard={initialQuotaStandard}
+      />
     </div>
   )
 }
