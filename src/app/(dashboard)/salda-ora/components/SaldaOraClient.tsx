@@ -194,6 +194,31 @@ export default function SaldaOraClient({
 
   const router = useRouter()
 
+  const syncEventoPagamento = async (ragazzoId: string, eventoId: string, riscosso: boolean) => {
+    const response = await fetch('/api/uscite/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ragazziIds: [ragazzoId],
+        eventoId,
+        riscosso,
+      }),
+    })
+
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.error || 'Impossibile aggiornare il pagamento evento')
+    }
+
+    const updated = result.updatedPartecipazioni?.[0] as Partecipazione | undefined
+    if (updated) {
+      setPartecipazioni(prev => [
+        ...prev.filter(p => !(p.ragazzo_id === ragazzoId && p.evento_id === eventoId)),
+        updated,
+      ])
+    }
+  }
+
   // Azione 1: Salda Tutto per un singolo ragazzo in 1-Click
   const handleSaldaTutto = async (ragazzo: Ragazzo) => {
     setLoadingBoyId(ragazzo.id)
@@ -231,24 +256,10 @@ export default function SaldaOraClient({
         })
       }
 
-      // C. Salda Eventi
-      if (debtInfo.unpaidEventDetails.length > 0) {
-        for (const evDetail of debtInfo.unpaidEventDetails) {
-          const { data: existingP } = await supabase.from('partecipazioni_eventi').select('id').eq('ragazzo_id', ragazzo.id).eq('evento_id', evDetail.eventoId).maybeSingle()
-          if (existingP?.id) {
-            await supabase.from('partecipazioni_eventi').update({ riscosso: true } as Database['public']['Tables']['partecipazioni_eventi']['Update']).eq('id', existingP.id)
-          } else {
-            await supabase.from('partecipazioni_eventi').insert({ ragazzo_id: ragazzo.id, evento_id: evDetail.eventoId, riscosso: true, stato_presenza: 'Presente' } as Database['public']['Tables']['partecipazioni_eventi']['Insert'])
-          }
-
-          setPartecipazioni(prev => {
-            const filtered = prev.filter(p => !(p.ragazzo_id === ragazzo.id && p.evento_id === evDetail.eventoId))
-            const existing = prev.find(p => p.ragazzo_id === ragazzo.id && p.evento_id === evDetail.eventoId)
-            const updatedP = existing
-              ? { ...existing, riscosso: true }
-              : { id: existingP?.id || 'temp', ragazzo_id: ragazzo.id, evento_id: evDetail.eventoId, riscosso: true, stato_presenza: 'Presente' } as Partecipazione
-            return [...filtered, updatedP]
-          })
+      // C. Salda Eventi e crea i relativi movimenti di cassa
+      for (const evento of debtInfo.unpaidEventDetails) {
+        if (evento.eventoId) {
+          await syncEventoPagamento(ragazzo.id, evento.eventoId, true)
         }
       }
 
@@ -308,27 +319,10 @@ export default function SaldaOraClient({
         return [...filtered, updatedObj]
       })
 
-      // Eventi
-      const allBoyParts = partecipazioni.filter(p => p.ragazzo_id === r.id)
-      for (const ev of eventi) {
-        const isUnpaidInModal = modalSelections.eventi.includes(ev.id)
-        const isPaid = !isUnpaidInModal
-
-        const existingP = allBoyParts.find(p => p.evento_id === ev.id)
-        if (existingP?.id) {
-          await supabase.from('partecipazioni_eventi').update({ riscosso: isPaid } as Database['public']['Tables']['partecipazioni_eventi']['Update']).eq('id', existingP.id)
-        } else if (isPaid) {
-          await supabase.from('partecipazioni_eventi').insert({ ragazzo_id: r.id, evento_id: ev.id, riscosso: true, stato_presenza: 'Presente' } as Database['public']['Tables']['partecipazioni_eventi']['Insert'])
-        }
-
-        setPartecipazioni(prev => {
-          const filtered = prev.filter(p => !(p.ragazzo_id === r.id && p.evento_id === ev.id))
-          const existing = prev.find(p => p.ragazzo_id === r.id && p.evento_id === ev.id)
-          const updatedP = existing
-            ? { ...existing, riscosso: isPaid }
-            : { id: existingP?.id || 'temp', ragazzo_id: r.id, evento_id: ev.id, riscosso: isPaid, stato_presenza: 'Presente' } as Partecipazione
-          return [...filtered, updatedP]
-        })
+      // Eventi: usa il flusso centralizzato che mantiene coerente anche la cassa
+      for (const evento of eventi) {
+        const isPaid = !modalSelections.eventi.includes(evento.id)
+        await syncEventoPagamento(r.id, evento.id, isPaid)
       }
 
       router.refresh()
