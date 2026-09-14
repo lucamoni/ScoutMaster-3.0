@@ -15,17 +15,20 @@ import { Card } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
 
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 
 export default function CensimentoClient({
   initialRagazzi,
   initialQuotaStandard = '45',
-  initialQuotaFratelli = '35'
+  initialQuotaFratelli = '35',
+  currentYear
 }: {
   initialRagazzi: Ragazzo[]
   initialQuotaStandard?: string
   initialQuotaFratelli?: string
+  currentYear: string
 }) {
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [quotaStandard, setQuotaStandard] = useState(initialQuotaStandard)
@@ -74,8 +77,52 @@ export default function CensimentoClient({
 
   const toggleQuotaPagata = async (id: string, current: boolean | null) => {
     const newVal = !current
-    setRagazzi(prev => prev.map(r => r.id === id ? { ...r, quota_censimento: newVal } : r))
-    await supabase.from('ragazzi').update({ quota_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const ragazzo = ragazzi.find(item => item.id === id)
+    if (!ragazzo) return
+
+    setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: newVal } : item))
+
+    const { error: ragazzoError } = await supabase
+      .from('ragazzi')
+      .update({ quota_censimento: newVal })
+      .eq('id', id)
+
+    if (ragazzoError) {
+      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: current } : item))
+      toast.error('Impossibile aggiornare il censimento')
+      return
+    }
+
+    const paymentQuery = supabase
+      .from('registro_spese')
+      .delete()
+      .eq('ragazzo_id', id)
+      .eq('riferimento_censimento_anno', currentYear)
+
+    const { error: movementError } = newVal
+      ? await supabase.from('registro_spese').upsert(
+          {
+            importo: Number(ragazzo.importo_censimento ?? numStandard),
+            metodo: 'Contanti',
+            voce_spesa: 'Quota Censimento',
+            tipo_movimento: 'ENTRATA',
+            data: new Date().toISOString().split('T')[0],
+            ragazzo_id: id,
+            riferimento_censimento_anno: currentYear,
+            note: `Censimento ${currentYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
+          },
+          { onConflict: 'ragazzo_id,riferimento_censimento_anno' }
+        )
+      : await paymentQuery
+
+    if (movementError) {
+      await supabase.from('ragazzi').update({ quota_censimento: current }).eq('id', id)
+      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: current } : item))
+      toast.error('Pagamento non registrato in prima nota')
+      return
+    }
+
+    toast.success(newVal ? 'Censimento registrato in prima nota' : 'Pagamento censimento annullato')
   }
 
   const toggleRicevuta = async (id: string, current: boolean | null) => {
@@ -85,8 +132,25 @@ export default function CensimentoClient({
   }
 
   const updateImportoRagazzo = async (id: string, val: number | null) => {
-    setRagazzi(prev => prev.map(r => r.id === id ? { ...r, importo_censimento: val } : r))
-    await supabase.from('ragazzi').update({ importo_censimento: val } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const previous = ragazzi.find(item => item.id === id)
+    setRagazzi(prev => prev.map(item => item.id === id ? { ...item, importo_censimento: val } : item))
+
+    const { error } = await supabase.from('ragazzi').update({ importo_censimento: val }).eq('id', id)
+    if (error) {
+      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, importo_censimento: previous?.importo_censimento ?? null } : item))
+      toast.error('Importo censimento non aggiornato')
+      return
+    }
+
+    if (previous?.quota_censimento === true) {
+      const { error: cashError } = await supabase
+        .from('registro_spese')
+        .update({ importo: Number(val ?? numStandard) })
+        .eq('ragazzo_id', id)
+        .eq('riferimento_censimento_anno', currentYear)
+
+      if (cashError) toast.error('Importo aggiornato, ma non in prima nota')
+    }
   }
 
   const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]
