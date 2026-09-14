@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
+import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
+import { fetchBuonaCacciaHtml } from '@/lib/security/safeFetch'
 
 const isInvalidTitle = (t?: string | null) => {
   if (!t) return true
@@ -19,6 +21,7 @@ const isInvalidTitle = (t?: string | null) => {
 
 export async function POST(req: Request) {
   try {
+    await requireAuthenticatedUser()
     const { url } = await req.json()
     if (!url) {
       return NextResponse.json({ error: 'URL mancante' }, { status: 400 })
@@ -28,24 +31,14 @@ export async function POST(req: Request) {
     let cleanText = url
 
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
-        }
-      })
-      
-      if (response.ok) {
-        rawHtml = await response.text()
-        cleanText = rawHtml
-          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .substring(0, 30000)
-      }
+      rawHtml = await fetchBuonaCacciaHtml(url)
+      cleanText = rawHtml
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 30000)
     } catch (fetchErr) {
       console.warn('Impossibile scaricare direttamente l\'URL, procedo con l\'analisi del testo:', fetchErr)
     }
@@ -166,6 +159,9 @@ ${cleanText}`
 
     return NextResponse.json({ data: eventData })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
+
     const err = error as Error
     console.error('Errore analisi evento:', err)
     return NextResponse.json({ error: 'Impossibile estrarre i dati con l\'IA: ' + err.message }, { status: 500 })

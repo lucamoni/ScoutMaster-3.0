@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
+import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
+import { fetchBuonaCacciaHtml } from '@/lib/security/safeFetch'
 
 export async function POST(request: Request) {
   try {
+    await requireAuthenticatedUser()
     const { input } = await request.json()
 
     if (!input || !input.trim()) {
@@ -15,20 +18,11 @@ export async function POST(request: Request) {
     // Se l'input è un URL, scarica il contenuto HTML
     if (contentToAnalyze.startsWith('http://') || contentToAnalyze.startsWith('https://')) {
       try {
-        const res = await fetch(contentToAnalyze, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7'
-          }
-        })
-        if (res.ok) {
-          const html = await res.text()
-          contentToAnalyze = html
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-            .substring(0, 15000)
-        }
+        const html = await fetchBuonaCacciaHtml(contentToAnalyze)
+        contentToAnalyze = html
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          .substring(0, 15000)
       } catch (err) {
         console.warn('Impossibile scaricare l\'URL, procedo con l\'analisi del testo:', err)
       }
@@ -160,6 +154,9 @@ Restituisci i dati con la seguente struttura:
       partecipazioni: partecipazioni || []
     })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
+
     const err = error as Error
     console.error('Errore Importazione BuonaCaccia:', err)
     return NextResponse.json({ error: err.message || 'Errore durante l\'importazione dell\'evento' }, { status: 500 })

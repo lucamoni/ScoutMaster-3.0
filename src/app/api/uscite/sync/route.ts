@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { Database } from '@/types/database.types'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 
 export async function POST(request: Request) {
   try {
+    await requireRole(['admin', 'capo', 'tesoriere'])
     const body = await request.json()
     const { 
       ragazziIds, 
@@ -26,9 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dati mancanti (eventoId o ragazziIds)' }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+    const supabase = createAdminClient()
 
     // 1. Recupera l'evento target
     const { data: evento } = await supabase
@@ -174,6 +173,9 @@ export async function POST(request: Request) {
     })
 
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
+
     const err = error as Error
     console.error('Errore API sync uscite:', err)
     return NextResponse.json({ error: err.message || 'Errore interno server' }, { status: 500 })
