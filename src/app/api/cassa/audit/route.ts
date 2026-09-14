@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
-import { toCanonicalMetodo } from '@/lib/utils/payment'
+import { getCurrentAnnoScout, normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +22,7 @@ export async function POST() {
     const quotaMensileStandard = Number(settings.quota_mensile_standard || '10') || 10
     const quotaCensimentoStandard = Number(settings.quota_censimento_standard || '45') || 45
     const dateStr = new Date().toISOString().split('T')[0]
+    const currentYear = normalizeAnnoScout(settings.anno_scout_corrente || getCurrentAnnoScout())
 
     // 2. Fetch di tutte le tabelle rilevanti
     const [
@@ -50,7 +51,8 @@ export async function POST() {
     // --- CHECK 1: ORFANI DI CASSA (Ricrea entrate mancanti) ---
 
     // 1A. Quote Mensili
-    for (const q of allQuote) {
+    const currentQuote = allQuote.filter(q => normalizeAnnoScout(q.anno_scout) === currentYear)
+    for (const q of currentQuote) {
       const rag = allRagazzi.find(r => r.id === q.ragazzo_id)
       for (const m of MONTHS_LIST) {
         const isPaid = (q as Record<string, unknown>)[m] === true
@@ -124,7 +126,6 @@ export async function POST() {
     // --- CHECK 2: DUPLICATI IN CASSA (Rimuove righe duplicate) ---
     const seenQuoteKeys = new Set<string>()
     const seenEventKeys = new Set<string>()
-    const seenCensimentoKeys = new Set<string>()
     const duplicateIdsToDelete: string[] = []
 
     // Ordiniamo per data o id per conservare la prima entrata registrata
@@ -134,8 +135,8 @@ export async function POST() {
       if (s.tipo_movimento !== 'ENTRATA') continue
 
       // Duplicate Quote Mensili
-      if (s.riferimento_quota && s.ragazzo_id) {
-        const key = `quote_${s.ragazzo_id}_${s.riferimento_quota.toLowerCase()}`
+      if (s.riferimento_quota && s.quota_mensile_id) {
+        const key = `quote_${s.quota_mensile_id}_${s.riferimento_quota.toLowerCase()}`
         if (seenQuoteKeys.has(key)) {
           duplicateIdsToDelete.push(s.id)
         } else {
@@ -153,15 +154,7 @@ export async function POST() {
         }
       }
 
-      // Duplicate Censimento
-      else if (s.voce_spesa === 'Censimento' && s.ragazzo_id) {
-        const key = `censimento_${s.ragazzo_id}`
-        if (seenCensimentoKeys.has(key)) {
-          duplicateIdsToDelete.push(s.id)
-        } else {
-          seenCensimentoKeys.add(key)
-        }
-      }
+
     }
 
     if (duplicateIdsToDelete.length > 0) {
