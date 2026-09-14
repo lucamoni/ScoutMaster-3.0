@@ -1,70 +1,141 @@
 -- Functional consistency: canonical scout years and duplicate prevention
--- Run through the Supabase migration pipeline before deploying the matching app version.
+-- Run this migration before deploying the matching application version.
 
 BEGIN;
 
--- Merge legacy slash-form rows into an existing canonical dash-form row.
-UPDATE public.quote_mensili AS canonical
+-- Group monthly-fee rows by member and canonical scout year. This preserves
+-- payments when both the legacy YYYY/YYYY and canonical YYYY-YYYY rows exist.
+CREATE TEMP TABLE quote_merge_groups ON COMMIT DROP AS
+SELECT
+  ragazzo_id,
+  replace(anno_scout, '/', '-') AS canonical_year,
+  (array_agg(id ORDER BY id))[1] AS keep_id,
+  bool_or(coalesce(novembre, false)) AS novembre,
+  bool_or(coalesce(dicembre, false)) AS dicembre,
+  bool_or(coalesce(gennaio, false)) AS gennaio,
+  bool_or(coalesce(febbraio, false)) AS febbraio,
+  bool_or(coalesce(marzo, false)) AS marzo,
+  bool_or(coalesce(aprile, false)) AS aprile,
+  bool_or(coalesce(maggio, false)) AS maggio,
+  bool_or(coalesce(giugno, false)) AS giugno
+FROM public.quote_mensili
+GROUP BY ragazzo_id, replace(anno_scout, '/', '-');
+
+CREATE TEMP TABLE quote_merge_map ON COMMIT DROP AS
+SELECT
+  quote.id AS duplicate_id,
+  grouped.keep_id
+FROM public.quote_mensili AS quote
+JOIN quote_merge_groups AS grouped
+  ON quote.ragazzo_id IS NOT DISTINCT FROM grouped.ragazzo_id
+ AND replace(quote.anno_scout, '/', '-') = grouped.canonical_year
+WHERE quote.id <> grouped.keep_id;
+
+UPDATE public.quote_mensili AS quote
 SET
-  novembre = COALESCE(canonical.novembre, false) OR COALESCE(legacy.novembre, false),
-  dicembre = COALESCE(canonical.dicembre, false) OR COALESCE(legacy.dicembre, false),
-  gennaio = COALESCE(canonical.gennaio, false) OR COALESCE(legacy.gennaio, false),
-  febbraio = COALESCE(canonical.febbraio, false) OR COALESCE(legacy.febbraio, false),
-  marzo = COALESCE(canonical.marzo, false) OR COALESCE(legacy.marzo, false),
-  aprile = COALESCE(canonical.aprile, false) OR COALESCE(legacy.aprile, false),
-  maggio = COALESCE(canonical.maggio, false) OR COALESCE(legacy.maggio, false),
-  giugno = COALESCE(canonical.giugno, false) OR COALESCE(legacy.giugno, false)
-FROM public.quote_mensili AS legacy
-WHERE legacy.ragazzo_id = canonical.ragazzo_id
-  AND legacy.anno_scout LIKE '%/%'
-  AND canonical.anno_scout = replace(legacy.anno_scout, '/', '-');
+  anno_scout = grouped.canonical_year,
+  novembre = grouped.novembre,
+  dicembre = grouped.dicembre,
+  gennaio = grouped.gennaio,
+  febbraio = grouped.febbraio,
+  marzo = grouped.marzo,
+  aprile = grouped.aprile,
+  maggio = grouped.maggio,
+  giugno = grouped.giugno
+FROM quote_merge_groups AS grouped
+WHERE quote.id = grouped.keep_id;
 
-DELETE FROM public.quote_mensili AS legacy
-USING public.quote_mensili AS canonical
-WHERE legacy.id <> canonical.id
-  AND legacy.ragazzo_id = canonical.ragazzo_id
-  AND legacy.anno_scout LIKE '%/%'
-  AND canonical.anno_scout = replace(legacy.anno_scout, '/', '-');
+-- Keep existing ledger links valid when duplicate monthly-fee rows are merged.
+UPDATE public.registro_spese AS movement
+SET quota_mensile_id = mapping.keep_id
+FROM quote_merge_map AS mapping
+WHERE movement.quota_mensile_id = mapping.duplicate_id;
 
-UPDATE public.quote_mensili
-SET anno_scout = replace(anno_scout, '/', '-')
-WHERE anno_scout LIKE '%/%';
+DELETE FROM public.quote_mensili AS quote
+USING quote_merge_map AS mapping
+WHERE quote.id = mapping.duplicate_id;
 
--- Canonicalize accounting-year suffixes stored in settings keys.
-UPDATE public.impostazioni
-SET chiave = regexp_replace(chiave, '(\\d{4})/(\\d{4})
+CREATE UNIQUE INDEX IF NOT EXISTS quote_mensili_ragazzo_anno_uidx
   ON public.quote_mensili (ragazzo_id, anno_scout);
+
+-- Canonicalize accounting-year suffixes stored in settings. Existing canonical
+-- values take precedence over their legacy slash-form equivalents.
+INSERT INTO public.impostazioni (chiave, valore)
+SELECT
+  left(chiave, length(chiave) - 9) || replace(right(chiave, 9), '/', '-'),
+  valore
+FROM public.impostazioni
+WHERE right(chiave, 9) ~ '^[0-9]{4}/[0-9]{4}$'
+  AND (
+    chiave LIKE 'saldo_iniziale_cassa_%'
+    OR chiave LIKE 'saldo_iniziale_banca_%'
+    OR chiave LIKE 'anno_chiuso_%'
+  )
+ON CONFLICT (chiave) DO NOTHING;
+
+DELETE FROM public.impostazioni
+WHERE right(chiave, 9) ~ '^[0-9]{4}/[0-9]{4}$'
+  AND (
+    chiave LIKE 'saldo_iniziale_cassa_%'
+    OR chiave LIKE 'saldo_iniziale_banca_%'
+    OR chiave LIKE 'anno_chiuso_%'
+  );
 
 ALTER TABLE public.registro_spese
   ADD COLUMN IF NOT EXISTS riferimento_censimento_anno text;
 
+-- Updating monthly-fee links can expose duplicate ledger movements. Keep the
+-- oldest operation deterministically before adding database-level safeguards.
 WITH ranked_movements AS (
   SELECT
     id,
     row_number() OVER (
       PARTITION BY quota_mensile_id, riferimento_quota
       ORDER BY data NULLS LAST, numero_operazione NULLS LAST, id
-    ) AS row_number
+    ) AS duplicate_rank
   FROM public.registro_spese
-  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL
+  WHERE quota_mensile_id IS NOT NULL
+    AND riferimento_quota IS NOT NULL
 )
-DELETE FROM public.registro_spese
-WHERE id IN (
-  SELECT id FROM ranked_movements WHERE row_number > 1
-);
+DELETE FROM public.registro_spese AS movement
+USING ranked_movements AS ranked
+WHERE movement.id = ranked.id
+  AND ranked.duplicate_rank > 1;
+
+WITH ranked_census_movements AS (
+  SELECT
+    id,
+    row_number() OVER (
+      PARTITION BY ragazzo_id, riferimento_censimento_anno
+      ORDER BY data NULLS LAST, numero_operazione NULLS LAST, id
+    ) AS duplicate_rank
+  FROM public.registro_spese
+  WHERE ragazzo_id IS NOT NULL
+    AND riferimento_censimento_anno IS NOT NULL
+)
+DELETE FROM public.registro_spese AS movement
+USING ranked_census_movements AS ranked
+WHERE movement.id = ranked.id
+  AND ranked.duplicate_rank > 1;
 
 CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
   ON public.registro_spese (quota_mensile_id, riferimento_quota)
-  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
+  WHERE quota_mensile_id IS NOT NULL
+    AND riferimento_quota IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_censimento_anno_uidx
   ON public.registro_spese (ragazzo_id, riferimento_censimento_anno)
-  WHERE ragazzo_id IS NOT NULL AND riferimento_censimento_anno IS NOT NULL;
+  WHERE ragazzo_id IS NOT NULL
+    AND riferimento_censimento_anno IS NOT NULL;
 
-CREATE OR REPLACE FUNCTION public.get_current_anno_scout() RETURNS text AS $$
+CREATE OR REPLACE FUNCTION public.get_current_anno_scout()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+AS $function$
 DECLARE
-  current_month int := EXTRACT(MONTH FROM CURRENT_DATE);
-  current_year int := EXTRACT(YEAR FROM CURRENT_DATE);
+  current_month integer := extract(month FROM current_date)::integer;
+  current_year integer := extract(year FROM current_date)::integer;
 BEGIN
   IF current_month >= 10 THEN
     RETURN current_year || '-' || (current_year + 1);
@@ -72,139 +143,61 @@ BEGIN
 
   RETURN (current_year - 1) || '-' || current_year;
 END;
-$$ LANGUAGE plpgsql STABLE;
+$function$;
 
 CREATE OR REPLACE FUNCTION public.prevent_closed_period_changes()
-RETURNS trigger AS $
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
 DECLARE
   movement_date date;
-  start_year int;
+  start_year integer;
   accounting_year text;
   closed_value text;
 BEGIN
-  movement_date := CASE WHEN TG_OP = 'DELETE' THEN OLD.data ELSE NEW.data END;
-  movement_date := COALESCE(movement_date, CURRENT_DATE);
+  IF TG_OP = 'DELETE' THEN
+    movement_date := old.data;
+  ELSE
+    movement_date := new.data;
+  END IF;
 
-  start_year := CASE
-    WHEN EXTRACT(MONTH FROM movement_date) >= 10 THEN EXTRACT(YEAR FROM movement_date)::int
-    ELSE EXTRACT(YEAR FROM movement_date)::int - 1
-  END;
+  movement_date := coalesce(movement_date, current_date);
+
+  IF extract(month FROM movement_date) >= 10 THEN
+    start_year := extract(year FROM movement_date)::integer;
+  ELSE
+    start_year := extract(year FROM movement_date)::integer - 1;
+  END IF;
+
   accounting_year := start_year || '-' || (start_year + 1);
 
-  SELECT valore INTO closed_value
+  SELECT valore
+  INTO closed_value
   FROM public.impostazioni
   WHERE chiave = 'anno_chiuso_' || accounting_year;
 
-  IF closed_value = 'true' THEN
-    RAISE EXCEPTION 'Anno contabile % chiuso: movimento non modificabile', accounting_year
-      USING ERRCODE = 'check_violation';
+  IF coalesce(closed_value, 'false') = 'true' THEN
+    RAISE EXCEPTION
+      'Anno contabile % chiuso: movimento non modificabile',
+      accounting_year
+      USING ERRCODE = '23514';
   END IF;
 
   IF TG_OP = 'DELETE' THEN
-    RETURN OLD;
+    RETURN old;
   END IF;
-  RETURN NEW;
-END;
-$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS protect_closed_registro_spese ON public.registro_spese;
+  RETURN new;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS protect_closed_registro_spese
+  ON public.registro_spese;
+
 CREATE TRIGGER protect_closed_registro_spese
-  BEFORE INSERT OR UPDATE OR DELETE ON public.registro_spese
-  FOR EACH ROW EXECUTE FUNCTION public.prevent_closed_period_changes();
-
-COMMIT;
-, '\\1-\\2')
-WHERE chiave ~ '(saldo_iniziale_cassa_|saldo_iniziale_banca_|anno_chiuso_)\\d{4}/\\d{4}
-  ON public.quote_mensili (ragazzo_id, anno_scout);
-
-CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
-  ON public.registro_spese (quota_mensile_id, riferimento_quota)
-  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
-
-CREATE OR REPLACE FUNCTION public.get_current_anno_scout() RETURNS text AS $$
-DECLARE
-  current_month int := EXTRACT(MONTH FROM CURRENT_DATE);
-  current_year int := EXTRACT(YEAR FROM CURRENT_DATE);
-BEGIN
-  IF current_month >= 10 THEN
-    RETURN current_year || '-' || (current_year + 1);
-  END IF;
-
-  RETURN (current_year - 1) || '-' || current_year;
-END;
-$$ LANGUAGE plpgsql STABLE;
-
-COMMIT;
-
-  AND NOT EXISTS (
-    SELECT 1
-    FROM public.impostazioni AS canonical
-    WHERE canonical.chiave = regexp_replace(impostazioni.chiave, '(\\d{4})/(\\d{4})
-  ON public.quote_mensili (ragazzo_id, anno_scout);
-
-CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
-  ON public.registro_spese (quota_mensile_id, riferimento_quota)
-  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
-
-CREATE OR REPLACE FUNCTION public.get_current_anno_scout() RETURNS text AS $$
-DECLARE
-  current_month int := EXTRACT(MONTH FROM CURRENT_DATE);
-  current_year int := EXTRACT(YEAR FROM CURRENT_DATE);
-BEGIN
-  IF current_month >= 10 THEN
-    RETURN current_year || '-' || (current_year + 1);
-  END IF;
-
-  RETURN (current_year - 1) || '-' || current_year;
-END;
-$$ LANGUAGE plpgsql STABLE;
-
-COMMIT;
-, '\\1-\\2')
-  );
-
-DELETE FROM public.impostazioni
-WHERE chiave ~ '(saldo_iniziale_cassa_|saldo_iniziale_banca_|anno_chiuso_)\\d{4}/\\d{4}
-  ON public.quote_mensili (ragazzo_id, anno_scout);
-
-CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
-  ON public.registro_spese (quota_mensile_id, riferimento_quota)
-  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
-
-CREATE OR REPLACE FUNCTION public.get_current_anno_scout() RETURNS text AS $$
-DECLARE
-  current_month int := EXTRACT(MONTH FROM CURRENT_DATE);
-  current_year int := EXTRACT(YEAR FROM CURRENT_DATE);
-BEGIN
-  IF current_month >= 10 THEN
-    RETURN current_year || '-' || (current_year + 1);
-  END IF;
-
-  RETURN (current_year - 1) || '-' || current_year;
-END;
-$$ LANGUAGE plpgsql STABLE;
-
-COMMIT;
-;
-
-CREATE UNIQUE INDEX IF NOT EXISTS quote_mensili_ragazzo_anno_uidx
-  ON public.quote_mensili (ragazzo_id, anno_scout);
-
-CREATE UNIQUE INDEX IF NOT EXISTS registro_spese_quota_mese_uidx
-  ON public.registro_spese (quota_mensile_id, riferimento_quota)
-  WHERE quota_mensile_id IS NOT NULL AND riferimento_quota IS NOT NULL;
-
-CREATE OR REPLACE FUNCTION public.get_current_anno_scout() RETURNS text AS $$
-DECLARE
-  current_month int := EXTRACT(MONTH FROM CURRENT_DATE);
-  current_year int := EXTRACT(YEAR FROM CURRENT_DATE);
-BEGIN
-  IF current_month >= 10 THEN
-    RETURN current_year || '-' || (current_year + 1);
-  END IF;
-
-  RETURN (current_year - 1) || '-' || current_year;
-END;
-$$ LANGUAGE plpgsql STABLE;
+  BEFORE INSERT OR UPDATE OR DELETE
+  ON public.registro_spese
+  FOR EACH ROW
+  EXECUTE FUNCTION public.prevent_closed_period_changes();
 
 COMMIT;
