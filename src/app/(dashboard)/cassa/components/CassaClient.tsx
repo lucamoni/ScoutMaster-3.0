@@ -124,12 +124,10 @@ export default function CassaClient({
   // Alias per compatibilità UI display
   const normalizeMetodoDisplay = toCanonicalMetodo
 
-  // Filtra ed escludi categoricamente il Censimento dai movimenti e dai saldi della Cassa
-  const cassaSpese = spese.filter(s => {
-    const voce = (s.voce_spesa || '').toLowerCase()
-    const note = (s.note || '').toLowerCase()
-    return !voce.includes('censimento') && !note.includes('censimento')
-  })
+  // La prima nota segue il principio di cassa e comprende anche le quote di censimento incassate.
+  const cassaSpese = spese.filter(
+    movimento => movimento.tipo_movimento === 'ENTRATA' || movimento.tipo_movimento === 'USCITA'
+  )
 
   // Spese filtrate in base al tab selezionato
   const speseFiltrate = cassaSpese.filter(s => activeTab === 'TUTTI' ? true : s.tipo_movimento === activeTab)
