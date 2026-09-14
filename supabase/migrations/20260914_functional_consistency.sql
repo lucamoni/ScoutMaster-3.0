@@ -3,37 +3,27 @@
 
 BEGIN;
 
--- Group monthly-fee rows by member and canonical scout year. This preserves
--- payments when both the legacy YYYY/YYYY and canonical YYYY-YYYY rows exist.
-CREATE TEMP TABLE quote_merge_groups ON COMMIT DROP AS
-SELECT
-  ragazzo_id,
-  replace(anno_scout, '/', '-') AS canonical_year,
-  (array_agg(id ORDER BY id))[1] AS keep_id,
-  bool_or(coalesce(novembre, false)) AS novembre,
-  bool_or(coalesce(dicembre, false)) AS dicembre,
-  bool_or(coalesce(gennaio, false)) AS gennaio,
-  bool_or(coalesce(febbraio, false)) AS febbraio,
-  bool_or(coalesce(marzo, false)) AS marzo,
-  bool_or(coalesce(aprile, false)) AS aprile,
-  bool_or(coalesce(maggio, false)) AS maggio,
-  bool_or(coalesce(giugno, false)) AS giugno
-FROM public.quote_mensili
-GROUP BY ragazzo_id, replace(anno_scout, '/', '-');
-
-CREATE TEMP TABLE quote_merge_map ON COMMIT DROP AS
-SELECT
-  quote.id AS duplicate_id,
-  grouped.keep_id
-FROM public.quote_mensili AS quote
-JOIN quote_merge_groups AS grouped
-  ON quote.ragazzo_id IS NOT DISTINCT FROM grouped.ragazzo_id
- AND replace(quote.anno_scout, '/', '-') = grouped.canonical_year
-WHERE quote.id <> grouped.keep_id;
-
+-- Merge monthly-fee rows by member and canonical scout year. Each statement
+-- rebuilds its own grouping so the migration also works when Supabase prepares
+-- the complete script before executing it.
+WITH quote_groups AS (
+  SELECT
+    ragazzo_id,
+    replace(anno_scout, '/', '-') AS canonical_year,
+    (array_agg(id ORDER BY id))[1] AS keep_id,
+    bool_or(coalesce(novembre, false)) AS novembre,
+    bool_or(coalesce(dicembre, false)) AS dicembre,
+    bool_or(coalesce(gennaio, false)) AS gennaio,
+    bool_or(coalesce(febbraio, false)) AS febbraio,
+    bool_or(coalesce(marzo, false)) AS marzo,
+    bool_or(coalesce(aprile, false)) AS aprile,
+    bool_or(coalesce(maggio, false)) AS maggio,
+    bool_or(coalesce(giugno, false)) AS giugno
+  FROM public.quote_mensili
+  GROUP BY ragazzo_id, replace(anno_scout, '/', '-')
+)
 UPDATE public.quote_mensili AS quote
 SET
-  anno_scout = grouped.canonical_year,
   novembre = grouped.novembre,
   dicembre = grouped.dicembre,
   gennaio = grouped.gennaio,
@@ -42,18 +32,50 @@ SET
   aprile = grouped.aprile,
   maggio = grouped.maggio,
   giugno = grouped.giugno
-FROM quote_merge_groups AS grouped
+FROM quote_groups AS grouped
 WHERE quote.id = grouped.keep_id;
 
--- Keep existing ledger links valid when duplicate monthly-fee rows are merged.
+-- Repoint ledger movements before removing duplicate monthly-fee records.
+WITH quote_groups AS (
+  SELECT
+    ragazzo_id,
+    replace(anno_scout, '/', '-') AS canonical_year,
+    (array_agg(id ORDER BY id))[1] AS keep_id
+  FROM public.quote_mensili
+  GROUP BY ragazzo_id, replace(anno_scout, '/', '-')
+),
+quote_map AS (
+  SELECT
+    quote.id AS duplicate_id,
+    grouped.keep_id
+  FROM public.quote_mensili AS quote
+  JOIN quote_groups AS grouped
+    ON quote.ragazzo_id IS NOT DISTINCT FROM grouped.ragazzo_id
+   AND replace(quote.anno_scout, '/', '-') = grouped.canonical_year
+  WHERE quote.id <> grouped.keep_id
+)
 UPDATE public.registro_spese AS movement
 SET quota_mensile_id = mapping.keep_id
-FROM quote_merge_map AS mapping
+FROM quote_map AS mapping
 WHERE movement.quota_mensile_id = mapping.duplicate_id;
 
+WITH quote_groups AS (
+  SELECT
+    ragazzo_id,
+    replace(anno_scout, '/', '-') AS canonical_year,
+    (array_agg(id ORDER BY id))[1] AS keep_id
+  FROM public.quote_mensili
+  GROUP BY ragazzo_id, replace(anno_scout, '/', '-')
+)
 DELETE FROM public.quote_mensili AS quote
-USING quote_merge_map AS mapping
-WHERE quote.id = mapping.duplicate_id;
+USING quote_groups AS grouped
+WHERE quote.ragazzo_id IS NOT DISTINCT FROM grouped.ragazzo_id
+  AND replace(quote.anno_scout, '/', '-') = grouped.canonical_year
+  AND quote.id <> grouped.keep_id;
+
+UPDATE public.quote_mensili
+SET anno_scout = replace(anno_scout, '/', '-')
+WHERE anno_scout LIKE '%/%';
 
 CREATE UNIQUE INDEX IF NOT EXISTS quote_mensili_ragazzo_anno_uidx
   ON public.quote_mensili (ragazzo_id, anno_scout);
