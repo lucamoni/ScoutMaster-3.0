@@ -34,30 +34,39 @@ type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row
 type Quota = Database['public']['Tables']['quote_mensili']['Row']
 type Pattuglia = Database['public']['Tables']['pattuglie']['Row']
 
-const MONTHS: (keyof Quota)[] = ['ott', 'nov', 'dic', 'gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'sep']
-const MONTH_LABELS: Record<string, string> = {
-  ott: 'Ottobre', nov: 'Novembre', dic: 'Dicembre', gen: 'Gennaio',
-  feb: 'Febbraio', mar: 'Marzo', apr: 'Aprile', mag: 'Maggio',
-  giu: 'Giugno', lug: 'Luglio', ago: 'Agosto', sep: 'Settembre'
+const MONTHS = [
+  'novembre',
+  'dicembre',
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+] as const satisfies readonly (keyof Quota)[]
+
+type QuotaMonth = (typeof MONTHS)[number]
+
+const MONTH_LABELS: Record<QuotaMonth, string> = {
+  novembre: 'Novembre',
+  dicembre: 'Dicembre',
+  gennaio: 'Gennaio',
+  febbraio: 'Febbraio',
+  marzo: 'Marzo',
+  aprile: 'Aprile',
+  maggio: 'Maggio',
+  giugno: 'Giugno',
 }
 
-const getScoutMonthsUpToNow = (): (keyof Quota)[] => {
-  const m = new Date().getMonth()
-  let limit = 7
-  if (m === 9) limit = 0
-  else if (m === 10) limit = 1
-  else if (m === 11) limit = 2
-  else if (m === 0) limit = 3
-  else if (m === 1) limit = 4
-  else if (m === 2) limit = 5
-  else if (m === 3) limit = 6
-  else if (m === 4) limit = 7
-  else if (m === 5) limit = 8
-  else if (m === 6) limit = 9
-  else if (m === 7) limit = 10
-  else if (m === 8) limit = 11
+const getScoutMonthsUpToNow = (): QuotaMonth[] => {
+  const month = new Date().getMonth()
 
-  return MONTHS.slice(0, limit + 1)
+  if (month === 8 || month === 9) return []
+  if (month === 10) return MONTHS.slice(0, 1)
+  if (month === 11) return MONTHS.slice(0, 2)
+  if (month >= 0 && month <= 5) return MONTHS.slice(0, month + 3)
+
+  return [...MONTHS]
 }
 
 export default function SaldaOraClient({
