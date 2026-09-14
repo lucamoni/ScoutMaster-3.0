@@ -6,6 +6,7 @@ import { FileText, Download, FileSpreadsheet } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import { normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Evento = Database['public']['Tables']['eventi']['Row']
@@ -18,13 +19,15 @@ export function ReportClient({
   eventi,
   partecipazioni,
   cassa,
-  quote
+  quote,
+  currentYear
 }: {
   ragazzi: Ragazzo[]
   eventi: Evento[]
   partecipazioni: Partecipazione[]
   cassa: Spesa[]
   quote: Quota[]
+  currentYear: string
 }) {
   const [selectedRagazzo, setSelectedRagazzo] = useState<string>('')
 
@@ -36,24 +39,26 @@ export function ReportClient({
     doc.setFontSize(11)
     doc.text(`Generato il ${new Date().toLocaleDateString('it-IT')}`, 14, 30)
 
-    const cassaContanti = cassa.filter(c => c.metodo === 'CONTANTI')
-    const cassaBanca = cassa.filter(c => c.metodo === 'CARTA' || c.metodo === 'BONIFICO')
+    const signedAmount = (movimento: Spesa) => movimento.tipo_movimento === 'ENTRATA' ? movimento.importo : -movimento.importo
+    const cassaContanti = cassa.filter(movimento => toCanonicalMetodo(movimento.metodo) === 'Contanti')
+    const cassaBanca = cassa.filter(movimento => toCanonicalMetodo(movimento.metodo) !== 'Contanti')
 
-    const totaleContanti = cassaContanti.reduce((acc, c) => acc + c.importo, 0)
-    const totaleBanca = cassaBanca.reduce((acc, c) => acc + c.importo, 0)
+    const totaleContanti = cassaContanti.reduce((totale, movimento) => totale + signedAmount(movimento), 0)
+    const totaleBanca = cassaBanca.reduce((totale, movimento) => totale + signedAmount(movimento), 0)
 
     autoTable(doc, {
       startY: 40,
-      head: [['Operazione N.', 'Data', 'Voce', 'Note', 'Importo', 'Metodo']],
+      head: [['Operazione N.', 'Data', 'Tipo', 'Voce', 'Note', 'Importo', 'Metodo']],
       body: cassa.map(c => [
         c.numero_operazione?.toString() || '-',
         c.data ? new Date(c.data).toLocaleDateString('it-IT') : '',
+        c.tipo_movimento || '',
         c.voce_spesa || '',
         c.note || '',
-        `€ ${c.importo.toFixed(2)}`,
+        `${c.tipo_movimento === 'ENTRATA' ? '+' : '-'} € ${c.importo.toFixed(2)}`,
         c.metodo || ''
       ]),
-      foot: [['', '', '', 'Saldo Contanti:', `€ ${totaleContanti.toFixed(2)}`, '']],
+      foot: [['', '', '', '', 'Saldo movimenti contanti:', `€ ${totaleContanti.toFixed(2)}`, '']],
       theme: 'grid',
       headStyles: { fillColor: [41, 128, 185] },
     })
@@ -61,7 +66,7 @@ export function ReportClient({
     const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY || 40
     doc.text(`Saldo Totale Banca/Carta: € ${totaleBanca.toFixed(2)}`, 14, finalY + 15)
 
-    doc.save('bilancio_reparto.pdf')
+    doc.save(`prima_nota_reparto_${currentYear}.pdf`)
   }
 
   const exportSchedaRagazzo = () => {
@@ -76,7 +81,7 @@ export function ReportClient({
     doc.text(`Pattuglia: ${r.pattuglia || '-'}`, 14, 30)
 
     const partRagazzo = partecipazioni.filter(p => p.ragazzo_id === r.id)
-    const quoteRagazzo = quote.find(q => q.ragazzo_id === r.id)
+    const quoteRagazzo = quote.find(q => q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(currentYear))
 
     // Eventi
     doc.text('Storico Uscite ed Eventi', 14, 45)
