@@ -3,9 +3,11 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/database.types'
 import { GoogleGenAI } from '@google/genai'
+import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
 
 export async function POST(request: Request) {
   try {
+    await requireAuthenticatedUser()
     const { message } = await request.json()
 
     if (!message) {
@@ -180,6 +182,8 @@ Regole di risposta:
 
     return NextResponse.json({ reply: fallbackReply })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
     const err = error as Error
     console.error('Errore ScoutBot:', err)
     return NextResponse.json({ error: 'Errore elaborazione ScoutBot' }, { status: 500 })

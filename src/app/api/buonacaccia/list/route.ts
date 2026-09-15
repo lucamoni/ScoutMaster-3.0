@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
 
 interface EventItem {
   id: string
@@ -14,6 +15,7 @@ export async function GET(req: Request) {
   const type = searchParams.get('type') || 'EG'
 
   try {
+    await requireAuthenticatedUser()
     const scrapedEvents: EventItem[] = []
 
     // 1. Prova web scraping in tempo reale da buonacaccia.net
@@ -77,6 +79,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ data: scrapedEvents, source: 'buonacaccia.net' })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
     const err = error as Error
     return NextResponse.json({ error: err.message || 'Errore durante la ricerca eventi' }, { status: 500 })
   }
