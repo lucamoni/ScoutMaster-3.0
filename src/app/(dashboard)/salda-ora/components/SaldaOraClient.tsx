@@ -27,6 +27,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { calculateScoutDebt, getScoutMonthsUpTo, ScoutFeeMonth } from '@/lib/utils/debts'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Evento = Database['public']['Tables']['eventi']['Row']
@@ -34,18 +35,7 @@ type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row
 type Quota = Database['public']['Tables']['quote_mensili']['Row']
 type Pattuglia = Database['public']['Tables']['pattuglie']['Row']
 
-const MONTHS = [
-  'novembre',
-  'dicembre',
-  'gennaio',
-  'febbraio',
-  'marzo',
-  'aprile',
-  'maggio',
-  'giugno',
-] as const satisfies readonly (keyof Quota)[]
-
-type QuotaMonth = (typeof MONTHS)[number]
+type QuotaMonth = ScoutFeeMonth
 
 const MONTH_LABELS: Record<QuotaMonth, string> = {
   novembre: 'Novembre',
@@ -56,17 +46,6 @@ const MONTH_LABELS: Record<QuotaMonth, string> = {
   aprile: 'Aprile',
   maggio: 'Maggio',
   giugno: 'Giugno',
-}
-
-const getScoutMonthsUpToNow = (): QuotaMonth[] => {
-  const month = new Date().getMonth()
-
-  if (month === 8 || month === 9) return []
-  if (month === 10) return MONTHS.slice(0, 1)
-  if (month === 11) return MONTHS.slice(0, 2)
-  if (month >= 0 && month <= 5) return MONTHS.slice(0, month + 3)
-
-  return [...MONTHS]
 }
 
 export default function SaldaOraClient({
@@ -108,7 +87,7 @@ export default function SaldaOraClient({
 
   const quotaMensileNum = Number(quotaMensileStandard) || 10
   const quotaCensimentoNum = Number(quotaCensimentoStandard) || 45
-  const activeMonths = getScoutMonthsUpToNow()
+  const activeMonths = getScoutMonthsUpTo()
 
   // Realtime Syncing
   useEffect(() => {
@@ -147,49 +126,16 @@ export default function SaldaOraClient({
 
   // Helper per calcolare le pendenze dettagliate di un ragazzo
   const computeBoyDebt = (ragazzo: Ragazzo) => {
-    const normYear = normalizeAnnoScout(currentYear)
-    const boyQuote = quote.find(q => q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)
-
-    // 1. Mesi arretrati
-    const unpaidMonths = activeMonths.filter(m => !boyQuote || boyQuote[m] !== true)
-    const quoteDebt = unpaidMonths.length * quotaMensileNum
-
-    // 2. Eventi non saldati
-    const boyParts = partecipazioni.filter(p => p.ragazzo_id === ragazzo.id && p.riscosso !== true)
-    const unpaidEventDetails = boyParts.map(p => {
-      const ev = eventi.find(e => e.id === p.evento_id)
-      const cost = (p.quota_dovuta !== null && p.quota_dovuta !== undefined) 
-        ? Number(p.quota_dovuta) 
-        : (ev?.quota_standard || 0)
-      return {
-        eventoId: p.evento_id,
-        nome: ev?.nome_evento || 'Evento Reparto',
-        cost
-      }
+    return calculateScoutDebt({
+      scout: ragazzo,
+      quote,
+      events: eventi,
+      participations: partecipazioni,
+      currentYear,
+      activeMonths,
+      monthlyFee: quotaMensileNum,
+      censusFee: quotaCensimentoNum,
     })
-    const eventiDebt = unpaidEventDetails.reduce((acc, curr) => acc + curr.cost, 0)
-
-    // 3. Censimento non saldato
-    const censimentoDue = ragazzo.quota_censimento !== true
-    const censimentoCost = (ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined)
-      ? Number(ragazzo.importo_censimento)
-      : quotaCensimentoNum
-    const censimentoDebt = censimentoDue ? censimentoCost : 0
-
-    const totalDebt = quoteDebt + eventiDebt + censimentoDebt
-    const pendenzeCount = unpaidMonths.length + unpaidEventDetails.length + (censimentoDue ? 1 : 0)
-
-    return {
-      unpaidMonths,
-      quoteDebt,
-      unpaidEventDetails,
-      eventiDebt,
-      censimentoDue,
-      censimentoCost,
-      censimentoDebt,
-      totalDebt,
-      pendenzeCount
-    }
   }
 
   const router = useRouter()
