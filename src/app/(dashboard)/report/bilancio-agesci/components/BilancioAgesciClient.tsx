@@ -72,9 +72,16 @@ export default function BilancioAgesciClient({
   const cassaInizialeKey = `saldo_iniziale_cassa_${selectedAnnoScout}`
   const bancaInizialeKey = `saldo_iniziale_banca_${selectedAnnoScout}`
   const annoChiusoKey = `anno_chiuso_${selectedAnnoScout}`
+  const cassaEffettivaKey = `saldo_effettivo_cassa_${selectedAnnoScout}`
+  const bancaEffettivaKey = `saldo_effettivo_banca_${selectedAnnoScout}`
 
   const saldoInizialeCassa = parseFloat(settings[cassaInizialeKey] || '0') || 0
   const saldoInizialeBanca = parseFloat(settings[bancaInizialeKey] || '0') || 0
+  const hasSaldoEffettivoCassa = settings[cassaEffettivaKey]?.trim() !== '' && Number.isFinite(Number(settings[cassaEffettivaKey]))
+  const hasSaldoEffettivoBanca = settings[bancaEffettivaKey]?.trim() !== '' && Number.isFinite(Number(settings[bancaEffettivaKey]))
+  const saldoEffettivoCassa = hasSaldoEffettivoCassa ? Number(settings[cassaEffettivaKey]) : 0
+  const saldoEffettivoBanca = hasSaldoEffettivoBanca ? Number(settings[bancaEffettivaKey]) : 0
+  const hasSaldiEffettivi = hasSaldoEffettivoCassa && hasSaldoEffettivoBanca
   const isAnnoChiuso = settings[annoChiusoKey] === 'true'
 
   // Calcolo intervallo date Anno Scout (01/10/YYYY -> 30/09/YYYY+1)
@@ -148,10 +155,14 @@ export default function BilancioAgesciClient({
   const saldoFinaleTotale = saldoFinaleCassa + saldoFinaleBanca
   const saldoInizialeTotale = saldoInizialeCassa + saldoInizialeBanca
 
-  // Controllo Quadratura Bilancio
+  // La quadratura reale confronta il saldo teorico con denaro contato ed
+  // estratto conto, non due risultati derivati dagli stessi movimenti.
   const quadraturaTeorica = saldoInizialeTotale + risultatoEsercizio
-  const differenzaQuadratura = Math.abs(saldoFinaleTotale - quadraturaTeorica)
-  const isQuadrato = differenzaQuadratura < 0.01
+  const saldoEffettivoTotale = saldoEffettivoCassa + saldoEffettivoBanca
+  const differenzaQuadratura = hasSaldiEffettivi
+    ? Math.abs(saldoEffettivoTotale - quadraturaTeorica)
+    : 0
+  const isQuadrato = hasSaldiEffettivi && differenzaQuadratura < 0.01
 
   // Salva saldo iniziale
   const handleSaveSaldo = async (key: string, value: string) => {
@@ -167,31 +178,54 @@ export default function BilancioAgesciClient({
   // Gestione Chiusura Anno Contabile
   const handleToggleChiusuraAnno = async () => {
     const newStatus = !isAnnoChiuso
+
+    if (newStatus && !hasSaldiEffettivi) {
+      toast.error('Inserisci il saldo effettivo di cassa e banca prima di chiudere l’anno')
+      return
+    }
+    if (newStatus && !isQuadrato) {
+      toast.error(`Bilancio non quadrato: differenza di € ${differenzaQuadratura.toFixed(2)}`)
+      return
+    }
+
     const newStatusStr = newStatus ? 'true' : 'false'
+    const { error: statusError } = await supabase
+      .from('impostazioni')
+      .upsert({ chiave: annoChiusoKey, valore: newStatusStr })
+
+    if (statusError) {
+      toast.error('Impossibile modificare lo stato dell’anno contabile')
+      return
+    }
 
     setSettings(prev => ({ ...prev, [annoChiusoKey]: newStatusStr }))
-    await supabase.from('impostazioni').upsert({ chiave: annoChiusoKey, valore: newStatusStr })
 
     if (newStatus) {
-      // Imposta automaticamente i saldi finali come saldi iniziali dell'anno successivo
       const nextAnnoStr = `${endYear}-${endYear + 1}`
       const nextCassaKey = `saldo_iniziale_cassa_${nextAnnoStr}`
       const nextBancaKey = `saldo_iniziale_banca_${nextAnnoStr}`
 
-      await supabase.from('impostazioni').upsert([
-        { chiave: nextCassaKey, valore: saldoFinaleCassa.toFixed(2) },
-        { chiave: nextBancaKey, valore: saldoFinaleBanca.toFixed(2) }
+      const { error: carryError } = await supabase.from('impostazioni').upsert([
+        { chiave: nextCassaKey, valore: saldoEffettivoCassa.toFixed(2) },
+        { chiave: nextBancaKey, valore: saldoEffettivoBanca.toFixed(2) }
       ])
+
+      if (carryError) {
+        await supabase.from('impostazioni').upsert({ chiave: annoChiusoKey, valore: 'false' })
+        setSettings(prev => ({ ...prev, [annoChiusoKey]: 'false' }))
+        toast.error('Chiusura annullata: saldi non trasferiti al nuovo anno')
+        return
+      }
 
       setSettings(prev => ({
         ...prev,
-        [nextCassaKey]: saldoFinaleCassa.toFixed(2),
-        [nextBancaKey]: saldoFinaleBanca.toFixed(2)
+        [nextCassaKey]: saldoEffettivoCassa.toFixed(2),
+        [nextBancaKey]: saldoEffettivoBanca.toFixed(2)
       }))
 
-      toast.success(`Anno Scout ${selectedAnnoScout} Chiuso e Congelato! Saldi trasferiti all'anno ${nextAnnoStr}.`)
+      toast.success(`Anno Scout ${selectedAnnoScout} chiuso. Saldi effettivi trasferiti all’anno ${nextAnnoStr}.`)
     } else {
-      toast.info(`Anno Scout ${selectedAnnoScout} Riaperto per modifiche.`)
+      toast.info(`Anno Scout ${selectedAnnoScout} riaperto per modifiche.`)
     }
   }
 
@@ -340,10 +374,10 @@ export default function BilancioAgesciClient({
             </CardDescription>
             <div className="flex items-center gap-2 mt-1">
               <Badge className={isQuadrato ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
-                {isQuadrato ? "QUADRATO" : "CONTROLLARE"}
+                {isQuadrato ? "QUADRATO" : hasSaldiEffettivi ? "CONTROLLARE" : "SALDI MANCANTI"}
               </Badge>
               <span className="text-xs text-muted-foreground font-mono">
-                Diff: € {differenzaQuadratura.toFixed(2)}
+                Diff: {hasSaldiEffettivi ? `€ ${differenzaQuadratura.toFixed(2)}` : '—'}
               </span>
             </div>
           </CardHeader>
@@ -502,6 +536,22 @@ export default function BilancioAgesciClient({
                   <span>(=) Saldo Finale Cassa (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleCassa.toFixed(2)}</span>
                 </div>
+
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="font-semibold">Cassa realmente contata:</span>
+                  <div className="flex items-center gap-1 w-32">
+                    <span className="text-xs font-bold text-muted-foreground">€</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={isAnnoChiuso}
+                      value={settings[cassaEffettivaKey] || ''}
+                      onChange={e => handleSaveSaldo(cassaEffettivaKey, e.target.value)}
+                      placeholder="Da verificare"
+                      className="h-8 text-right font-mono"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -542,6 +592,22 @@ export default function BilancioAgesciClient({
                   <span>(=) Saldo Finale Banca (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleBanca.toFixed(2)}</span>
                 </div>
+
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="font-semibold">Saldo da estratto conto:</span>
+                  <div className="flex items-center gap-1 w-32">
+                    <span className="text-xs font-bold text-muted-foreground">€</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={isAnnoChiuso}
+                      value={settings[bancaEffettivaKey] || ''}
+                      onChange={e => handleSaveSaldo(bancaEffettivaKey, e.target.value)}
+                      placeholder="Da verificare"
+                      className="h-8 text-right font-mono"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -566,7 +632,7 @@ export default function BilancioAgesciClient({
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="text-sm py-1 px-3">
-                  ⚠️ DISCREPANZA: € {differenzaQuadratura.toFixed(2)}
+                  {hasSaldiEffettivi ? `⚠️ DISCREPANZA: € ${differenzaQuadratura.toFixed(2)}` : 'INSERIRE SALDI EFFETTIVI'}
                 </Badge>
               )}
             </div>
