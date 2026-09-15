@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
+import { ReceiptOcrResult, scanReceiptLocally } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,13 +55,7 @@ export default function CassaClient({
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [scannerFile, setScannerFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [ocrData, setOcrData] = useState<{
-    importo_totale?: string,
-    data?: string,
-    metodo_pagamento?: string,
-    fornitore_voce?: string,
-    categoria_suggerita?: string
-  } | null>(null)
+  const [ocrData, setOcrData] = useState<ReceiptOcrResult | null>(null)
   
   const [formData, setFormData] = useState<{
     voce_spesa: string;
@@ -410,17 +405,7 @@ export default function CassaClient({
     setOcrData(null)
     toast.info('Analisi scontrino in corso...', { id: 'ocr-scontrino' })
     try {
-      const bodyData = new FormData()
-      bodyData.append('file', fileToAnalyze)
-      bodyData.append('categorie', categorie.map(c => c.nome).join(', '))
-      
-      const res = await fetch('/api/ocr', { method: 'POST', body: bodyData })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.details || errorData.error || 'Errore durante l\'analisi OCR')
-      }
-      
-      const data = await res.json()
+      const data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
       
       setOcrData(data)
       
@@ -435,11 +420,20 @@ export default function CassaClient({
         tipo_movimento: 'USCITA' // Assumiamo uscita per gli scontrini
       }))
 
-      toast.success('Scontrino letto con successo! Controlla i dati.', { id: 'ocr-scontrino' })
+      toast.success('Scontrino letto sul dispositivo. Controlla i dati.', { id: 'ocr-scontrino' })
     } catch (err: unknown) {
       console.error(err)
       const errMsg = err instanceof Error ? err.message : 'Errore sconosciuto'
       toast.error(`Impossibile analizzare lo scontrino: ${errMsg}`, { id: 'ocr-scontrino' })
+      setOcrData({
+        provider: 'paddleocr-browser',
+        importo: null,
+        data: null,
+        fornitore: null,
+        voce_spesa: null,
+        confidence: 0,
+        raw_text: '',
+      })
     } finally {
       setIsProcessing(false)
     }
