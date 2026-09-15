@@ -82,7 +82,7 @@ export default function OCRScannerPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      let photoUrl = null
+      let photoPath: string | null = null
 
       if (file) {
         const fileExt = file.name.split('.').pop()
@@ -93,11 +93,9 @@ export default function OCRScannerPage() {
 
         if (uploadError) throw uploadError
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('scontrini')
-          .getPublicUrl(fileName)
-        
-        photoUrl = publicUrl
+        // Store only the private object path. The Cassa page creates a
+        // short-lived signed URL when an authorized user opens the receipt.
+        photoPath = fileName
       }
 
       const { error } = await supabase
@@ -111,10 +109,15 @@ export default function OCRScannerPage() {
           momento_anno: formData.momento_anno,
           note: formData.note,
           ricevuta_presente: true,
-          foto_scontrino_url: photoUrl
+          foto_scontrino_url: photoPath
         })
 
-      if (error) throw error
+      if (error) {
+        if (photoPath) {
+          await supabase.storage.from('scontrini').remove([photoPath])
+        }
+        throw error
+      }
 
       router.push('/cassa')
     } catch (error) {
