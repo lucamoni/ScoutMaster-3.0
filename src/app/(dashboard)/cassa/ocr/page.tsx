@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Camera, UploadCloud, Loader2, ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { scanReceiptLocally } from '@/lib/ocr/receipt'
 
 export default function OCRScannerPage() {
   const router = useRouter()
@@ -43,17 +44,8 @@ export default function OCRScannerPage() {
 
     setLoading(true)
     try {
-      const data = new FormData()
-      data.append('file', file)
-
-      const response = await fetch('/api/ocr', {
-        method: 'POST',
-        body: data
-      })
-
-      if (!response.ok) throw new Error('Errore OCR')
-
-      const result = await response.json()
+      const categories = ['Materiale da Lavoro', 'KAMBU', 'Materiale vario attività', 'Altro']
+      const result = await scanReceiptLocally(file, categories)
       const importo = Number(result.importo)
       const fornitore = typeof result.fornitore === 'string' ? result.fornitore.trim() : ''
       const dataScontrino = typeof result.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(result.data)
@@ -72,7 +64,8 @@ export default function OCRScannerPage() {
       }))
     } catch (error) {
       console.error(error)
-      alert("Impossibile analizzare lo scontrino. Riprova.")
+      alert("Impossibile analizzare automaticamente lo scontrino. Puoi inserire i dati manualmente.")
+      setExtractedData({ manual: true })
     } finally {
       setLoading(false)
     }
