@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import {
