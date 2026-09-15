@@ -244,6 +244,11 @@ export default function CassaClient({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const amount = Number(formData.importo)
+    const movementDate = formData.data || editingSpesa?.data || new Date().toISOString().split('T')[0]
+    if (!Number.isFinite(amount) || amount <= 0) return toast.error('Inserisci un importo maggiore di zero')
+    if (!formData.voce_spesa.trim()) return toast.error('Seleziona una voce di bilancio')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(movementDate)) return toast.error('Inserisci una data valida')
     
     if (editingSpesa) {
       const safeMetodo = toCanonicalMetodo(formData.metodo)
@@ -251,7 +256,7 @@ export default function CassaClient({
         .from('registro_spese')
         .update({
           voce_spesa: formData.voce_spesa,
-          importo: Number(formData.importo),
+          importo: amount,
           metodo: safeMetodo,
           momento_anno: formData.momento_anno,
           note: formData.note,
@@ -267,7 +272,7 @@ export default function CassaClient({
           .from('registro_spese')
           .update({
             voce_spesa: formData.voce_spesa,
-            importo: Number(formData.importo),
+            importo: amount,
             metodo: safeMetodo.toUpperCase(),
             momento_anno: formData.momento_anno,
             note: formData.note,
@@ -301,7 +306,7 @@ export default function CassaClient({
         .from('registro_spese')
         .insert({
           voce_spesa: formData.voce_spesa,
-          importo: Number(formData.importo),
+          importo: amount,
           metodo: safeMetodo,
           momento_anno: formData.momento_anno,
           note: formData.note,
@@ -316,7 +321,7 @@ export default function CassaClient({
           .from('registro_spese')
           .insert({
             voce_spesa: formData.voce_spesa,
-            importo: Number(formData.importo),
+            importo: amount,
             metodo: safeMetodo.toUpperCase(),
             momento_anno: formData.momento_anno,
             note: formData.note,
