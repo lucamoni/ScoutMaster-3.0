@@ -42,6 +42,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
+type RagazzoUpdate = Database['public']['Tables']['ragazzi']['Update']
 type PrivacyField = 'foglio_privacy_firmato' | 'partecipazione_ci' | 'scheda_medica_ci' | 'partecipazione_ce' | 'scheda_medica_ce' | 'quota_censimento' | 'ricevuta_censimento'
 
 interface CustomDocPerRagazzo {
@@ -263,11 +264,12 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     if (!scout || !scanResult || !scanResult.extracted) return
     const ext = scanResult.extracted
 
-    const updatePayload: Record<string, any> = {}
+    const updatePayload: RagazzoUpdate = {}
 
     // Imposta la spunta per la categoria scelta dall'utente nella tendina
-    if (selectedCategory in scout || ['foglio_privacy_firmato', 'partecipazione_ci', 'scheda_medica_ci', 'partecipazione_ce', 'scheda_medica_ce', 'quota_censimento', 'ricevuta_censimento'].includes(selectedCategory)) {
-      updatePayload[selectedCategory] = true
+    const privacyField = selectedCategory as PrivacyField
+    if (['foglio_privacy_firmato', 'partecipazione_ci', 'scheda_medica_ci', 'partecipazione_ce', 'scheda_medica_ce', 'quota_censimento', 'ricevuta_censimento'].includes(privacyField)) {
+      updatePayload[privacyField] = true
     }
 
     // Se l'utente vuole applicare anche i dati anagrafici estratti dall'IA
@@ -709,7 +711,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                   <Label className="font-bold text-purple-950 flex items-center gap-1.5 text-xs">
                     <FileText className="w-4 h-4 text-purple-700" /> Categoria / Casella Documento da Assegnare:
                   </Label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value ?? 'foglio_privacy_firmato')}>
                     <SelectTrigger className="h-9 bg-white font-medium">
                       <SelectValue placeholder="Seleziona Categoria Documento" />
                     </SelectTrigger>
@@ -896,7 +898,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           <div className="space-y-4 py-2 text-xs">
             <div className="space-y-1.5">
               <Label>Seleziona Squadriglia / Pattuglia</Label>
-              <Select value={bulkSquadriglia} onValueChange={setBulkSquadriglia}>
+              <Select value={bulkSquadriglia} onValueChange={(value) => setBulkSquadriglia(value ?? 'TUTTE')}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Seleziona squadriglia" />
                 </SelectTrigger>

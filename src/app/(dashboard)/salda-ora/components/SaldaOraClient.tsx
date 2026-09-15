@@ -373,7 +373,9 @@ export default function SaldaOraClient({
     setModalSelections({
       censimento: debt.censimentoDue,
       months: [...debt.unpaidMonths],
-      eventi: debt.unpaidEventDetails.map(e => e.eventoId)
+      eventi: debt.unpaidEventDetails
+        .map(e => e.eventoId)
+        .filter((eventoId): eventoId is string => Boolean(eventoId))
     })
   }
 

@@ -190,7 +190,10 @@ export type Database = {
       ragazzi: {
         Row: {
           attivo: boolean | null
+          codice_censimento: string | null
+          codice_fiscale: string | null
           cognome: string
+          data_nascita: string | null
           foglio_privacy_firmato: boolean | null
           partecipazione_ci: boolean | null
           scheda_medica_ci: boolean | null
@@ -199,14 +202,24 @@ export type Database = {
           quota_censimento: boolean | null
           ricevuta_censimento: boolean | null
           id: string
+          genitore_1_nome: string | null
+          genitore_1_telefono: string | null
+          genitore_2_nome: string | null
+          genitore_2_telefono: string | null
           nome: string
+          note_sanitarie: string | null
           pattuglia: string | null
+          residenza: string | null
           sesso: string | null
+          telefono_ragazzo: string | null
           importo_censimento: number | null
         }
         Insert: {
           attivo?: boolean | null
+          codice_censimento?: string | null
+          codice_fiscale?: string | null
           cognome: string
+          data_nascita?: string | null
           foglio_privacy_firmato?: boolean | null
           partecipazione_ci?: boolean | null
           scheda_medica_ci?: boolean | null
@@ -215,14 +228,24 @@ export type Database = {
           quota_censimento?: boolean | null
           ricevuta_censimento?: boolean | null
           id?: string
+          genitore_1_nome?: string | null
+          genitore_1_telefono?: string | null
+          genitore_2_nome?: string | null
+          genitore_2_telefono?: string | null
           nome: string
+          note_sanitarie?: string | null
           pattuglia?: string | null
+          residenza?: string | null
           sesso?: string | null
+          telefono_ragazzo?: string | null
           importo_censimento?: number | null
         }
         Update: {
           attivo?: boolean | null
+          codice_censimento?: string | null
+          codice_fiscale?: string | null
           cognome?: string
+          data_nascita?: string | null
           foglio_privacy_firmato?: boolean | null
           partecipazione_ci?: boolean | null
           scheda_medica_ci?: boolean | null
@@ -231,9 +254,16 @@ export type Database = {
           quota_censimento?: boolean | null
           ricevuta_censimento?: boolean | null
           id?: string
+          genitore_1_nome?: string | null
+          genitore_1_telefono?: string | null
+          genitore_2_nome?: string | null
+          genitore_2_telefono?: string | null
           nome?: string
+          note_sanitarie?: string | null
           pattuglia?: string | null
+          residenza?: string | null
           sesso?: string | null
+          telefono_ragazzo?: string | null
           importo_censimento?: number | null
         }
         Relationships: []

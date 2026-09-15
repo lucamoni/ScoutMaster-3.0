@@ -72,7 +72,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   
   // Modale Link Rapidi
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
-  const [fetchedEvents, setFetchedEvents] = useState<{id: string, titolo: string, luogo?: string, date?: string}[]>([])
+  const [fetchedEvents, setFetchedEvents] = useState<{id: string, titolo: string, luogo?: string, date?: string, categoria?: string}[]>([])
   const [isFetchingList, setIsFetchingList] = useState(false)
   
   // Nuovo candidato

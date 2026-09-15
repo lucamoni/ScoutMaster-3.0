@@ -160,7 +160,7 @@ RESTITUISCI UN JSON CON QUESTA STRUTTURA ESATTA:
         matchedScout = existing
         isNewScout = false
 
-        const checkField = (field: string, label: string, extVal: any) => {
+        const checkField = (field: keyof typeof existing, label: string, extVal: any) => {
           if (!extVal) return
           const dbVal = existing[field]
           if (dbVal && String(dbVal).trim().toLowerCase() !== String(extVal).trim().toLowerCase()) {
