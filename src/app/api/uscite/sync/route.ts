@@ -30,12 +30,13 @@ export async function POST(request: Request) {
     const supabase = createAdminClient()
 
     // 1. Recupera l'evento target
-    const { data: evento } = await supabase
+    const { data: evento, error: eventoError } = await supabase
       .from('eventi')
       .select('*')
       .eq('id', eventoId)
       .maybeSingle()
 
+    if (eventoError) throw eventoError
     if (!evento) {
       return NextResponse.json({ error: 'Evento non trovato' }, { status: 404 })
     }
@@ -45,7 +46,6 @@ export async function POST(request: Request) {
     if (metodoPagamento !== undefined && metodoPagamento !== null) {
       const canonicalMet = toCanonicalMetodo(metodoPagamento, 'Bonifico')
       targetEventoMetodo = canonicalMet
-      await supabase.from('eventi').update({ metodo_pagamento: canonicalMet }).eq('id', eventoId)
     }
 
     // 3. Batch Fetch: Ragazzi & Partecipazioni Esistenti
@@ -98,10 +98,15 @@ export async function POST(request: Request) {
         .from('partecipazioni_eventi')
         .upsert(uppercasePartPayloads, { onConflict: 'ragazzo_id, evento_id' })
         .select('*')
+
+      if (retry.error) throw retry.error
       savedPartecipazioni = retry.data
     }
 
     const finalParts = savedPartecipazioni || []
+    if (finalParts.length !== ragazziIds.length) {
+      throw new Error('Non tutte le partecipazioni sono state salvate')
+    }
     const finalPartsMap = new Map(finalParts.map(p => [p.ragazzo_id, p]))
 
     // 5. Batch gestisci Registro Spese (Cassa)
@@ -109,11 +114,12 @@ export async function POST(request: Request) {
     let existingSpeseMap = new Map<string, any>()
 
     if (partIds.length > 0) {
-      const { data: existingSpese } = await supabase
+      const { data: existingSpese, error: existingSpeseError } = await supabase
         .from('registro_spese')
         .select('*')
         .in('partecipazione_evento_id', partIds)
 
+      if (existingSpeseError) throw existingSpeseError
       existingSpeseMap = new Map((existingSpese || []).map(s => [s.partecipazione_evento_id || '', s]))
     }
 
@@ -152,17 +158,50 @@ export async function POST(request: Request) {
       }
     }
 
-    // Exec batch upsert spese & batch delete
+    const rollbackPaymentStates = async () => {
+      await Promise.all(finalParts.map(part => {
+        const previous = existingPartsMap.get(part.ragazzo_id)
+        return supabase
+          .from('partecipazioni_eventi')
+          .update({ riscosso: previous?.riscosso === true })
+          .eq('id', part.id)
+      }))
+    }
+
+    // Exec batch upsert spese & batch delete. Never report success if the
+    // ledger rejected a movement (for example because the year is closed).
     if (speseToUpsert.length > 0) {
-      const { error: spesaErr } = await supabase.from('registro_spese').upsert(speseToUpsert).select()
-      if (spesaErr) {
+      let { error: spesaErr } = await supabase.from('registro_spese').upsert(speseToUpsert).select()
+      if (spesaErr && (spesaErr.code === '23514' || spesaErr.message?.includes('metodo'))) {
         const upperSpese = speseToUpsert.map(s => ({ ...s, metodo: String(s.metodo).toUpperCase() }))
-        await supabase.from('registro_spese').upsert(upperSpese)
+        const retry = await supabase.from('registro_spese').upsert(upperSpese)
+        spesaErr = retry.error
+      }
+
+      if (spesaErr) {
+        await rollbackPaymentStates()
+        throw spesaErr
       }
     }
 
     if (speseIdsToDelete.length > 0) {
-      await supabase.from('registro_spese').delete().in('id', speseIdsToDelete)
+      const { error: deleteError } = await supabase
+        .from('registro_spese')
+        .delete()
+        .in('id', speseIdsToDelete)
+
+      if (deleteError) {
+        await rollbackPaymentStates()
+        throw deleteError
+      }
+    }
+
+    if (metodoPagamento !== undefined && metodoPagamento !== null) {
+      const { error: methodError } = await supabase
+        .from('eventi')
+        .update({ metodo_pagamento: targetEventoMetodo })
+        .eq('id', eventoId)
+      if (methodError) throw methodError
     }
 
     return NextResponse.json({
