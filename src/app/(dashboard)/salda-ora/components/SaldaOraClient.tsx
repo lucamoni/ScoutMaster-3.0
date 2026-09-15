@@ -260,6 +260,45 @@ export default function SaldaOraClient({
     if (error) throw error
   }
 
+  const syncCensimentoMovement = async (ragazzo: Ragazzo, paid: boolean) => {
+    const accountingYear = normalizeAnnoScout(currentYear)
+    const { data: existing, error: lookupError } = await supabase
+      .from('registro_spese')
+      .select('id')
+      .eq('ragazzo_id', ragazzo.id)
+      .eq('riferimento_censimento_anno', accountingYear)
+      .maybeSingle()
+
+    if (lookupError) throw lookupError
+
+    if (!paid) {
+      if (!existing) return
+      const { error } = await supabase
+        .from('registro_spese')
+        .delete()
+        .eq('id', existing.id)
+      if (error) throw error
+      return
+    }
+
+    const movement = {
+      importo: Number(ragazzo.importo_censimento ?? quotaCensimentoNum),
+      metodo: 'Contanti',
+      voce_spesa: 'Quota Censimento',
+      tipo_movimento: 'ENTRATA',
+      data: new Date().toISOString().split('T')[0],
+      ragazzo_id: ragazzo.id,
+      riferimento_censimento_anno: accountingYear,
+      note: `Censimento ${accountingYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
+    }
+
+    const { error } = existing
+      ? await supabase.from('registro_spese').update(movement).eq('id', existing.id)
+      : await supabase.from('registro_spese').insert(movement)
+
+    if (error) throw error
+  }
+
   // Azione 1: Salda Tutto per un singolo ragazzo in 1-Click
   const handleSaldaTutto = async (ragazzo: Ragazzo) => {
     setLoadingBoyId(ragazzo.id)
@@ -269,9 +308,19 @@ export default function SaldaOraClient({
     try {
       const normYear = normalizeAnnoScout(currentYear)
 
-      // A. Salda Censimento
+      // A. Salda Censimento e registra l'entrata in prima nota.
       if (debtInfo.censimentoDue) {
-        await supabase.from('ragazzi').update({ quota_censimento: true } as Database['public']['Tables']['ragazzi']['Update']).eq('id', ragazzo.id)
+        await syncCensimentoMovement(ragazzo, true)
+        const { error: censusError } = await supabase
+          .from('ragazzi')
+          .update({ quota_censimento: true } as Database['public']['Tables']['ragazzi']['Update'])
+          .eq('id', ragazzo.id)
+
+        if (censusError) {
+          await syncCensimentoMovement(ragazzo, false)
+          throw censusError
+        }
+
         setRagazzi(prev => prev.map(r => r.id === ragazzo.id ? { ...r, quota_censimento: true } : r))
       }
 
@@ -338,9 +387,22 @@ export default function SaldaOraClient({
     try {
       const normYear = normalizeAnnoScout(currentYear)
 
-      // Censimento
-      await supabase.from('ragazzi').update({ quota_censimento: !modalSelections.censimento } as Database['public']['Tables']['ragazzi']['Update']).eq('id', r.id)
-      setRagazzi(prev => prev.map(item => item.id === r.id ? { ...item, quota_censimento: !modalSelections.censimento } : item))
+      // Censimento: mantiene sincronizzati stato e prima nota.
+      const censusPaid = !modalSelections.censimento
+      const previousCensusPaid = r.quota_censimento === true
+      await syncCensimentoMovement(r, censusPaid)
+
+      const { error: censusError } = await supabase
+        .from('ragazzi')
+        .update({ quota_censimento: censusPaid } as Database['public']['Tables']['ragazzi']['Update'])
+        .eq('id', r.id)
+
+      if (censusError) {
+        await syncCensimentoMovement(r, previousCensusPaid)
+        throw censusError
+      }
+
+      setRagazzi(prev => prev.map(item => item.id === r.id ? { ...item, quota_censimento: censusPaid } : item))
 
       // Quote Mensili
       const monthUpdatePayload: Record<string, boolean> = {}
