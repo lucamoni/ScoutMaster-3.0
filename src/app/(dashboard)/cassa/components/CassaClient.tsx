@@ -513,9 +513,8 @@ export default function CassaClient({
       
       if (!res.ok) throw new Error(data.error || 'Errore importazione')
       
+      if (data.error) throw new Error(data.error)
       toast.success(data.message || 'Sincronizzazione completata!', { id: 'import-sheets' })
-      
-      // Ricarica i dati (hard refresh)
       window.location.reload()
       
     } catch (error: unknown) {
