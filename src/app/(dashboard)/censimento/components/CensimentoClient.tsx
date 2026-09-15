@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 
 import { createClient } from '@/lib/supabase/client'
+import { normalizeAnnoScout } from '@/lib/utils/payment'
 
 import { useEffect } from 'react'
 import { toast } from 'sonner'
@@ -68,11 +69,14 @@ export default function CensimentoClient({
 
   const handleSaveQuota = async () => {
     setIsSaving(true)
-    await supabase.from('impostazioni').upsert([
+    const { error } = await supabase.from('impostazioni').upsert([
       { chiave: 'quota_censimento_standard', valore: quotaStandard },
       { chiave: 'quota_censimento_fratelli', valore: quotaFratelli }
     ])
     setIsSaving(false)
+
+    if (error) toast.error('Impossibile salvare le quote censimento')
+    else toast.success('Quote censimento salvate')
   }
 
   const toggleQuotaPagata = async (id: string, current: boolean | null) => {
@@ -93,27 +97,35 @@ export default function CensimentoClient({
       return
     }
 
-    const paymentQuery = supabase
+    const accountingYear = normalizeAnnoScout(currentYear)
+    const { data: existingMovement, error: lookupError } = await supabase
       .from('registro_spese')
-      .delete()
+      .select('id')
       .eq('ragazzo_id', id)
-      .eq('riferimento_censimento_anno', currentYear)
+      .eq('riferimento_censimento_anno', accountingYear)
+      .maybeSingle()
 
-    const { error: movementError } = newVal
-      ? await supabase.from('registro_spese').upsert(
-          {
-            importo: Number(ragazzo.importo_censimento ?? numStandard),
-            metodo: 'Contanti',
-            voce_spesa: 'Quota Censimento',
-            tipo_movimento: 'ENTRATA',
-            data: new Date().toISOString().split('T')[0],
-            ragazzo_id: id,
-            riferimento_censimento_anno: currentYear,
-            note: `Censimento ${currentYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
-          },
-          { onConflict: 'ragazzo_id,riferimento_censimento_anno' }
-        )
-      : await paymentQuery
+    let movementError = lookupError
+    if (!movementError && newVal) {
+      const movement = {
+        importo: Number(ragazzo.importo_censimento ?? numStandard),
+        metodo: 'Contanti',
+        voce_spesa: 'Quota Censimento',
+        tipo_movimento: 'ENTRATA',
+        data: new Date().toISOString().split('T')[0],
+        ragazzo_id: id,
+        riferimento_censimento_anno: accountingYear,
+        note: `Censimento ${accountingYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
+      }
+
+      const result = existingMovement
+        ? await supabase.from('registro_spese').update(movement).eq('id', existingMovement.id)
+        : await supabase.from('registro_spese').insert(movement)
+      movementError = result.error
+    } else if (!movementError && !newVal && existingMovement) {
+      const result = await supabase.from('registro_spese').delete().eq('id', existingMovement.id)
+      movementError = result.error
+    }
 
     if (movementError) {
       await supabase.from('ragazzi').update({ quota_censimento: current }).eq('id', id)
@@ -128,7 +140,15 @@ export default function CensimentoClient({
   const toggleRicevuta = async (id: string, current: boolean | null) => {
     const newVal = !current
     setRagazzi(prev => prev.map(r => r.id === id ? { ...r, ricevuta_censimento: newVal } : r))
-    await supabase.from('ragazzi').update({ ricevuta_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const { error } = await supabase
+      .from('ragazzi')
+      .update({ ricevuta_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update'])
+      .eq('id', id)
+
+    if (error) {
+      setRagazzi(prev => prev.map(r => r.id === id ? { ...r, ricevuta_censimento: current } : r))
+      toast.error('Ricevuta non aggiornata')
+    }
   }
 
   const updateImportoRagazzo = async (id: string, val: number | null) => {
@@ -147,7 +167,7 @@ export default function CensimentoClient({
         .from('registro_spese')
         .update({ importo: Number(val ?? numStandard) })
         .eq('ragazzo_id', id)
-        .eq('riferimento_censimento_anno', currentYear)
+        .eq('riferimento_censimento_anno', normalizeAnnoScout(currentYear))
 
       if (cashError) toast.error('Importo aggiornato, ma non in prima nota')
     }
