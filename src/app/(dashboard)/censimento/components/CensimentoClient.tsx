@@ -13,19 +13,23 @@ import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 
 import { createClient } from '@/lib/supabase/client'
+import { normalizeAnnoScout } from '@/lib/utils/payment'
 
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 
 export default function CensimentoClient({
   initialRagazzi,
   initialQuotaStandard = '45',
-  initialQuotaFratelli = '35'
+  initialQuotaFratelli = '35',
+  currentYear
 }: {
   initialRagazzi: Ragazzo[]
   initialQuotaStandard?: string
   initialQuotaFratelli?: string
+  currentYear: string
 }) {
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [quotaStandard, setQuotaStandard] = useState(initialQuotaStandard)
@@ -65,28 +69,115 @@ export default function CensimentoClient({
 
   const handleSaveQuota = async () => {
     setIsSaving(true)
-    await supabase.from('impostazioni').upsert([
+    const { error } = await supabase.from('impostazioni').upsert([
       { chiave: 'quota_censimento_standard', valore: quotaStandard },
       { chiave: 'quota_censimento_fratelli', valore: quotaFratelli }
     ])
     setIsSaving(false)
+
+    if (error) toast.error('Impossibile salvare le quote censimento')
+    else toast.success('Quote censimento salvate')
   }
 
   const toggleQuotaPagata = async (id: string, current: boolean | null) => {
     const newVal = !current
-    setRagazzi(prev => prev.map(r => r.id === id ? { ...r, quota_censimento: newVal } : r))
-    await supabase.from('ragazzi').update({ quota_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const ragazzo = ragazzi.find(item => item.id === id)
+    if (!ragazzo) return
+
+    setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: newVal } : item))
+
+    const { error: ragazzoError } = await supabase
+      .from('ragazzi')
+      .update({ quota_censimento: newVal })
+      .eq('id', id)
+
+    if (ragazzoError) {
+      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: current } : item))
+      toast.error('Impossibile aggiornare il censimento')
+      return
+    }
+
+    const accountingYear = normalizeAnnoScout(currentYear)
+    const { data: existingMovement, error: lookupError } = await supabase
+      .from('registro_spese')
+      .select('id')
+      .eq('ragazzo_id', id)
+      .eq('riferimento_censimento_anno', accountingYear)
+      .maybeSingle()
+
+    let movementError = lookupError
+    if (!movementError && newVal) {
+      const movement = {
+        importo: Number(ragazzo.importo_censimento ?? numStandard),
+        metodo: 'Contanti',
+        voce_spesa: 'Quota Censimento',
+        tipo_movimento: 'ENTRATA',
+        data: new Date().toISOString().split('T')[0],
+        ragazzo_id: id,
+        riferimento_censimento_anno: accountingYear,
+        note: `Censimento ${accountingYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
+      }
+
+      const result = existingMovement
+        ? await supabase.from('registro_spese').update(movement).eq('id', existingMovement.id)
+        : await supabase.from('registro_spese').insert(movement)
+      movementError = result.error
+    } else if (!movementError && !newVal && existingMovement) {
+      const result = await supabase.from('registro_spese').delete().eq('id', existingMovement.id)
+      movementError = result.error
+    }
+
+    if (movementError) {
+      await supabase.from('ragazzi').update({ quota_censimento: current }).eq('id', id)
+      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: current } : item))
+      toast.error('Pagamento non registrato in prima nota')
+      return
+    }
+
+    toast.success(newVal ? 'Censimento registrato in prima nota' : 'Pagamento censimento annullato')
   }
 
   const toggleRicevuta = async (id: string, current: boolean | null) => {
     const newVal = !current
     setRagazzi(prev => prev.map(r => r.id === id ? { ...r, ricevuta_censimento: newVal } : r))
-    await supabase.from('ragazzi').update({ ricevuta_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const { error } = await supabase
+      .from('ragazzi')
+      .update({ ricevuta_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update'])
+      .eq('id', id)
+
+    if (error) {
+      setRagazzi(prev => prev.map(r => r.id === id ? { ...r, ricevuta_censimento: current } : r))
+      toast.error('Ricevuta non aggiornata')
+    }
   }
 
   const updateImportoRagazzo = async (id: string, val: number | null) => {
-    setRagazzi(prev => prev.map(r => r.id === id ? { ...r, importo_censimento: val } : r))
-    await supabase.from('ragazzi').update({ importo_censimento: val } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const previous = ragazzi.find(item => item.id === id)
+    setRagazzi(prev => prev.map(item => item.id === id ? { ...item, importo_censimento: val } : item))
+
+    const { error } = await supabase.from('ragazzi').update({ importo_censimento: val }).eq('id', id)
+    if (error) {
+      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, importo_censimento: previous?.importo_censimento ?? null } : item))
+      toast.error('Importo censimento non aggiornato')
+      return
+    }
+
+    if (previous?.quota_censimento === true) {
+      const { error: cashError } = await supabase
+        .from('registro_spese')
+        .update({ importo: Number(val ?? numStandard) })
+        .eq('ragazzo_id', id)
+        .eq('riferimento_censimento_anno', normalizeAnnoScout(currentYear))
+
+      if (cashError) {
+        const previousAmount = previous.importo_censimento ?? null
+        await supabase.from('ragazzi').update({ importo_censimento: previousAmount }).eq('id', id)
+        setRagazzi(prev => prev.map(item =>
+          item.id === id ? { ...item, importo_censimento: previousAmount } : item
+        ))
+        toast.error('Importo non aggiornato: la prima nota ha rifiutato la modifica')
+      }
+    }
   }
 
   const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]

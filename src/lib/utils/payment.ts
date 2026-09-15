@@ -1,9 +1,5 @@
 export type MetodoPagamento = 'Contanti' | 'Bonifico' | 'Carta'
 
-/**
- * Converte qualsiasi variante di stringa relativa al metodo di pagamento
- * al valore canonico standard ('Contanti' | 'Bonifico' | 'Carta').
- */
 export function toCanonicalMetodo(
   rawMetodo?: string | null,
   fallback: MetodoPagamento = 'Contanti'
@@ -19,15 +15,28 @@ export function toCanonicalMetodo(
   if (s === 'CONTANTI' || s === 'CONTANTE' || s === 'CASH') {
     return 'Contanti'
   }
-  if (s === 'BONIFICO') return 'Bonifico'
-  if (s === 'CARTA') return 'Carta'
   return fallback
 }
 
-/**
- * Normalizza le stringhe dell'anno scout (es. '2025/2026' -> '2025-2026')
- */
+export function getCurrentAnnoScout(referenceDate = new Date()): string {
+  const year = referenceDate.getFullYear()
+  return referenceDate.getMonth() >= 9
+    ? `${year}-${year + 1}`
+    : `${year - 1}-${year}`
+}
+
 export function normalizeAnnoScout(raw?: string | null): string {
-  if (!raw) return '2025-2026'
-  return String(raw).trim().replace('/', '-')
+  if (!raw) return getCurrentAnnoScout()
+
+  const normalized = String(raw)
+    .trim()
+    .replace(/[\s/]+/g, '-')
+
+  const match = normalized.match(/^(\d{4})-(\d{4})$/)
+  return match ? `${match[1]}-${match[2]}` : normalized
+}
+
+export function annoScoutVariants(raw?: string | null): string[] {
+  const canonical = normalizeAnnoScout(raw)
+  return [canonical, canonical.replace('-', '/')]
 }

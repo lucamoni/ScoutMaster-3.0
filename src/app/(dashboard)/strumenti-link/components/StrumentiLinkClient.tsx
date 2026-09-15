@@ -128,7 +128,7 @@ export function StrumentiLinkClient() {
       }
     }
     loadCustomLinks()
-  }, [])
+  }, [supabase])
 
   const saveLinksToDb = async (newList: ScoutLink[]) => {
     setLinks(newList)
@@ -345,7 +345,7 @@ export function StrumentiLinkClient() {
 
             <div className="space-y-1">
               <Label>Categoria</Label>
-              <Select value={formCategoria} onValueChange={setFormCategoria}>
+              <Select value={formCategoria} onValueChange={(value) => setFormCategoria(value ?? 'Ufficiali AGESCI')}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Seleziona categoria" />
                 </SelectTrigger>

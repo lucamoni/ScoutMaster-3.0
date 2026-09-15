@@ -21,7 +21,9 @@ import {
   Wallet
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase/client'
+import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
+import { calculateAccountingBalances } from '@/lib/utils/accounting'
 
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -35,93 +37,20 @@ export interface AgesciVoce {
 }
 
 export const AGESCI_VOCI: AgesciVoce[] = [
-  // ENTRATE
-  {
-    codice: 'E.01',
-    titolo: 'Quote Censimento di competenza',
-    tipo: 'ENTRATA',
-    descrizione: 'Quote versate dagli esploratori/guide per il censimento AGESCI',
-    keywords: ['censimento', 'censiti', 'iscrizione annuale']
-  },
-  {
-    codice: 'E.02',
-    titolo: 'Quote ordinarie di branca / Autofinanziamenti',
-    tipo: 'ENTRATA',
-    descrizione: 'Quote mensili di reparto, autofinanziamenti, vendita torte/calendari',
-    keywords: ['quota mensile', 'mensile', 'autofinanziamento', 'torta', 'vendita', 'mercatino']
-  },
-  {
-    codice: 'E.03',
-    titolo: 'Quote partecipazione attività ed eventi',
-    tipo: 'ENTRATA',
-    descrizione: 'Quote per uscite, campi invernali (CI), campi estivi (CE), San Giorgio',
-    keywords: ['uscita', 'campo', 'ci', 'ce', 'san giorgio', 'evento', 'quota evento', 'pernottamento']
-  },
-  {
-    codice: 'E.04',
-    titolo: 'Contributi, Sussidi e Donazioni',
-    tipo: 'ENTRATA',
-    descrizione: 'Donazioni da famiglie, contributi parrocchiali o comunali',
-    keywords: ['contributo', 'donazione', 'sussidio', 'offerta', 'parrocchia']
-  },
-  {
-    codice: 'E.99',
-    titolo: 'Altre Entrate di branca',
-    tipo: 'ENTRATA',
-    descrizione: 'Altre entrate varie di reparto non classificate altrove',
-    keywords: []
-  },
-
-  // USCITE
-  {
-    codice: 'U.01',
-    titolo: 'Generi alimentari / Vitto (Cambusa)',
-    tipo: 'USCITA',
-    descrizione: 'Spesa alimentare per uscite, campi e attività (Supermercato, Panificio)',
-    keywords: ['cambusa', 'vitto', 'spesa alimentare', 'supermercato', 'cibo', 'coop', 'conad', 'panificio']
-  },
-  {
-    codice: 'U.02',
-    titolo: 'Materiale per attività e attrezzature',
-    tipo: 'USCITA',
-    descrizione: 'Tende, corde, materiale di squadriglia, bricolage, attrezzi',
-    keywords: ['materiale', 'attrezzatura', 'tenda', 'bricolage', 'ferramenta', 'decathlon', 'legna', 'lavoro']
-  },
-  {
-    codice: 'U.03',
-    titolo: 'Spese di viaggio e trasporti',
-    tipo: 'USCITA',
-    descrizione: 'Pullman, treni, carburante/benzina, rimborsi viaggio, autostrada',
-    keywords: ['trasporto', 'pullman', 'treno', 'benzina', 'carburante', 'pedaggio', 'rimborso auto', 'viaggio']
-  },
-  {
-    codice: 'U.04',
-    titolo: 'Spese per alloggio e strutture (Basi Scout / Posti Campo)',
-    tipo: 'USCITA',
-    descrizione: 'Affitto basi scout, case per accantonamento, posti campo, campeggi',
-    keywords: ['accantonamento', 'base scout', 'posto campo', 'affitto', 'struttura', 'alloggio', 'casa']
-  },
-  {
-    codice: 'U.05',
-    titolo: 'Spese minute e cancelleria',
-    tipo: 'USCITA',
-    descrizione: 'Cancelleria, quaderni, pennarelli, stampe, fotocopie',
-    keywords: ['cancelleria', 'spese minute', 'stampa', 'fotocopia', 'quaderno', 'pennarelli', 'carta']
-  },
-  {
-    codice: 'U.06',
-    titolo: 'Quote Censimento ed Assicurazioni Nazionali/Regionali',
-    tipo: 'USCITA',
-    descrizione: 'Versamento quote censimento ad AGESCI o assicurazioni integrative',
-    keywords: ['versamento censimento', 'quota agesci', 'assicurazione']
-  },
-  {
-    codice: 'U.99',
-    titolo: 'Altre Uscite di branca',
-    tipo: 'USCITA',
-    descrizione: 'Altre spese e uscite di reparto non classificate altrove',
-    keywords: []
-  }
+  { codice: 'E-A1', titolo: 'A1 — Quote associative', tipo: 'ENTRATA', descrizione: 'Quote nazionale, di Gruppo, Zona o Regione', keywords: ['censimento', 'quota associativa', 'quota mensile', 'mensile'] },
+  { codice: 'E-A2', titolo: 'A2 — Quote per attività mutuali', tipo: 'ENTRATA', descrizione: 'Quote per uscite, campi, route e attività', keywords: ['uscita', 'campo', 'route', 'san giorgio', 'evento', 'pernottamento'] },
+  { codice: 'E-A4', titolo: 'A4 — Erogazioni liberali', tipo: 'ENTRATA', descrizione: 'Donazioni senza controprestazione', keywords: ['donazione', 'erogazione liberale', 'lascito'] },
+  { codice: 'E-A6', titolo: 'A6 — Contributi da soggetti privati', tipo: 'ENTRATA', descrizione: 'Contributi da aziende, fondazioni o sponsor privati', keywords: ['sponsor', 'fondazione', 'contributo privato'] },
+  { codice: 'E-A8', titolo: 'A8 — Contributi da enti pubblici', tipo: 'ENTRATA', descrizione: 'Contributi da Comuni e altri enti pubblici', keywords: ['comune', 'contributo pubblico', 'ente pubblico'] },
+  { codice: 'E-A10', titolo: 'A10 — Altre entrate', tipo: 'ENTRATA', descrizione: 'Entrate da altri livelli AGESCI e altre entrate generali', keywords: ['agesci nazionale', 'zona agesci', 'regione agesci'] },
+  { codice: 'E-C2', titolo: 'C2 — Raccolte fondi occasionali', tipo: 'ENTRATA', descrizione: 'Entrate di autofinanziamenti occasionali, da rendicontare separatamente', keywords: ['autofinanziamento', 'raccolta fondi', 'vendita torte', 'mercatino'] },
+  { codice: 'E-A10-ALTRE', titolo: 'A10 — Altre entrate da classificare', tipo: 'ENTRATA', descrizione: 'Movimenti privi di una classificazione più specifica', keywords: [] },
+  { codice: 'U-A1', titolo: 'A1 — Materiali e beni di consumo', tipo: 'USCITA', descrizione: 'Materiale, cancelleria, cambusa e attrezzature di consumo', keywords: ['materiale', 'attrezzatura', 'cancelleria', 'cambusa', 'vitto', 'supermercato', 'ferramenta', 'cibo'] },
+  { codice: 'U-A2', titolo: 'A2 — Servizi', tipo: 'USCITA', descrizione: 'Attività, viaggi, utenze, servizi bancari e consulenze', keywords: ['uscita', 'campo', 'trasporto', 'pullman', 'treno', 'benzina', 'pedaggio', 'utenza', 'bonifico', 'commissione bancaria', 'consulenza'] },
+  { codice: 'U-A3', titolo: 'A3 — Godimento beni di terzi', tipo: 'USCITA', descrizione: 'Affitti, noleggi, basi, sedi e licenze software', keywords: ['affitto', 'noleggio', 'base scout', 'posto campo', 'alloggio', 'licenza', 'software', 'leasing'] },
+  { codice: 'U-A5', titolo: 'A5 — Uscite diverse di gestione', tipo: 'USCITA', descrizione: 'Censimenti riversati, rimborsi volontari, imposte e trasferimenti AGESCI', keywords: ['versamento censimento', 'quota agesci', 'rimborso volontario', 'imposta', 'tari', 'bollo', 'thinking day'] },
+  { codice: 'U-C2', titolo: 'C2 — Uscite raccolte fondi occasionali', tipo: 'USCITA', descrizione: 'Costi direttamente riferiti a una raccolta fondi occasionale', keywords: ['costo autofinanziamento', 'spesa raccolta fondi'] },
+  { codice: 'U-A5-ALTRE', titolo: 'A5 — Altre uscite da classificare', tipo: 'USCITA', descrizione: 'Movimenti privi di una classificazione più specifica', keywords: [] },
 ]
 
 export default function BilancioAgesciClient({
@@ -133,26 +62,31 @@ export default function BilancioAgesciClient({
   initialRagazzi?: Ragazzo[]
   initialSettings: Record<string, string>
 }) {
-  const [selectedAnnoScout, setSelectedAnnoScout] = useState<string>('2025/2026')
+  const configuredYear = normalizeAnnoScout(initialSettings.anno_scout_corrente || getCurrentAnnoScout())
+  const [selectedAnnoScout, setSelectedAnnoScout] = useState<string>(configuredYear)
   const [settings, setSettings] = useState<Record<string, string>>(initialSettings)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   // Saldi iniziali configurabili al 01/10
   const cassaInizialeKey = `saldo_iniziale_cassa_${selectedAnnoScout}`
   const bancaInizialeKey = `saldo_iniziale_banca_${selectedAnnoScout}`
   const annoChiusoKey = `anno_chiuso_${selectedAnnoScout}`
+  const cassaEffettivaKey = `saldo_effettivo_cassa_${selectedAnnoScout}`
+  const bancaEffettivaKey = `saldo_effettivo_banca_${selectedAnnoScout}`
 
   const saldoInizialeCassa = parseFloat(settings[cassaInizialeKey] || '0') || 0
   const saldoInizialeBanca = parseFloat(settings[bancaInizialeKey] || '0') || 0
+  const hasSaldoEffettivoCassa = settings[cassaEffettivaKey]?.trim() !== '' && Number.isFinite(Number(settings[cassaEffettivaKey]))
+  const hasSaldoEffettivoBanca = settings[bancaEffettivaKey]?.trim() !== '' && Number.isFinite(Number(settings[bancaEffettivaKey]))
+  const saldoEffettivoCassa = hasSaldoEffettivoCassa ? Number(settings[cassaEffettivaKey]) : 0
+  const saldoEffettivoBanca = hasSaldoEffettivoBanca ? Number(settings[bancaEffettivaKey]) : 0
+  const hasSaldiEffettivi = hasSaldoEffettivoCassa && hasSaldoEffettivoBanca
   const isAnnoChiuso = settings[annoChiusoKey] === 'true'
 
   // Calcolo intervallo date Anno Scout (01/10/YYYY -> 30/09/YYYY+1)
-  const [startYearStr, endYearStr] = selectedAnnoScout.split('/')
+  const [startYearStr, endYearStr] = normalizeAnnoScout(selectedAnnoScout).split('-')
   const startYear = parseInt(startYearStr || '2025', 10)
   const endYear = parseInt(endYearStr || '2026', 10)
 
@@ -162,12 +96,13 @@ export default function BilancioAgesciClient({
   // Filtra movimenti di cassa per l'anno scout selezionato
   const speseAnno = initialSpese.filter(s => {
     if (!s.data) return false
+    if (s.tipo_movimento !== 'ENTRATA' && s.tipo_movimento !== 'USCITA') return false
     return s.data >= startDate && s.data <= endDate
   })
 
   // Classifica la spesa/entrata in una voce AGESCI
   const classifySpesa = (spesa: Spesa): string => {
-    const voceText = (spesa.voce_spesa || '').toLowerCase()
+    const voceText = `${spesa.voce_spesa || ''} ${spesa.note || ''}`.toLowerCase()
     const tipo = spesa.tipo_movimento === 'ENTRATA' ? 'ENTRATA' : 'USCITA'
 
     const availableVoci = AGESCI_VOCI.filter(v => v.tipo === tipo)
@@ -178,7 +113,7 @@ export default function BilancioAgesciClient({
       }
     }
 
-    return tipo === 'ENTRATA' ? 'E.99' : 'U.99'
+    return tipo === 'ENTRATA' ? 'E-A10-ALTRE' : 'U-A5-ALTRE'
   }
 
   // Aggrega i totali per ogni voce AGESCI
@@ -190,13 +125,7 @@ export default function BilancioAgesciClient({
     totaliVoci[codice] = (totaliVoci[codice] || 0) + (spesa.importo || 0)
   })
 
-  // Calcolo Quota Censimento E.01 direttamente dall'anagrafica ragazzi censiti
-  const standardQuotaCensimento = Number(settings['quota_censimento_standard']) || 45
-  const censimentoAgesciTotale = initialRagazzi
-    .filter(r => r.quota_censimento === true)
-    .reduce((acc, r) => acc + (r.importo_censimento !== null && r.importo_censimento !== undefined ? Number(r.importo_censimento) : standardQuotaCensimento), 0)
-
-  totaliVoci['E.01'] = censimentoAgesciTotale
+  // Il rendiconto segue il principio di cassa: anche il censimento deriva esclusivamente dai movimenti registrati.
 
   // Calcolo Totali Complessivi
   const totaleEntrate = AGESCI_VOCI.filter(v => v.tipo === 'ENTRATA').reduce((acc, v) => acc + (totaliVoci[v.codice] || 0), 0)
@@ -204,33 +133,25 @@ export default function BilancioAgesciClient({
   const risultatoEsercizio = totaleEntrate - totaleUscite
 
   // Riconciliazione Saldi Cassa Contanti e C/C Banca
-  let entrateContanti = 0
-  let usciteContanti = 0
-  let entrateBanca = 0
-  let usciteBanca = 0
-
-  speseAnno.forEach(s => {
-    const m = (s.metodo || '').toUpperCase()
-    const isBanca = m.includes('BONIFICO') || m.includes('CARTA') || m.includes('BANCA')
-
-    if (s.tipo_movimento === 'ENTRATA') {
-      if (isBanca) entrateBanca += s.importo
-      else entrateContanti += s.importo
-    } else {
-      if (isBanca) usciteBanca += s.importo
-      else usciteContanti += s.importo
-    }
-  })
-
-  const saldoFinaleCassa = saldoInizialeCassa + entrateContanti - usciteContanti
-  const saldoFinaleBanca = saldoInizialeBanca + entrateBanca - usciteBanca
-  const saldoFinaleTotale = saldoFinaleCassa + saldoFinaleBanca
+  const {
+    entrateContanti,
+    usciteContanti,
+    entrateBanca,
+    usciteBanca,
+    saldoFinaleCassa,
+    saldoFinaleBanca,
+    saldoFinaleTotale,
+  } = calculateAccountingBalances(speseAnno, saldoInizialeCassa, saldoInizialeBanca)
   const saldoInizialeTotale = saldoInizialeCassa + saldoInizialeBanca
 
-  // Controllo Quadratura Bilancio
+  // La quadratura reale confronta il saldo teorico con denaro contato ed
+  // estratto conto, non due risultati derivati dagli stessi movimenti.
   const quadraturaTeorica = saldoInizialeTotale + risultatoEsercizio
-  const differenzaQuadratura = Math.abs(saldoFinaleTotale - quadraturaTeorica)
-  const isQuadrato = differenzaQuadratura < 0.01
+  const saldoEffettivoTotale = saldoEffettivoCassa + saldoEffettivoBanca
+  const differenzaQuadratura = hasSaldiEffettivi
+    ? Math.abs(saldoEffettivoTotale - quadraturaTeorica)
+    : 0
+  const isQuadrato = hasSaldiEffettivi && differenzaQuadratura < 0.01
 
   // Salva saldo iniziale
   const handleSaveSaldo = async (key: string, value: string) => {
@@ -246,31 +167,54 @@ export default function BilancioAgesciClient({
   // Gestione Chiusura Anno Contabile
   const handleToggleChiusuraAnno = async () => {
     const newStatus = !isAnnoChiuso
+
+    if (newStatus && !hasSaldiEffettivi) {
+      toast.error('Inserisci il saldo effettivo di cassa e banca prima di chiudere l’anno')
+      return
+    }
+    if (newStatus && !isQuadrato) {
+      toast.error(`Bilancio non quadrato: differenza di € ${differenzaQuadratura.toFixed(2)}`)
+      return
+    }
+
     const newStatusStr = newStatus ? 'true' : 'false'
+    const { error: statusError } = await supabase
+      .from('impostazioni')
+      .upsert({ chiave: annoChiusoKey, valore: newStatusStr })
+
+    if (statusError) {
+      toast.error('Impossibile modificare lo stato dell’anno contabile')
+      return
+    }
 
     setSettings(prev => ({ ...prev, [annoChiusoKey]: newStatusStr }))
-    await supabase.from('impostazioni').upsert({ chiave: annoChiusoKey, valore: newStatusStr })
 
     if (newStatus) {
-      // Imposta automaticamente i saldi finali come saldi iniziali dell'anno successivo
-      const nextAnnoStr = `${endYear}/${endYear + 1}`
+      const nextAnnoStr = `${endYear}-${endYear + 1}`
       const nextCassaKey = `saldo_iniziale_cassa_${nextAnnoStr}`
       const nextBancaKey = `saldo_iniziale_banca_${nextAnnoStr}`
 
-      await supabase.from('impostazioni').upsert([
-        { chiave: nextCassaKey, valore: saldoFinaleCassa.toFixed(2) },
-        { chiave: nextBancaKey, valore: saldoFinaleBanca.toFixed(2) }
+      const { error: carryError } = await supabase.from('impostazioni').upsert([
+        { chiave: nextCassaKey, valore: saldoEffettivoCassa.toFixed(2) },
+        { chiave: nextBancaKey, valore: saldoEffettivoBanca.toFixed(2) }
       ])
+
+      if (carryError) {
+        await supabase.from('impostazioni').upsert({ chiave: annoChiusoKey, valore: 'false' })
+        setSettings(prev => ({ ...prev, [annoChiusoKey]: 'false' }))
+        toast.error('Chiusura annullata: saldi non trasferiti al nuovo anno')
+        return
+      }
 
       setSettings(prev => ({
         ...prev,
-        [nextCassaKey]: saldoFinaleCassa.toFixed(2),
-        [nextBancaKey]: saldoFinaleBanca.toFixed(2)
+        [nextCassaKey]: saldoEffettivoCassa.toFixed(2),
+        [nextBancaKey]: saldoEffettivoBanca.toFixed(2)
       }))
 
-      toast.success(`Anno Scout ${selectedAnnoScout} Chiuso e Congelato! Saldi trasferiti all'anno ${nextAnnoStr}.`)
+      toast.success(`Anno Scout ${selectedAnnoScout} chiuso. Saldi effettivi trasferiti all’anno ${nextAnnoStr}.`)
     } else {
-      toast.info(`Anno Scout ${selectedAnnoScout} Riaperto per modifiche.`)
+      toast.info(`Anno Scout ${selectedAnnoScout} riaperto per modifiche.`)
     }
   }
 
@@ -316,7 +260,7 @@ export default function BilancioAgesciClient({
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', `Raccordo_Bilancio_AGESCI_${selectedAnnoScout.replace('/', '_')}.csv`)
+    link.setAttribute('download', `Raccordo_Bilancio_AGESCI_${selectedAnnoScout.replace('-', '_')}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -349,10 +293,11 @@ export default function BilancioAgesciClient({
                 <SelectValue placeholder="Seleziona..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="2023/2024">2023 / 2024</SelectItem>
-                <SelectItem value="2024/2025">2024 / 2025</SelectItem>
-                <SelectItem value="2025/2026">2025 / 2026</SelectItem>
-                <SelectItem value="2026/2027">2026 / 2027</SelectItem>
+                {Array.from({ length: 6 }, (_, index) => {
+                  const baseYear = Number(configuredYear.slice(0, 4)) - 3 + index
+                  const value = `${baseYear}-${baseYear + 1}`
+                  return <SelectItem key={value} value={value}>{baseYear} / {baseYear + 1}</SelectItem>
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -418,10 +363,10 @@ export default function BilancioAgesciClient({
             </CardDescription>
             <div className="flex items-center gap-2 mt-1">
               <Badge className={isQuadrato ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
-                {isQuadrato ? "QUADRATO" : "CONTROLLARE"}
+                {isQuadrato ? "QUADRATO" : hasSaldiEffettivi ? "CONTROLLARE" : "SALDI MANCANTI"}
               </Badge>
               <span className="text-xs text-muted-foreground font-mono">
-                Diff: € {differenzaQuadratura.toFixed(2)}
+                Diff: {hasSaldiEffettivi ? `€ ${differenzaQuadratura.toFixed(2)}` : '—'}
               </span>
             </div>
           </CardHeader>
@@ -580,6 +525,22 @@ export default function BilancioAgesciClient({
                   <span>(=) Saldo Finale Cassa (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleCassa.toFixed(2)}</span>
                 </div>
+
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="font-semibold">Cassa realmente contata:</span>
+                  <div className="flex items-center gap-1 w-32">
+                    <span className="text-xs font-bold text-muted-foreground">€</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={isAnnoChiuso}
+                      value={settings[cassaEffettivaKey] || ''}
+                      onChange={e => handleSaveSaldo(cassaEffettivaKey, e.target.value)}
+                      placeholder="Da verificare"
+                      className="h-8 text-right font-mono"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -620,6 +581,22 @@ export default function BilancioAgesciClient({
                   <span>(=) Saldo Finale Banca (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleBanca.toFixed(2)}</span>
                 </div>
+
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="font-semibold">Saldo da estratto conto:</span>
+                  <div className="flex items-center gap-1 w-32">
+                    <span className="text-xs font-bold text-muted-foreground">€</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={isAnnoChiuso}
+                      value={settings[bancaEffettivaKey] || ''}
+                      onChange={e => handleSaveSaldo(bancaEffettivaKey, e.target.value)}
+                      placeholder="Da verificare"
+                      className="h-8 text-right font-mono"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -644,7 +621,7 @@ export default function BilancioAgesciClient({
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="text-sm py-1 px-3">
-                  ⚠️ DISCREPANZA: € {differenzaQuadratura.toFixed(2)}
+                  {hasSaldiEffettivi ? `⚠️ DISCREPANZA: € ${differenzaQuadratura.toFixed(2)}` : 'INSERIRE SALDI EFFETTIVI'}
                 </Badge>
               )}
             </div>

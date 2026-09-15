@@ -27,6 +27,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { calculateScoutDebt, getScoutMonthsUpTo, ScoutFeeMonth } from '@/lib/utils/debts'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Evento = Database['public']['Tables']['eventi']['Row']
@@ -34,30 +35,17 @@ type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row
 type Quota = Database['public']['Tables']['quote_mensili']['Row']
 type Pattuglia = Database['public']['Tables']['pattuglie']['Row']
 
-const MONTHS: (keyof Quota)[] = ['ott', 'nov', 'dic', 'gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'sep']
-const MONTH_LABELS: Record<string, string> = {
-  ott: 'Ottobre', nov: 'Novembre', dic: 'Dicembre', gen: 'Gennaio',
-  feb: 'Febbraio', mar: 'Marzo', apr: 'Aprile', mag: 'Maggio',
-  giu: 'Giugno', lug: 'Luglio', ago: 'Agosto', sep: 'Settembre'
-}
+type QuotaMonth = ScoutFeeMonth
 
-const getScoutMonthsUpToNow = (): (keyof Quota)[] => {
-  const m = new Date().getMonth()
-  let limit = 7
-  if (m === 9) limit = 0
-  else if (m === 10) limit = 1
-  else if (m === 11) limit = 2
-  else if (m === 0) limit = 3
-  else if (m === 1) limit = 4
-  else if (m === 2) limit = 5
-  else if (m === 3) limit = 6
-  else if (m === 4) limit = 7
-  else if (m === 5) limit = 8
-  else if (m === 6) limit = 9
-  else if (m === 7) limit = 10
-  else if (m === 8) limit = 11
-
-  return MONTHS.slice(0, limit + 1)
+const MONTH_LABELS: Record<QuotaMonth, string> = {
+  novembre: 'Novembre',
+  dicembre: 'Dicembre',
+  gennaio: 'Gennaio',
+  febbraio: 'Febbraio',
+  marzo: 'Marzo',
+  aprile: 'Aprile',
+  maggio: 'Maggio',
+  giugno: 'Giugno',
 }
 
 export default function SaldaOraClient({
@@ -99,7 +87,7 @@ export default function SaldaOraClient({
 
   const quotaMensileNum = Number(quotaMensileStandard) || 10
   const quotaCensimentoNum = Number(quotaCensimentoStandard) || 45
-  const activeMonths = getScoutMonthsUpToNow()
+  const activeMonths = getScoutMonthsUpTo()
 
   // Realtime Syncing
   useEffect(() => {
@@ -138,52 +126,124 @@ export default function SaldaOraClient({
 
   // Helper per calcolare le pendenze dettagliate di un ragazzo
   const computeBoyDebt = (ragazzo: Ragazzo) => {
-    const normYear = normalizeAnnoScout(currentYear)
-    const boyQuote = quote.find(q => q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)
-
-    // 1. Mesi arretrati
-    const unpaidMonths = activeMonths.filter(m => !boyQuote || boyQuote[m] !== true)
-    const quoteDebt = unpaidMonths.length * quotaMensileNum
-
-    // 2. Eventi non saldati
-    const boyParts = partecipazioni.filter(p => p.ragazzo_id === ragazzo.id && p.riscosso !== true)
-    const unpaidEventDetails = boyParts.map(p => {
-      const ev = eventi.find(e => e.id === p.evento_id)
-      const cost = (p.quota_dovuta !== null && p.quota_dovuta !== undefined) 
-        ? Number(p.quota_dovuta) 
-        : (ev?.quota_standard || 0)
-      return {
-        eventoId: p.evento_id,
-        nome: ev?.nome_evento || 'Evento Reparto',
-        cost
-      }
+    return calculateScoutDebt({
+      scout: ragazzo,
+      quote,
+      events: eventi,
+      participations: partecipazioni,
+      currentYear,
+      activeMonths,
+      monthlyFee: quotaMensileNum,
+      censusFee: quotaCensimentoNum,
     })
-    const eventiDebt = unpaidEventDetails.reduce((acc, curr) => acc + curr.cost, 0)
-
-    // 3. Censimento non saldato
-    const censimentoDue = ragazzo.quota_censimento !== true
-    const censimentoCost = (ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined)
-      ? Number(ragazzo.importo_censimento)
-      : quotaCensimentoNum
-    const censimentoDebt = censimentoDue ? censimentoCost : 0
-
-    const totalDebt = quoteDebt + eventiDebt + censimentoDebt
-    const pendenzeCount = unpaidMonths.length + unpaidEventDetails.length + (censimentoDue ? 1 : 0)
-
-    return {
-      unpaidMonths,
-      quoteDebt,
-      unpaidEventDetails,
-      eventiDebt,
-      censimentoDue,
-      censimentoCost,
-      censimentoDebt,
-      totalDebt,
-      pendenzeCount
-    }
   }
 
   const router = useRouter()
+
+  const syncEventoPagamento = async (ragazzoId: string, eventoId: string, riscosso: boolean) => {
+    const response = await fetch('/api/uscite/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ragazziIds: [ragazzoId],
+        eventoId,
+        riscosso,
+      }),
+    })
+
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.error || 'Impossibile aggiornare il pagamento evento')
+    }
+
+    const updated = result.updatedPartecipazioni?.[0] as Partecipazione | undefined
+    if (updated) {
+      setPartecipazioni(prev => [
+        ...prev.filter(p => !(p.ragazzo_id === ragazzoId && p.evento_id === eventoId)),
+        updated,
+      ])
+    }
+  }
+
+  const syncQuotaMovement = async (
+    ragazzo: Ragazzo,
+    quotaId: string,
+    month: QuotaMonth,
+    paid: boolean
+  ) => {
+    if (!paid) {
+      const { error } = await supabase
+        .from('registro_spese')
+        .delete()
+        .eq('quota_mensile_id', quotaId)
+        .eq('riferimento_quota', month)
+      if (error) throw error
+      return
+    }
+
+    const { data: existing, error: lookupError } = await supabase
+      .from('registro_spese')
+      .select('id')
+      .eq('quota_mensile_id', quotaId)
+      .eq('riferimento_quota', month)
+      .maybeSingle()
+
+    if (lookupError) throw lookupError
+    if (existing) return
+
+    const { error } = await supabase.from('registro_spese').insert({
+      importo: quotaMensileNum,
+      metodo: 'Contanti',
+      voce_spesa: 'Quota Mensile',
+      tipo_movimento: 'ENTRATA',
+      data: new Date().toISOString().split('T')[0],
+      ragazzo_id: ragazzo.id,
+      quota_mensile_id: quotaId,
+      riferimento_quota: month,
+      note: `Quota ${MONTH_LABELS[month]} - ${ragazzo.nome} ${ragazzo.cognome}`,
+    })
+
+    if (error) throw error
+  }
+
+  const syncCensimentoMovement = async (ragazzo: Ragazzo, paid: boolean) => {
+    const accountingYear = normalizeAnnoScout(currentYear)
+    const { data: existing, error: lookupError } = await supabase
+      .from('registro_spese')
+      .select('id')
+      .eq('ragazzo_id', ragazzo.id)
+      .eq('riferimento_censimento_anno', accountingYear)
+      .maybeSingle()
+
+    if (lookupError) throw lookupError
+
+    if (!paid) {
+      if (!existing) return
+      const { error } = await supabase
+        .from('registro_spese')
+        .delete()
+        .eq('id', existing.id)
+      if (error) throw error
+      return
+    }
+
+    const movement = {
+      importo: Number(ragazzo.importo_censimento ?? quotaCensimentoNum),
+      metodo: 'Contanti',
+      voce_spesa: 'Quota Censimento',
+      tipo_movimento: 'ENTRATA',
+      data: new Date().toISOString().split('T')[0],
+      ragazzo_id: ragazzo.id,
+      riferimento_censimento_anno: accountingYear,
+      note: `Censimento ${accountingYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
+    }
+
+    const { error } = existing
+      ? await supabase.from('registro_spese').update(movement).eq('id', existing.id)
+      : await supabase.from('registro_spese').insert(movement)
+
+    if (error) throw error
+  }
 
   // Azione 1: Salda Tutto per un singolo ragazzo in 1-Click
   const handleSaldaTutto = async (ragazzo: Ragazzo) => {
@@ -194,9 +254,19 @@ export default function SaldaOraClient({
     try {
       const normYear = normalizeAnnoScout(currentYear)
 
-      // A. Salda Censimento
+      // A. Salda Censimento e registra l'entrata in prima nota.
       if (debtInfo.censimentoDue) {
-        await supabase.from('ragazzi').update({ quota_censimento: true } as Database['public']['Tables']['ragazzi']['Update']).eq('id', ragazzo.id)
+        await syncCensimentoMovement(ragazzo, true)
+        const { error: censusError } = await supabase
+          .from('ragazzi')
+          .update({ quota_censimento: true } as Database['public']['Tables']['ragazzi']['Update'])
+          .eq('id', ragazzo.id)
+
+        if (censusError) {
+          await syncCensimentoMovement(ragazzo, false)
+          throw censusError
+        }
+
         setRagazzi(prev => prev.map(r => r.id === ragazzo.id ? { ...r, quota_censimento: true } : r))
       }
 
@@ -205,41 +275,44 @@ export default function SaldaOraClient({
         const updatePayload: Record<string, boolean> = {}
         debtInfo.unpaidMonths.forEach(m => { updatePayload[m] = true })
 
-        const { data: existingQ } = await supabase.from('quote_mensili').select('id').eq('ragazzo_id', ragazzo.id).eq('anno_scout', normYear).maybeSingle()
-        if (existingQ?.id) {
-          await supabase.from('quote_mensili').update(updatePayload).eq('id', existingQ.id)
-        } else {
-          await supabase.from('quote_mensili').insert({ ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload })
+        const { data: savedQuote, error: quoteError } = await supabase
+          .from('quote_mensili')
+          .upsert(
+            { ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload },
+            { onConflict: 'ragazzo_id,anno_scout' }
+          )
+          .select('*')
+          .single()
+
+        if (quoteError || !savedQuote) throw quoteError || new Error('Quota mensile non salvata')
+
+        try {
+          for (const month of debtInfo.unpaidMonths) {
+            await syncQuotaMovement(ragazzo, savedQuote.id, month, true)
+          }
+        } catch (movementError) {
+          const rollbackPayload = Object.fromEntries(
+            debtInfo.unpaidMonths.map(month => [month, false])
+          ) as Database['public']['Tables']['quote_mensili']['Update']
+          await supabase.from('quote_mensili').update(rollbackPayload).eq('id', savedQuote.id)
+          await supabase
+            .from('registro_spese')
+            .delete()
+            .eq('quota_mensile_id', savedQuote.id)
+            .in('riferimento_quota', debtInfo.unpaidMonths)
+          throw movementError
         }
 
-        setQuote(prev => {
-          const filtered = prev.filter(q => !(q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear))
-          const existing = prev.find(q => q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)
-          const updatedObj = existing 
-            ? { ...existing, ...updatePayload }
-            : { id: existingQ?.id || 'temp', ragazzo_id: ragazzo.id, anno_scout: normYear, ...updatePayload } as Quota
-          return [...filtered, updatedObj]
-        })
+        setQuote(prev => [
+          ...prev.filter(q => !(q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normYear)),
+          savedQuote,
+        ])
       }
 
-      // C. Salda Eventi
-      if (debtInfo.unpaidEventDetails.length > 0) {
-        for (const evDetail of debtInfo.unpaidEventDetails) {
-          const { data: existingP } = await supabase.from('partecipazioni_eventi').select('id').eq('ragazzo_id', ragazzo.id).eq('evento_id', evDetail.eventoId).maybeSingle()
-          if (existingP?.id) {
-            await supabase.from('partecipazioni_eventi').update({ riscosso: true } as Database['public']['Tables']['partecipazioni_eventi']['Update']).eq('id', existingP.id)
-          } else {
-            await supabase.from('partecipazioni_eventi').insert({ ragazzo_id: ragazzo.id, evento_id: evDetail.eventoId, riscosso: true, stato_presenza: 'Presente' } as Database['public']['Tables']['partecipazioni_eventi']['Insert'])
-          }
-
-          setPartecipazioni(prev => {
-            const filtered = prev.filter(p => !(p.ragazzo_id === ragazzo.id && p.evento_id === evDetail.eventoId))
-            const existing = prev.find(p => p.ragazzo_id === ragazzo.id && p.evento_id === evDetail.eventoId)
-            const updatedP = existing
-              ? { ...existing, riscosso: true }
-              : { id: existingP?.id || 'temp', ragazzo_id: ragazzo.id, evento_id: evDetail.eventoId, riscosso: true, stato_presenza: 'Presente' } as Partecipazione
-            return [...filtered, updatedP]
-          })
+      // C. Salda Eventi e crea i relativi movimenti di cassa
+      for (const evento of debtInfo.unpaidEventDetails) {
+        if (evento.eventoId) {
+          await syncEventoPagamento(ragazzo.id, evento.eventoId, true)
         }
       }
 
@@ -259,7 +332,9 @@ export default function SaldaOraClient({
     setModalSelections({
       censimento: debt.censimentoDue,
       months: [...debt.unpaidMonths],
-      eventi: debt.unpaidEventDetails.map(e => e.eventoId)
+      eventi: debt.unpaidEventDetails
+        .map(e => e.eventoId)
+        .filter((eventoId): eventoId is string => Boolean(eventoId))
     })
   }
 
@@ -273,9 +348,22 @@ export default function SaldaOraClient({
     try {
       const normYear = normalizeAnnoScout(currentYear)
 
-      // Censimento
-      await supabase.from('ragazzi').update({ quota_censimento: !modalSelections.censimento } as Database['public']['Tables']['ragazzi']['Update']).eq('id', r.id)
-      setRagazzi(prev => prev.map(item => item.id === r.id ? { ...item, quota_censimento: !modalSelections.censimento } : item))
+      // Censimento: mantiene sincronizzati stato e prima nota.
+      const censusPaid = !modalSelections.censimento
+      const previousCensusPaid = r.quota_censimento === true
+      await syncCensimentoMovement(r, censusPaid)
+
+      const { error: censusError } = await supabase
+        .from('ragazzi')
+        .update({ quota_censimento: censusPaid } as Database['public']['Tables']['ragazzi']['Update'])
+        .eq('id', r.id)
+
+      if (censusError) {
+        await syncCensimentoMovement(r, previousCensusPaid)
+        throw censusError
+      }
+
+      setRagazzi(prev => prev.map(item => item.id === r.id ? { ...item, quota_censimento: censusPaid } : item))
 
       // Quote Mensili
       const monthUpdatePayload: Record<string, boolean> = {}
@@ -283,43 +371,50 @@ export default function SaldaOraClient({
         monthUpdatePayload[m] = !modalSelections.months.includes(m)
       })
 
-      const { data: existingQ } = await supabase.from('quote_mensili').select('id').eq('ragazzo_id', r.id).eq('anno_scout', normYear).maybeSingle()
-      if (existingQ?.id) {
-        await supabase.from('quote_mensili').update(monthUpdatePayload).eq('id', existingQ.id)
-      } else {
-        await supabase.from('quote_mensili').insert({ ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload })
+      const { data: savedQuote, error: quoteError } = await supabase
+        .from('quote_mensili')
+        .upsert(
+          { ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload },
+          { onConflict: 'ragazzo_id,anno_scout' }
+        )
+        .select('*')
+        .single()
+
+      if (quoteError || !savedQuote) throw quoteError || new Error('Quota mensile non salvata')
+
+      const previousQuote = quote.find(item =>
+        item.ragazzo_id === r.id && normalizeAnnoScout(item.anno_scout) === normYear
+      )
+      try {
+        for (const month of activeMonths) {
+          await syncQuotaMovement(r, savedQuote.id, month, !modalSelections.months.includes(month))
+        }
+      } catch (movementError) {
+        const rollbackPayload = Object.fromEntries(
+          activeMonths.map(month => [month, previousQuote?.[month] === true])
+        ) as Database['public']['Tables']['quote_mensili']['Update']
+        await supabase.from('quote_mensili').update(rollbackPayload).eq('id', savedQuote.id)
+        for (const month of activeMonths) {
+          await syncQuotaMovement(r, savedQuote.id, month, previousQuote?.[month] === true)
+        }
+        throw movementError
       }
 
-      setQuote(prev => {
-        const filtered = prev.filter(q => !(q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear))
-        const existing = prev.find(q => q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear)
-        const updatedObj = existing 
-          ? { ...existing, ...monthUpdatePayload }
-          : { id: existingQ?.id || 'temp', ragazzo_id: r.id, anno_scout: normYear, ...monthUpdatePayload } as Quota
-        return [...filtered, updatedObj]
-      })
+      setQuote(prev => [
+        ...prev.filter(q => !(q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normYear)),
+        savedQuote,
+      ])
 
-      // Eventi
-      const allBoyParts = partecipazioni.filter(p => p.ragazzo_id === r.id)
-      for (const ev of eventi) {
-        const isUnpaidInModal = modalSelections.eventi.includes(ev.id)
-        const isPaid = !isUnpaidInModal
-
-        const existingP = allBoyParts.find(p => p.evento_id === ev.id)
-        if (existingP?.id) {
-          await supabase.from('partecipazioni_eventi').update({ riscosso: isPaid } as Database['public']['Tables']['partecipazioni_eventi']['Update']).eq('id', existingP.id)
-        } else if (isPaid) {
-          await supabase.from('partecipazioni_eventi').insert({ ragazzo_id: r.id, evento_id: ev.id, riscosso: true, stato_presenza: 'Presente' } as Database['public']['Tables']['partecipazioni_eventi']['Insert'])
-        }
-
-        setPartecipazioni(prev => {
-          const filtered = prev.filter(p => !(p.ragazzo_id === r.id && p.evento_id === ev.id))
-          const existing = prev.find(p => p.ragazzo_id === r.id && p.evento_id === ev.id)
-          const updatedP = existing
-            ? { ...existing, riscosso: isPaid }
-            : { id: existingP?.id || 'temp', ragazzo_id: r.id, evento_id: ev.id, riscosso: isPaid, stato_presenza: 'Presente' } as Partecipazione
-          return [...filtered, updatedP]
-        })
+      // Aggiorna soltanto eventi ai quali il ragazzo è già iscritto. Scorrere
+      // tutti gli eventi creerebbe partecipazioni involontarie tramite l'upsert.
+      const scoutParticipations = partecipazioni.filter(part =>
+        part.ragazzo_id === r.id && Boolean(part.evento_id)
+      )
+      for (const participation of scoutParticipations) {
+        const eventoId = participation.evento_id
+        if (!eventoId) continue
+        const isPaid = !modalSelections.eventi.includes(eventoId)
+        await syncEventoPagamento(r.id, eventoId, isPaid)
       }
 
       router.refresh()

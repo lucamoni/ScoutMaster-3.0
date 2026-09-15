@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     if (rawHtml) {
       const titleMatch = rawHtml.match(/<title>([^<]+)<\/title>/i) || rawHtml.match(/<h[12][^>]*>([^<]+)<\/h[12]>/i)
       if (titleMatch && titleMatch[1]) {
-        let t = titleMatch[1].replace(/- Buona\s?Caccia/i, '').replace(/BuonaCaccia/i, '').trim()
+        const t = titleMatch[1].replace(/- Buona\s?Caccia/i, '').replace(/BuonaCaccia/i, '').trim()
         if (!isInvalidTitle(t)) extractedTitle = t
       }
     }

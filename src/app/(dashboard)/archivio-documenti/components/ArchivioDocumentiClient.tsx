@@ -77,7 +77,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
       }
     }
     loadArchivio()
-  }, [])
+  }, [supabase])
 
   const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
     setArchivedFiles(newList)
@@ -185,7 +185,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
         <div className="flex flex-wrap gap-2 flex-1">
           {/* Filtro Squadriglia */}
           <div className="w-full sm:w-56">
-            <Select value={selectedPattuglia} onValueChange={setSelectedPattuglia}>
+            <Select value={selectedPattuglia} onValueChange={(value) => setSelectedPattuglia(value ?? 'TUTTE')}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Tutte le Squadriglie" />
               </SelectTrigger>
@@ -365,7 +365,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
           <div className="space-y-4 py-2 text-xs">
             <div className="space-y-1">
               <Label>Tipo Documento</Label>
-              <Select value={uploadTipoDoc} onValueChange={setUploadTipoDoc}>
+              <Select value={uploadTipoDoc} onValueChange={(value) => setUploadTipoDoc(value ?? 'foglio_privacy_firmato')}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Tipo Documento" />
                 </SelectTrigger>

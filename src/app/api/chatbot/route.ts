@@ -3,9 +3,11 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/database.types'
 import { GoogleGenAI } from '@google/genai'
+import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
 
 export async function POST(request: Request) {
   try {
+    await requireAuthenticatedUser()
     const { message } = await request.json()
 
     if (!message) {
@@ -35,9 +37,9 @@ export async function POST(request: Request) {
     const [ragazziRes, eventiRes, partecipazioniRes, speseRes, quoteRes, bcEventiRes, bcCandRes] = await Promise.all([
       supabase.from('ragazzi').select('id, nome, cognome, sesso, pattuglia, attivo').limit(100),
       supabase.from('eventi').select('id, nome_evento, quota_standard, data_inizio, tipo_evento').limit(50),
-      supabase.from('partecipazioni_eventi').select('id, evento_id, ragazzo_id, presente, riscosso, quota_dovuta, ragazzi(nome, cognome, pattuglia)').limit(200),
-      supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data, descrizione').order('data', { ascending: false }).limit(50),
-      supabase.from('quote_mensili').select('ragazzo_id, gennaio, febbraio, marzo, aprile, maggio, giugno, luglio, agosto, settembre, ottobre, novembre, dicembre').limit(100),
+      supabase.from('partecipazioni_eventi').select('id, evento_id, ragazzo_id, stato_presenza, riscosso, quota_dovuta, ragazzi(nome, cognome, pattuglia)').limit(200),
+      supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data, note').order('data', { ascending: false }).limit(50),
+      supabase.from('quote_mensili').select('ragazzo_id, anno_scout, novembre, dicembre, gennaio, febbraio, marzo, aprile, maggio, giugno').limit(100),
       supabase.from('eventi_buonacaccia' as any).select('id, titolo, categoria, branca, data_inizio, luogo, costo_evento').limit(50),
       supabase.from('candidature_buonacaccia' as any).select('id, evento_id, ragazzo_id, stato_iscrizione, quota_pagata, ragazzi(nome, cognome, pattuglia)').limit(200)
     ])
@@ -54,15 +56,19 @@ export async function POST(request: Request) {
     let totaleEntrate = 0
     let totaleUscite = 0
     spese.forEach(s => {
-      if (s.tipo_movimento === 'ENTRATA') totaleEntrate += (s.importo || 0)
-      else totaleUscite += (s.importo || 0)
+      const tipo = (s.tipo_movimento || '').toUpperCase()
+      if (tipo === 'ENTRATA') totaleEntrate += Number(s.importo || 0)
+      if (tipo === 'USCITA') totaleUscite += Number(s.importo || 0)
     })
     const saldoAttuale = totaleEntrate - totaleUscite
 
     // Mappa eventi con il conteggio e lista nomi dei presenti
     const eventiDettaglio = eventi.map(e => {
       const partEv = partecipazioni.filter(p => p.evento_id === e.id)
-      const presenti = partEv.filter(p => p.presente !== false)
+      const presenti = partEv.filter(p => {
+        const stato = (p.stato_presenza || '').toUpperCase()
+        return stato === 'PRESENTE' || stato === 'PENDOLARE'
+      })
       const nomiPresenti = presenti.map((p: any) => `${p.ragazzi?.nome || ''} ${p.ragazzi?.cognome || ''} (${p.ragazzi?.pattuglia || 'Senza Sq.'})`).filter(Boolean)
       return {
         id: e.id,
@@ -176,8 +182,10 @@ Regole di risposta:
 
     return NextResponse.json({ reply: fallbackReply })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
     const err = error as Error
     console.error('Errore ScoutBot:', err)
-    return NextResponse.json({ error: err.message || 'Errore elaborazione ScoutBot' }, { status: 500 })
+    return NextResponse.json({ error: 'Errore elaborazione ScoutBot' }, { status: 500 })
   }
 }
