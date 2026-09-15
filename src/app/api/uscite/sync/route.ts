@@ -26,6 +26,9 @@ export async function POST(request: Request) {
     if (!eventoId || !ragazziIds || !Array.isArray(ragazziIds) || ragazziIds.length === 0) {
       return NextResponse.json({ error: 'Dati mancanti (eventoId o ragazziIds)' }, { status: 400 })
     }
+    if (quotaDovuta != null && (!Number.isFinite(Number(quotaDovuta)) || Number(quotaDovuta) < 0)) {
+      return NextResponse.json({ error: 'La quota dovuta deve essere un importo valido e non negativo' }, { status: 400 })
+    }
 
     const supabase = createAdminClient()
 
@@ -109,6 +112,15 @@ export async function POST(request: Request) {
       throw new Error('Non tutte le partecipazioni sono state salvate')
     }
     const finalPartsMap = new Map(finalParts.map(p => [p.ragazzo_id, p]))
+    const rollbackPaymentStates = async () => {
+      await Promise.all(finalParts.map(part => {
+        const previous = existingPartsMap.get(part.ragazzo_id)
+        return supabase
+          .from('partecipazioni_eventi')
+          .update({ riscosso: previous?.riscosso === true })
+          .eq('id', part.id)
+      }))
+    }
 
     // 5. Batch gestisci Registro Spese (Cassa)
     const partIds = finalParts.map(p => p.id).filter(Boolean)
@@ -137,6 +149,10 @@ export async function POST(request: Request) {
       const effectiveQuota = (part.quota_dovuta !== null && part.quota_dovuta !== undefined)
         ? Number(part.quota_dovuta)
         : Number(evento.quota_standard || 0)
+      if (!Number.isFinite(effectiveQuota) || effectiveQuota < 0) {
+        await rollbackPaymentStates()
+        throw new Error(`Quota non valida per il ragazzo ${rId}`)
+      }
       const canonicalMetodo = toCanonicalMetodo(part.metodo_pagamento || targetEventoMetodo, 'Bonifico')
       const rag = ragazziMap.get(rId)
 
@@ -157,16 +173,6 @@ export async function POST(request: Request) {
           speseIdsToDelete.push(existingSpesa.id)
         }
       }
-    }
-
-    const rollbackPaymentStates = async () => {
-      await Promise.all(finalParts.map(part => {
-        const previous = existingPartsMap.get(part.ragazzo_id)
-        return supabase
-          .from('partecipazioni_eventi')
-          .update({ riscosso: previous?.riscosso === true })
-          .eq('id', part.id)
-      }))
     }
 
     // Exec batch upsert spese & batch delete. Never report success if the

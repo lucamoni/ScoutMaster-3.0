@@ -169,7 +169,14 @@ export default function CensimentoClient({
         .eq('ragazzo_id', id)
         .eq('riferimento_censimento_anno', normalizeAnnoScout(currentYear))
 
-      if (cashError) toast.error('Importo aggiornato, ma non in prima nota')
+      if (cashError) {
+        const previousAmount = previous.importo_censimento ?? null
+        await supabase.from('ragazzi').update({ importo_censimento: previousAmount }).eq('id', id)
+        setRagazzi(prev => prev.map(item =>
+          item.id === id ? { ...item, importo_censimento: previousAmount } : item
+        ))
+        toast.error('Importo non aggiornato: la prima nota ha rifiutato la modifica')
+      }
     }
   }
 

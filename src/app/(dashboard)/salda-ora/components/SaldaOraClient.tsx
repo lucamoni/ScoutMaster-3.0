@@ -286,8 +286,21 @@ export default function SaldaOraClient({
 
         if (quoteError || !savedQuote) throw quoteError || new Error('Quota mensile non salvata')
 
-        for (const month of debtInfo.unpaidMonths) {
-          await syncQuotaMovement(ragazzo, savedQuote.id, month, true)
+        try {
+          for (const month of debtInfo.unpaidMonths) {
+            await syncQuotaMovement(ragazzo, savedQuote.id, month, true)
+          }
+        } catch (movementError) {
+          const rollbackPayload = Object.fromEntries(
+            debtInfo.unpaidMonths.map(month => [month, false])
+          ) as Database['public']['Tables']['quote_mensili']['Update']
+          await supabase.from('quote_mensili').update(rollbackPayload).eq('id', savedQuote.id)
+          await supabase
+            .from('registro_spese')
+            .delete()
+            .eq('quota_mensile_id', savedQuote.id)
+            .in('riferimento_quota', debtInfo.unpaidMonths)
+          throw movementError
         }
 
         setQuote(prev => [
@@ -369,8 +382,22 @@ export default function SaldaOraClient({
 
       if (quoteError || !savedQuote) throw quoteError || new Error('Quota mensile non salvata')
 
-      for (const month of activeMonths) {
-        await syncQuotaMovement(r, savedQuote.id, month, !modalSelections.months.includes(month))
+      const previousQuote = quote.find(item =>
+        item.ragazzo_id === r.id && normalizeAnnoScout(item.anno_scout) === normYear
+      )
+      try {
+        for (const month of activeMonths) {
+          await syncQuotaMovement(r, savedQuote.id, month, !modalSelections.months.includes(month))
+        }
+      } catch (movementError) {
+        const rollbackPayload = Object.fromEntries(
+          activeMonths.map(month => [month, previousQuote?.[month] === true])
+        ) as Database['public']['Tables']['quote_mensili']['Update']
+        await supabase.from('quote_mensili').update(rollbackPayload).eq('id', savedQuote.id)
+        for (const month of activeMonths) {
+          await syncQuotaMovement(r, savedQuote.id, month, previousQuote?.[month] === true)
+        }
+        throw movementError
       }
 
       setQuote(prev => [
@@ -378,10 +405,16 @@ export default function SaldaOraClient({
         savedQuote,
       ])
 
-      // Eventi: usa il flusso centralizzato che mantiene coerente anche la cassa
-      for (const evento of eventi) {
-        const isPaid = !modalSelections.eventi.includes(evento.id)
-        await syncEventoPagamento(r.id, evento.id, isPaid)
+      // Aggiorna soltanto eventi ai quali il ragazzo è già iscritto. Scorrere
+      // tutti gli eventi creerebbe partecipazioni involontarie tramite l'upsert.
+      const scoutParticipations = partecipazioni.filter(part =>
+        part.ragazzo_id === r.id && Boolean(part.evento_id)
+      )
+      for (const participation of scoutParticipations) {
+        const eventoId = participation.evento_id
+        if (!eventoId) continue
+        const isPaid = !modalSelections.eventi.includes(eventoId)
+        await syncEventoPagamento(r.id, eventoId, isPaid)
       }
 
       router.refresh()
