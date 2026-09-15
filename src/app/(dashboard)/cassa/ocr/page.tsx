@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Camera, UploadCloud, Loader2, ArrowLeft } from 'lucide-react'
-import { Database } from '@/types/database.types'
+import { createClient } from '@/lib/supabase/client'
 
 export default function OCRScannerPage() {
   const router = useRouter()
@@ -28,10 +27,7 @@ export default function OCRScannerPage() {
     note: ''
   })
 
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -58,15 +54,21 @@ export default function OCRScannerPage() {
       if (!response.ok) throw new Error('Errore OCR')
 
       const result = await response.json()
+      const importo = Number(result.importo)
+      const fornitore = typeof result.fornitore === 'string' ? result.fornitore.trim() : ''
+      const dataScontrino = typeof result.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(result.data)
+        ? result.data
+        : ''
+      const voceSpesa = typeof result.voce_spesa === 'string' ? result.voce_spesa : ''
+
       setExtractedData(result)
-      
       setFormData(prev => ({
         ...prev,
-        importo: result.importo.toString(),
-        data: result.data,
-        fornitore: result.fornitore,
-        voce_spesa: result.voce_spesa,
-        note: `Acquisto presso ${result.fornitore}`
+        importo: Number.isFinite(importo) && importo >= 0 ? importo.toFixed(2) : '',
+        data: dataScontrino,
+        fornitore,
+        voce_spesa: voceSpesa,
+        note: fornitore ? `Acquisto presso ${fornitore}` : ''
       }))
     } catch (error) {
       console.error(error)
@@ -102,6 +104,7 @@ export default function OCRScannerPage() {
         .from('registro_spese')
         .insert({
           voce_spesa: formData.voce_spesa,
+          tipo_movimento: 'USCITA',
           importo: Number(formData.importo),
           data: formData.data || new Date().toISOString().split('T')[0],
           metodo: formData.metodo,
@@ -128,7 +131,7 @@ export default function OCRScannerPage() {
         <Button variant="outline" size="icon" onClick={() => router.push('/cassa')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">Scanner Scontrini AI</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Scanner Scontrini</h1>
       </div>
 
       {!extractedData ? (
@@ -167,7 +170,7 @@ export default function OCRScannerPage() {
                 </Button>
                 <Button className="flex-1" onClick={handleScan} disabled={loading}>
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                  Analizza (Gemini OCR)
+                  Analizza scontrino
                 </Button>
               </div>
             )}
@@ -177,7 +180,7 @@ export default function OCRScannerPage() {
         <Card>
           <CardHeader>
             <CardTitle>Conferma Dati</CardTitle>
-            <CardDescription>Gemini ha estratto i seguenti dati. Controlla e salva.</CardDescription>
+            <CardDescription>I dati estratti sono proposte: controllali prima di salvare.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
