@@ -135,7 +135,7 @@ RESTITUISCI UN JSON CON QUESTA STRUTTURA ESATTA:
         cognome: null,
         pattuglia: null,
         tipo_documento_riconosciuto: "Documento Caricato",
-        foglio_privacy_firmato: true,
+        foglio_privacy_firmato: false,
         scheda_medica_ci: false,
         scheda_medica_ce: false,
         ricevuta_censimento: false
