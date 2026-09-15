@@ -74,6 +74,8 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [fetchedEvents, setFetchedEvents] = useState<{id: string, titolo: string, luogo?: string, date?: string, categoria?: string}[]>([])
   const [isFetchingList, setIsFetchingList] = useState(false)
+  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
+  const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
   
   // Nuovo candidato
   const [newCandidatoId, setNewCandidatoId] = useState<string>('')
@@ -329,7 +331,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     } finally {
       setIsImporting(false)
     }
-  }, [importUrl, supabase, fetchData])
+  }, [activeTab, fetchData, importUrl, isLinkModalOpen, linkModalTab, supabase])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -465,9 +467,6 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
     return { label: 'Nessuna Scadenza', color: 'bg-muted-foreground', icon: Calendar }
   }
-
-  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
-  const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
 
   useEffect(() => {
     if (isLinkModalOpen) {

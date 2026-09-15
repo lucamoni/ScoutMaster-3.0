@@ -120,7 +120,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
       }
     }
     loadData()
-  }, [])
+  }, [supabase])
 
   const saveCustomDocsToDb = async (newList: CustomDocPerRagazzo[]) => {
     setCustomDocs(newList)

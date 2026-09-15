@@ -77,7 +77,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
       }
     }
     loadArchivio()
-  }, [])
+  }, [supabase])
 
   const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
     setArchivedFiles(newList)

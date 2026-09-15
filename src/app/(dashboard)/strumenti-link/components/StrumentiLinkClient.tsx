@@ -128,7 +128,7 @@ export function StrumentiLinkClient() {
       }
     }
     loadCustomLinks()
-  }, [])
+  }, [supabase])
 
   const saveLinksToDb = async (newList: ScoutLink[]) => {
     setLinks(newList)
