@@ -77,7 +77,19 @@ export default function QuoteClient({
 
   const updateQuota = async (ragazzoId: string, month: keyof Quote, value: boolean) => {
     const normYear = normalizeAnnoScout(currentYear)
-    const previousQuote = quote
+    const previousValue = quote.some(q =>
+      q.ragazzo_id === ragazzoId &&
+      normalizeAnnoScout(q.anno_scout) === normYear &&
+      q[month] === true
+    )
+
+    const restorePreviousValue = () => {
+      setQuote(prev => prev.map(q =>
+        q.ragazzo_id === ragazzoId && normalizeAnnoScout(q.anno_scout) === normYear
+          ? { ...q, [month]: previousValue }
+          : q
+      ))
+    }
 
     setQuote(prev =>
       prev.map(q =>
@@ -97,9 +109,9 @@ export default function QuoteClient({
       .single()
 
     if (error || !quoteData) {
-      setQuote(previousQuote)
+      restorePreviousValue()
       toast.error('Quota non aggiornata: ' + (error?.message || 'risposta non valida'))
-      return
+      return false
     }
 
     const ragazzo = ragazzi.find(r => r.id === ragazzoId)
@@ -142,72 +154,40 @@ export default function QuoteClient({
         .from('quote_mensili')
         .update({ [month]: !value } as unknown as Database['public']['Tables']['quote_mensili']['Update'])
         .eq('id', quoteData.id)
-      setQuote(previousQuote)
+      restorePreviousValue()
       toast.error('Quota non registrata in prima nota: ' + movementError.message)
-      return
+      return false
     }
 
     setQuote(prev => [
       ...prev.filter(q => !(q.ragazzo_id === ragazzoId && normalizeAnnoScout(q.anno_scout) === normYear)),
       quoteData,
     ])
+    return true
   }
 
   // --- AZIONI IN AGGREGATO (BULK ACTIONS) ---
 
   const bulkUpdateQuote = async (targetRagazziIds: string[], targetMonths: (keyof Quote)[], value: boolean) => {
     setIsBulkLoading(true)
+    let failures = 0
 
-    setQuote(prev => prev.map(q => {
-      if (q.ragazzo_id && targetRagazziIds.includes(q.ragazzo_id)) {
-        const updated = { ...q }
-        targetMonths.forEach(m => { (updated as Record<string, unknown>)[m as string] = value })
-        return updated as Quote
-      }
-      return q
-    }))
-
-    const normYear = normalizeAnnoScout(currentYear)
-    for (const rId of targetRagazziIds) {
-      const payload: Record<string, unknown> = { ragazzo_id: rId, anno_scout: normYear }
-      targetMonths.forEach(m => { payload[m as string] = value })
-
-      const { data: quoteData } = await supabase
-        .from('quote_mensili')
-        .upsert(payload as Database['public']['Tables']['quote_mensili']['Insert'], { onConflict: 'ragazzo_id,anno_scout' })
-        .select('id').single()
-
-      if (quoteData) {
+    try {
+      for (const ragazzoId of targetRagazziIds) {
         for (const month of targetMonths) {
-          if (value) {
-            const ragazzo = ragazzi.find(r => r.id === rId)
-            const { data: existingReg } = await supabase.from('registro_spese').select('id')
-              .eq('quota_mensile_id', quoteData.id)
-              .eq('riferimento_quota', month as string)
-            
-            if (!existingReg || existingReg.length === 0) {
-              await supabase.from('registro_spese').insert({
-                importo: Number(quotaStandard),
-                metodo: 'Contanti',
-                voce_spesa: 'Quota Mensile',
-                tipo_movimento: 'ENTRATA',
-                data: new Date().toISOString().split('T')[0],
-                ragazzo_id: rId,
-                quota_mensile_id: quoteData.id,
-                riferimento_quota: month as string,
-                note: `Quota ${String(month).substring(0,3).toUpperCase()} - ${ragazzo?.nome} ${ragazzo?.cognome}`
-              })
-            }
-          } else {
-            await supabase.from('registro_spese').delete()
-              .eq('quota_mensile_id', quoteData.id)
-              .eq('riferimento_quota', month as string)
-          }
+          const saved = await updateQuota(ragazzoId, month, value)
+          if (!saved) failures += 1
         }
       }
-    }
 
-    setIsBulkLoading(false)
+      if (failures === 0) {
+        toast.success(value ? 'Quote registrate in prima nota' : 'Quote annullate correttamente')
+      } else {
+        toast.error(`${failures} quote non sono state aggiornate`)
+      }
+    } finally {
+      setIsBulkLoading(false)
+    }
   }
 
   const handleGlobalSelectAll = (val: boolean) => {
