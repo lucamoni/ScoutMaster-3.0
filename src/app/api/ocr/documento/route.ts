@@ -50,7 +50,7 @@ export async function POST(request: Request) {
           cognome: null,
           pattuglia: null,
           tipo_documento_riconosciuto: "Documento Caricato",
-          foglio_privacy_firmato: true,
+          foglio_privacy_firmato: false,
           scheda_medica_ci: false,
           scheda_medica_ce: false,
           ricevuta_censimento: false
@@ -197,15 +197,10 @@ RESTITUISCI UN JSON CON QUESTA STRUTTURA ESATTA:
 
     const err = error as Error
     console.error('Errore Scanner Documenti OCR:', err)
-    return NextResponse.json({ 
-      success: true,
+    return NextResponse.json({
+      success: false,
       error: err.message || 'Errore durante la scansione del documento',
-      extracted: {
-        nome: null,
-        cognome: null,
-        tipo_documento_riconosciuto: "Documento Caricato",
-        foglio_privacy_firmato: true
-      }
-    }, { status: 200 })
+      extracted: null
+    }, { status: 500 })
   }
 }
