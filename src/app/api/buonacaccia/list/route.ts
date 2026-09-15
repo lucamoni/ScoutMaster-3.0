@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const type = searchParams.get('type') || 'EG'
 
   try {
-    let scrapedEvents: EventItem[] = []
+    const scrapedEvents: EventItem[] = []
 
     // 1. Prova web scraping in tempo reale da buonacaccia.net
     try {

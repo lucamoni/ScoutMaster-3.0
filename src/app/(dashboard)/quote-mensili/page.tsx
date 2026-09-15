@@ -20,7 +20,7 @@ export default async function QuotePage() {
   const currentYear = normalizeAnnoScout(settings.get('anno_scout_corrente') || getCurrentAnnoScout())
   const initialQuotaStandard = Number(settings.get('quota_mensile_standard') || 10)
 
-  let { data: quote, error: quoteError } = await supabase
+  const { data: initialQuote, error: quoteError } = await supabase
     .from('quote_mensili')
     .select('*')
     .in('anno_scout', annoScoutVariants(currentYear))
@@ -28,6 +28,8 @@ export default async function QuotePage() {
   if (quoteError) {
     return <div>Errore nel caricamento delle quote mensili.</div>
   }
+
+  let quote = initialQuote
 
   const activeRagazzi = ragazzi || []
   const existingRagazzoIds = new Set((quote || []).map(item => item.ragazzo_id))
@@ -46,7 +48,7 @@ export default async function QuotePage() {
         .from('quote_mensili')
         .select('*')
         .in('anno_scout', annoScoutVariants(currentYear))
-      quote = updatedQuote
+      quote = updatedQuote || quote
     }
   }
 

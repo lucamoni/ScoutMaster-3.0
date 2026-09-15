@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
+import { calculateAccountingBalances } from '@/lib/utils/accounting'
 
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -132,27 +133,15 @@ export default function BilancioAgesciClient({
   const risultatoEsercizio = totaleEntrate - totaleUscite
 
   // Riconciliazione Saldi Cassa Contanti e C/C Banca
-  let entrateContanti = 0
-  let usciteContanti = 0
-  let entrateBanca = 0
-  let usciteBanca = 0
-
-  speseAnno.forEach(s => {
-    const m = (s.metodo || '').toUpperCase()
-    const isBanca = m.includes('BONIFICO') || m.includes('CARTA') || m.includes('BANCA')
-
-    if (s.tipo_movimento === 'ENTRATA') {
-      if (isBanca) entrateBanca += s.importo
-      else entrateContanti += s.importo
-    } else if (s.tipo_movimento === 'USCITA') {
-      if (isBanca) usciteBanca += s.importo
-      else usciteContanti += s.importo
-    }
-  })
-
-  const saldoFinaleCassa = saldoInizialeCassa + entrateContanti - usciteContanti
-  const saldoFinaleBanca = saldoInizialeBanca + entrateBanca - usciteBanca
-  const saldoFinaleTotale = saldoFinaleCassa + saldoFinaleBanca
+  const {
+    entrateContanti,
+    usciteContanti,
+    entrateBanca,
+    usciteBanca,
+    saldoFinaleCassa,
+    saldoFinaleBanca,
+    saldoFinaleTotale,
+  } = calculateAccountingBalances(speseAnno, saldoInizialeCassa, saldoInizialeBanca)
   const saldoInizialeTotale = saldoInizialeCassa + saldoInizialeBanca
 
   // La quadratura reale confronta il saldo teorico con denaro contato ed

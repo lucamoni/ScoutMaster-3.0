@@ -157,7 +157,7 @@ export default function CassaClient({
 
     // 1. Se collegata a una specifica partecipazione evento
     if (spesa.partecipazione_evento_id) {
-      let res = await supabase.from('partecipazioni_eventi')
+      const res = await supabase.from('partecipazioni_eventi')
         .update({ metodo_pagamento: safeMetodo })
         .eq('id', spesa.partecipazione_evento_id)
       if (res.error && (res.error.code === '23514' || res.error.message?.includes('metodo'))) {
@@ -175,11 +175,11 @@ export default function CassaClient({
         const { data: evList } = await supabase.from('eventi').select('id').ilike('nome_evento', nomeEv)
         if (evList && evList.length > 0) {
           for (const ev of evList) {
-            let resEv = await supabase.from('eventi').update({ metodo_pagamento: safeMetodo }).eq('id', ev.id)
+            const resEv = await supabase.from('eventi').update({ metodo_pagamento: safeMetodo }).eq('id', ev.id)
             if (resEv.error && (resEv.error.code === '23514' || resEv.error.message?.includes('metodo'))) {
               await supabase.from('eventi').update({ metodo_pagamento: safeMetodo.toUpperCase() }).eq('id', ev.id)
             }
-            let resPart = await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo }).eq('evento_id', ev.id)
+            const resPart = await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo }).eq('evento_id', ev.id)
             if (resPart.error && (resPart.error.code === '23514' || resPart.error.message?.includes('metodo'))) {
               await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo.toUpperCase() }).eq('evento_id', ev.id)
             }

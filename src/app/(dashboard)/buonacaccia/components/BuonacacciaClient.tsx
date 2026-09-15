@@ -250,7 +250,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
 
       const initialTitle = !isGenericTitle(directTitle) ? directTitle! : 'Evento BuonaCaccia'
 
-      let eventPayload: Partial<Evento> = {
+      const eventPayload: Partial<Evento> = {
         titolo: initialTitle,
         categoria: derivedMeta.categoria,
         branca: derivedMeta.branca,

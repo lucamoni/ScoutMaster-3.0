@@ -82,11 +82,12 @@ export async function POST(request: Request) {
     })
 
     // Upsert batch partecipazioni
-    let { data: savedPartecipazioni, error: partErr } = await supabase
+    const { data: initialSavedPartecipazioni, error: partErr } = await supabase
       .from('partecipazioni_eventi')
       .upsert(partPayloads, { onConflict: 'ragazzo_id, evento_id' })
       .select('*')
 
+    let savedPartecipazioni = initialSavedPartecipazioni
     if (partErr) {
       console.error('[SYNC BULK ERROR] Upsert partecipazioni fallito, tentando fallback uppercase:', partErr)
       const uppercasePartPayloads = partPayloads.map(p => ({
