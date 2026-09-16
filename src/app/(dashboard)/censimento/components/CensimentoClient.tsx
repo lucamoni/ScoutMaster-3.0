@@ -106,7 +106,7 @@ export default function CensimentoClient({
     const accountingYear = normalizeAnnoScout(currentYear)
     const { data: existingMovement, error: lookupError } = await supabase
       .from('registro_spese')
-      .select('id')
+      .select('id, metodo')
       .eq('ragazzo_id', id)
       .eq('riferimento_censimento_anno', accountingYear)
       .maybeSingle()
@@ -115,7 +115,7 @@ export default function CensimentoClient({
     if (!movementError && newVal) {
       const movement = {
         importo: Number(ragazzo.importo_censimento ?? numStandard),
-        metodo: 'Contanti',
+        metodo: existingMovement?.metodo || 'Contanti',
         voce_spesa: 'Quota Censimento',
         tipo_movimento: 'ENTRATA',
         data: new Date().toISOString().split('T')[0],
