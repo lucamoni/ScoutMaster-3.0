@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
 import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
+import { normalizeDocumentData } from '@/lib/ocr/document'
 
 export async function POST(request: Request) {
   try {
@@ -166,6 +167,8 @@ RESTITUISCI UN JSON CON QUESTA STRUTTURA ESATTA:
         ricevuta_censimento: false
       }
     }
+
+    extracted = normalizeDocumentData(extracted)
 
     const supabase = await createClient()
 
