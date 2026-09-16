@@ -26,7 +26,7 @@ const text = (value: unknown) => {
 const date = (value: unknown) => {
   const candidate = text(value)
   if (!candidate) return null
-  const match = candidate.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/) || candidate.match(/^(\\d{2})[\\/. -](\\d{2})[\\/. -](\\d{4})$/)
+  const match = candidate.match(/^(\d{4})-(\d{2})-(\d{2})$/) || candidate.match(/^(\d{2})[\/. -](\d{2})[\/. -](\d{4})$/)
   if (!match) return null
   const iso = match[1].length === 4 ? candidate : \`${match[3]}-${match[2]}-${match[1]}\`
   const parsed = new Date(\`${iso}T00:00:00Z\`)
@@ -43,7 +43,7 @@ const phone = (value: unknown) => {
 export function normalizeDocumentData(input: unknown): NormalizedDocumentData {
   const source = input && typeof input === 'object' ? input as Record<string, unknown> : {}
   const sesso = text(source.sesso)?.toUpperCase()
-  const codice = text(source.codice_fiscale)?.replace(/\\s/g, '').toUpperCase()
+  const codice = text(source.codice_fiscale)?.replace(/\s/g, '').toUpperCase()
 
   return {
     nome: text(source.nome),
