@@ -751,7 +751,7 @@ export default function CassaClient({
             <DialogHeader>
               <DialogTitle>Acquisisci Scontrino</DialogTitle>
               <DialogDescription>
-                Scatta o carica uno scontrino. Gemini estrarrà in automatico l&apos;importo e i dati.
+                Scatta o carica uno scontrino. PaddleOCR lo analizzerà direttamente sul dispositivo.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
@@ -759,7 +759,7 @@ export default function CassaClient({
                 <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50" onClick={() => document.getElementById('scontrino-upload')?.click()}>
                   <Camera className="w-12 h-12 text-muted-foreground mb-4" />
                   <p className="font-medium">Tocca per scattare una foto</p>
-                  <p className="text-sm text-muted-foreground mt-1">o carica un&apos;immagine o un PDF</p>
+                  <p className="text-sm text-muted-foreground mt-1">o carica un&apos;immagine JPEG, PNG o WebP</p>
                   <input id="scontrino-upload" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleScannerFileChange} />
                 </div>
               ) : (
