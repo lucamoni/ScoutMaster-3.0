@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { useRouter } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 type Evento = Database['public']['Tables']['eventi']['Row']
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -448,7 +449,7 @@ export default function UsciteClient({
       }).eq('id', editingEvento.id).select().single()
       
       if (error) {
-        alert("Errore modifica evento: " + error.message)
+        toast.error("Errore modifica evento: " + error.message)
       }
       if (!error && data) {
         // Sincronizza subito la Cassa ed i record collegati in tempo reale per tutte le entrate di questo evento
@@ -469,7 +470,7 @@ export default function UsciteClient({
       }).select().single()
       
       if (error) {
-        alert("Errore inserimento evento: " + error.message)
+        toast.error("Errore inserimento evento: " + error.message)
       }
       if (!error && data) {
         setEventi([...eventi, data])
@@ -936,4 +937,3 @@ export default function UsciteClient({
     </div>
   )
 }
-
