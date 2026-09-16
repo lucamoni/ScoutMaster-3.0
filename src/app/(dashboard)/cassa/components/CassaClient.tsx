@@ -400,6 +400,12 @@ export default function CassaClient({
   const handleScannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+      const allowed = ['image/jpeg', 'image/png', 'image/webp']
+      if (!allowed.includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) {
+        toast.error('Carica un’immagine JPEG, PNG o WebP fino a 10 MB')
+        e.target.value = ''
+        return
+      }
       setScannerFile(file)
       await analyzeScontrino(file)
     }
@@ -446,12 +452,18 @@ export default function CassaClient({
 
   const handleSaveScannedScontrino = async () => {
     if (!scannerFile) return
+    const amount = Number(formData.importo)
+    if (!Number.isFinite(amount) || amount <= 0 || !formData.voce_spesa.trim()) {
+      toast.error('Controlla importo e categoria prima di salvare')
+      return
+    }
     setIsProcessing(true)
     toast.loading('Salvataggio scontrino in corso...', { id: 'save-scontrino' })
-    
+    let uploadedFileName: string | null = null
     try {
-      const fileExt = scannerFile.name.split('.').pop()
-      const fileName = `scontrino_${Date.now()}.${fileExt}`
+      const fileExt = scannerFile.type === 'image/png' ? 'png' : scannerFile.type === 'image/webp' ? 'webp' : 'jpg'
+      const fileName = `scontrino_${crypto.randomUUID()}.${fileExt}`
+      uploadedFileName = fileName
       const { error: uploadError } = await supabase.storage
         .from('scontrini')
         .upload(fileName, scannerFile)
@@ -462,8 +474,8 @@ export default function CassaClient({
         .from('registro_spese')
         .insert({
           voce_spesa: formData.voce_spesa,
-          importo: Number(formData.importo),
-          metodo: formData.metodo,
+          importo: amount,
+          metodo: toCanonicalMetodo(formData.metodo),
           momento_anno: formData.momento_anno,
           note: formData.note,
           tipo_movimento: formData.tipo_movimento,
@@ -490,6 +502,7 @@ export default function CassaClient({
       
     } catch (error: unknown) {
       console.error(error)
+      if (uploadedFileName) await supabase.storage.from('scontrini').remove([uploadedFileName])
       toast.error('Errore salvataggio scontrino', { id: 'save-scontrino' })
     } finally {
       setIsProcessing(false)
@@ -747,7 +760,7 @@ export default function CassaClient({
                   <Camera className="w-12 h-12 text-muted-foreground mb-4" />
                   <p className="font-medium">Tocca per scattare una foto</p>
                   <p className="text-sm text-muted-foreground mt-1">o carica un&apos;immagine o un PDF</p>
-                  <input id="scontrino-upload" type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScannerFileChange} />
+                  <input id="scontrino-upload" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleScannerFileChange} />
                 </div>
               ) : (
                 <div className="space-y-4">
