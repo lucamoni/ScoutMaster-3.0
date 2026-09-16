@@ -68,6 +68,12 @@ export default function CensimentoClient({
     : 0
 
   const handleSaveQuota = async () => {
+    const standard = Number(quotaStandard)
+    const fratelli = Number(quotaFratelli)
+    if (!Number.isFinite(standard) || standard <= 0 || !Number.isFinite(fratelli) || fratelli <= 0) {
+      toast.error('Le quote devono essere importi maggiori di zero')
+      return
+    }
     setIsSaving(true)
     const { error } = await supabase.from('impostazioni').upsert([
       { chiave: 'quota_censimento_standard', valore: quotaStandard },
