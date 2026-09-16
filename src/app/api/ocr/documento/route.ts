@@ -37,6 +37,31 @@ export async function POST(request: Request) {
       mimeType = 'image/heic'
     }
 
+    const ocrProvider = (process.env.DOCUMENT_OCR_PROVIDER || 'gemini').toLowerCase()
+
+    // Modalità locale: non invia il documento a provider esterni.
+    // Il client può completare i dati manualmente o usare un motore self-hosted.
+    if (ocrProvider === 'local' || ocrProvider === 'self-hosted') {
+      return NextResponse.json({
+        success: true,
+        fallback: true,
+        provider: ocrProvider,
+        extracted: {
+          nome: null,
+          cognome: null,
+          pattuglia: null,
+          tipo_documento_riconosciuto: 'Documento caricato',
+          foglio_privacy_firmato: false,
+          scheda_medica_ci: false,
+          scheda_medica_ce: false,
+          ricevuta_censimento: false
+        },
+        matchedScout: null,
+        isNewScout: false,
+        discrepancies: []
+      })
+    }
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
     
     // Se la chiave API manca, fornisci un fallback grazioso per evitare 500 crash
