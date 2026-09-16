@@ -80,11 +80,11 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   }, [supabase])
 
   const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
-    setArchivedFiles(newList)
     const { error } = await supabase.from('impostazioni').upsert([
       { chiave: 'archivio_documenti_digitale', valore: JSON.stringify(newList) }
     ])
     if (error) throw error
+    setArchivedFiles(newList)
   }
 
   const cleanFileNameToTitle = (fileName: string) => {

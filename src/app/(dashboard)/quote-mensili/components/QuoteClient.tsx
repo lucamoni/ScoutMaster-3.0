@@ -205,9 +205,15 @@ export default function QuoteClient({
   }
 
   const saveQuotaStandard = async () => {
+    const amount = Number(quotaStandard)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('La quota deve essere un importo maggiore di zero')
+      return
+    }
     setIsSavingQuota(true)
     const { error } = await supabase.from('impostazioni').upsert({ chiave: 'quota_mensile_standard', valore: quotaStandard } as Database['public']['Tables']['impostazioni']['Insert'])
-    if (error) alert("Errore salvataggio: " + error.message)
+    if (error) toast.error("Errore salvataggio: " + error.message)
+    else toast.success('Quota mensile aggiornata')
     setIsSavingQuota(false)
   }
 
