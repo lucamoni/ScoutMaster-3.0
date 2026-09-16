@@ -25,9 +25,12 @@ const text = (value: unknown) => {
 
 const date = (value: unknown) => {
   const candidate = text(value)
-  if (!candidate || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return null
-  const parsed = new Date(`${candidate}T00:00:00Z`)
-  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== candidate ? null : candidate
+  if (!candidate) return null
+  const match = candidate.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/) || candidate.match(/^(\\d{2})[\\/. -](\\d{2})[\\/. -](\\d{4})$/)
+  if (!match) return null
+  const iso = match[1].length === 4 ? candidate : \`${match[3]}-${match[2]}-${match[1]}\`
+  const parsed = new Date(\`${iso}T00:00:00Z\`)
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso ? null : iso
 }
 
 const phone = (value: unknown) => {
@@ -40,7 +43,7 @@ const phone = (value: unknown) => {
 export function normalizeDocumentData(input: unknown): NormalizedDocumentData {
   const source = input && typeof input === 'object' ? input as Record<string, unknown> : {}
   const sesso = text(source.sesso)?.toUpperCase()
-  const codice = text(source.codice_fiscale)?.toUpperCase()
+  const codice = text(source.codice_fiscale)?.replace(/\\s/g, '').toUpperCase()
 
   return {
     nome: text(source.nome),
