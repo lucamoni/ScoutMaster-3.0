@@ -109,17 +109,20 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
     setIsUploading(true)
     try {
-    const file = selectedFileObj
-    if (file.size === 0 || file.size > 5 * 1024 * 1024) {
-      toast.error('Il documento deve avere una dimensione massima di 5 MB')
-      return
-    }
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const base64Url = e.target?.result as string
-        const finalTitle = uploadTitolo.trim() || cleanFileNameToTitle(file.name)
+      const file = selectedFileObj
+      if (file.size === 0 || file.size > 5 * 1024 * 1024) {
+        toast.error('Il documento deve avere una dimensione massima di 5 MB')
+        return
+      }
+      const base64Url = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Formato file non leggibile'))
+        reader.onerror = () => reject(reader.error || new Error('Errore lettura file'))
+        reader.readAsDataURL(file)
+      })
+      const finalTitle = uploadTitolo.trim() || cleanFileNameToTitle(file.name)
 
-        const newArchivedItem: ArchivedDocumentFile = {
+      const newArchivedItem: ArchivedDocumentFile = {
           id: 'arch_' + Date.now(),
           ragazzo_id: targetScoutForUpload.id,
           ragazzo_nome: `${targetScoutForUpload.nome} ${targetScoutForUpload.cognome}`,
@@ -129,25 +132,24 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
           file_url: base64Url,
           mime_type: file.type,
           created_at: new Date().toISOString()
-        }
-
-        const updated = [newArchivedItem, ...archivedFiles]
-        await saveArchivedFilesToDb(updated)
-
-        if (uploadTipoDoc in targetScoutForUpload) {
-          const field = uploadTipoDoc as PrivacyField
-          await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetScoutForUpload.id)
-        }
-
-        toast.success(`Documento salvato ed AUTOMATICAMENTE SPUNTATO per ${targetScoutForUpload.nome}!`)
-        setIsUploading(false)
-        setIsUploadOpen(false)
-        setSelectedFileObj(null)
-        setUploadTitolo('')
       }
-      reader.readAsDataURL(file)
+
+      const updated = [newArchivedItem, ...archivedFiles]
+      await saveArchivedFilesToDb(updated)
+
+      if (uploadTipoDoc in targetScoutForUpload) {
+        const field = uploadTipoDoc as PrivacyField
+        const { error } = await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetScoutForUpload.id)
+        if (error) throw error
+      }
+
+      toast.success(`Documento salvato ed AUTOMATICAMENTE SPUNTATO per ${targetScoutForUpload.nome}!`)
+      setIsUploadOpen(false)
+      setSelectedFileObj(null)
+      setUploadTitolo('')
     } catch {
       toast.error('Impossibile salvare il documento')
+    } finally {
       setIsUploading(false)
     }
   }
