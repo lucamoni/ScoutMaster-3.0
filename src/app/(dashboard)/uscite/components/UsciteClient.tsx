@@ -251,47 +251,37 @@ export default function UsciteClient({
   // Helper per aggiornare in modo atomico e coerente il metodo di pagamento di un evento in Cassa, Partecipazioni ed Evento
   const updateRegistroSpeseMetodoPerEvento = async (eventoId: string, nomeEvento: string, metodo: string) => {
     const safeMetodo = toCanonicalMetodo(metodo, 'Bonifico')
+    const errors: string[] = []
 
-    // 1. Aggiorna tabella eventi
-    await supabase.from('eventi').update({ metodo_pagamento: safeMetodo }).eq('id', eventoId)
+    const eventoRes = await supabase.from('eventi').update({ metodo_pagamento: safeMetodo }).eq('id', eventoId)
+    if (eventoRes.error) errors.push('evento')
 
-    // 2. Troviamo tutte le partecipazioni dell'evento
-    const { data: parts } = await supabase.from('partecipazioni_eventi').select('id').eq('evento_id', eventoId)
-    const partIds = (parts || []).map(p => p.id)
+    const partsRes = await supabase.from('partecipazioni_eventi').select('id').eq('evento_id', eventoId)
+    if (partsRes.error) errors.push('partecipazioni')
+    const partIds = (partsRes.data || []).map(p => p.id)
 
-    // 3. Aggiorna tutte le partecipazioni con il nuovo metodo
-    await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo }).eq('evento_id', eventoId)
+    const partecipazioniRes = await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo }).eq('evento_id', eventoId)
+    if (partecipazioniRes.error) errors.push('partecipazioni')
 
-    // 4. Aggiorna lo stato locale partecipazioni ed eventi
-    setPartecipazioni(prev => prev.map(p => p.evento_id === eventoId ? { ...p, metodo_pagamento: safeMetodo } : p))
-    setEventi(prev => prev.map(e => e.id === eventoId ? { ...e, metodo_pagamento: safeMetodo } : e))
-
-    // 5. Aggiorna registro_spese con fallback per vincolo check
     if (partIds.length > 0) {
-      let res1 = await supabase.from('registro_spese').update({ metodo: safeMetodo }).in('partecipazione_evento_id', partIds)
-      if (res1.error && (res1.error.code === '23514' || res1.error.message?.includes('metodo'))) {
-        res1 = await supabase.from('registro_spese').update({ metodo: safeMetodo.toUpperCase() }).in('partecipazione_evento_id', partIds)
-      }
-      if (res1.error && (res1.error.code === '23514' || res1.error.message?.includes('metodo'))) {
-        res1 = await supabase.from('registro_spese').update({ metodo: safeMetodo.toLowerCase() }).in('partecipazione_evento_id', partIds)
-      }
-      if (res1.error && (res1.error.code === '23514' || res1.error.message?.includes('metodo'))) {
-        await supabase.from('registro_spese').update({ metodo: null }).in('partecipazione_evento_id', partIds)
-      }
+      const res = await supabase.from('registro_spese').update({ metodo: safeMetodo }).in('partecipazione_evento_id', partIds)
+      if (res.error) errors.push('registro spese')
     }
 
     if (nomeEvento) {
-      let res2 = await supabase.from('registro_spese').update({ metodo: safeMetodo }).eq('voce_spesa', `Evento: ${nomeEvento}`)
-      if (res2.error && (res2.error.code === '23514' || res2.error.message?.includes('metodo'))) {
-        res2 = await supabase.from('registro_spese').update({ metodo: safeMetodo.toUpperCase() }).eq('voce_spesa', `Evento: ${nomeEvento}`)
-      }
-      if (res2.error && (res2.error.code === '23514' || res2.error.message?.includes('metodo'))) {
-        res2 = await supabase.from('registro_spese').update({ metodo: safeMetodo.toLowerCase() }).eq('voce_spesa', `Evento: ${nomeEvento}`)
-      }
-      if (res2.error && (res2.error.code === '23514' || res2.error.message?.includes('metodo'))) {
-        await supabase.from('registro_spese').update({ metodo: null }).eq('voce_spesa', `Evento: ${nomeEvento}`)
-      }
+      const res = await supabase.from('registro_spese').update({ metodo: safeMetodo }).eq('voce_spesa', `Evento: ${nomeEvento}`)
+      if (res.error) errors.push('registro spese evento')
     }
+
+    if (errors.length > 0) {
+      toast.error(`Aggiornamento incompleto: ${Array.from(new Set(errors)).join(', ')}`)
+      return false
+    }
+
+    setPartecipazioni(prev => prev.map(p => p.evento_id === eventoId ? { ...p, metodo_pagamento: safeMetodo } : p))
+    setEventi(prev => prev.map(e => e.id === eventoId ? { ...e, metodo_pagamento: safeMetodo } : e))
+    toast.success('Metodo di pagamento aggiornato')
+    return true
   }
 
   const updatePartecipazione = async (ragazzoId: string, eventoId: string, field: keyof Partecipazione, value: string | boolean | number | null) => {
