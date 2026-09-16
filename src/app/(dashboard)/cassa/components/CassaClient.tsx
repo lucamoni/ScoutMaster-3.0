@@ -248,7 +248,8 @@ export default function CassaClient({
     const movementDate = formData.data || editingSpesa?.data || new Date().toISOString().split('T')[0]
     if (!Number.isFinite(amount) || amount <= 0) return toast.error('Inserisci un importo maggiore di zero')
     if (!formData.voce_spesa.trim()) return toast.error('Seleziona una voce di bilancio')
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(movementDate)) return toast.error('Inserisci una data valida')
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(movementDate) ? new Date(`${movementDate}T00:00:00Z`) : null
+    if (!parsedDate || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== movementDate) return toast.error('Inserisci una data valida')
     
     if (editingSpesa) {
       const safeMetodo = toCanonicalMetodo(formData.metodo)
@@ -470,7 +471,7 @@ export default function CassaClient({
         
       if (uploadError) throw uploadError
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('registro_spese')
         .insert({
           voce_spesa: formData.voce_spesa,
@@ -486,9 +487,25 @@ export default function CassaClient({
         .select()
         .single()
 
-      if (error) throw error
+      if (error && (error.code === '23514' || error.message?.toLowerCase().includes('metodo'))) {
+        const retry = await supabase.from('registro_spese').insert({
+          voce_spesa: formData.voce_spesa,
+          importo: amount,
+          metodo: toCanonicalMetodo(formData.metodo).toUpperCase(),
+          momento_anno: formData.momento_anno,
+          note: formData.note,
+          tipo_movimento: formData.tipo_movimento,
+          data: formData.data || new Date().toISOString().split('T')[0],
+          ricevuta_presente: true,
+          foto_scontrino_url: fileName,
+        }).select().single()
+        data = retry.data
+        error = retry.error
+      }
+      if (error || !data) throw error || new Error('Il movimento è stato inserito ma non è stato restituito dal database')
+      const saved = data
 
-      setSpese([data, ...spese])
+      setSpese([saved, ...spese])
       setIsScannerOpen(false)
       setScannerFile(null)
       toast.success('Scontrino salvato in cassa!', { id: 'save-scontrino' })
@@ -497,7 +514,7 @@ export default function CassaClient({
       fetch('/api/sheets/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: data.id, type: 'cassa' })
+        body: JSON.stringify({ id: saved.id, type: 'cassa' })
       }).catch(e => console.error("Errore background sync sheets:", e))
       
     } catch (error: unknown) {
