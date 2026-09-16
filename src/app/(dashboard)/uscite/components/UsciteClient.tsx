@@ -479,18 +479,35 @@ export default function UsciteClient({
   const deleteEvento = async (id: string) => {
     if (!confirm('Sei sicuro di voler eliminare questo evento? Tutti i dati di pagamento andranno persi.')) return
     
-    // Cancella prima le voci in registro_spese collegate alle partecipazioni dell'evento
-    const { data: eventParts } = await supabase.from('partecipazioni_eventi').select('id').eq('evento_id', id)
+    const { data: eventParts, error: partsError } = await supabase.from('partecipazioni_eventi').select('id').eq('evento_id', id)
+    if (partsError) {
+      toast.error('Impossibile leggere le partecipazioni dell\'evento')
+      return
+    }
     if (eventParts && eventParts.length > 0) {
       const partIds = eventParts.map(p => p.id)
-      await supabase.from('registro_spese').delete().in('partecipazione_evento_id', partIds)
+      const { error: expensesError } = await supabase.from('registro_spese').delete().in('partecipazione_evento_id', partIds)
+      if (expensesError) {
+        toast.error('Impossibile eliminare le spese collegate: evento non cancellato')
+        return
+      }
+    }
+
+    const { error: participationError } = await supabase.from('partecipazioni_eventi').delete().eq('evento_id', id)
+    if (participationError) {
+      toast.error('Impossibile eliminare le partecipazioni: evento non cancellato')
+      return
     }
 
     const { error } = await supabase.from('eventi').delete().eq('id', id)
-    if (!error) {
-      setEventi(eventi.filter(e => e.id !== id))
-      router.refresh()
+    if (error) {
+      toast.error(error.message)
+      return
     }
+
+    setEventi(prev => prev.filter(e => e.id !== id))
+    router.refresh()
+    toast.success('Evento eliminato correttamente')
   }
 
   const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean)))
