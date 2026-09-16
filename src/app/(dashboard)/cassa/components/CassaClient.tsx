@@ -48,7 +48,6 @@ export default function CassaClient({
   const [editingCatTipo, setEditingCatTipo] = useState('USCITA')
   const [editingSpesa, setEditingSpesa] = useState<Spesa | null>(null)
   const [activeTab, setActiveTab] = useState('TUTTI')
-  const [isSyncing, setIsSyncing] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Scanner Scontrino State
@@ -539,27 +538,6 @@ export default function CassaClient({
     }
   }
 
-  const handleImportSheets = async () => {
-    setIsSyncing(true)
-    toast.loading('Importazione da Google Sheets in corso...', { id: 'import-sheets' })
-    try {
-      const res = await fetch('/api/sheets/import?type=cassa')
-      const data = await res.json()
-      
-      if (!res.ok) throw new Error(data.error || 'Errore importazione')
-      
-      if (data.error) throw new Error(data.error)
-      toast.success(data.message || 'Sincronizzazione completata!', { id: 'import-sheets' })
-      window.location.reload()
-      
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : 'Errore importazione'
-      toast.error(msg, { id: 'import-sheets' })
-    } finally {
-      setIsSyncing(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* Dashboard Saldi */}
@@ -616,11 +594,9 @@ export default function CassaClient({
           <Button 
             variant="outline" 
             className="flex-1 md:flex-none border-purple-200 text-purple-700 hover:bg-purple-50"
-            onClick={handleImportSheets}
-            disabled={isSyncing}
+            onClick={() => { window.location.href = '/impostazioni' }}
           >
-            {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Settings2 className="mr-2 h-4 w-4" />}
-            {isSyncing ? 'Sincronizzazione...' : 'Sincronizza da Google Sheets'}
+            <Settings2 className="mr-2 h-4 w-4" /> Configura importazione Sheets
           </Button>
           <DialogContent>
             <DialogHeader>
