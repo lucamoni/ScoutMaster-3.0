@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
+import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 
 export async function POST(request: Request) {
   try {
+    await requireRole(['admin', 'capo', 'tesoriere'])
     const body = await request.json()
     const debitori = body.debitori
 
@@ -25,6 +27,8 @@ Scrivi un messaggio amichevole ma chiaro. Saluta i genitori, inserisci l'elenco 
 
     return NextResponse.json({ message: response.text })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
     const err = error as Error
     console.error('Errore Reminder API:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

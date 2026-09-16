@@ -72,8 +72,10 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   
   // Modale Link Rapidi
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
-  const [fetchedEvents, setFetchedEvents] = useState<{id: string, titolo: string, luogo?: string, date?: string}[]>([])
+  const [fetchedEvents, setFetchedEvents] = useState<{id: string, titolo: string, luogo?: string, date?: string, categoria?: string}[]>([])
   const [isFetchingList, setIsFetchingList] = useState(false)
+  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
+  const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
   
   // Nuovo candidato
   const [newCandidatoId, setNewCandidatoId] = useState<string>('')
@@ -141,10 +143,11 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     setFetchedEvents([])
     try {
       const res = await fetch(`/api/buonacaccia/list?type=${type}`)
-      const { data, error } = await res.json()
+      const { data, error, warning } = await res.json()
       if (error) throw new Error(error)
-      setFetchedEvents(data)
-      toast.success(`Trovati ${data.length} eventi!`)
+      setFetchedEvents(data || [])
+      if (warning) toast.warning(warning)
+      else toast.success(`Trovati ${(data || []).length} eventi verificati!`)
     } catch (error: unknown) {
       const err = error as Error
       toast.error(err.message)
@@ -249,7 +252,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
 
       const initialTitle = !isGenericTitle(directTitle) ? directTitle! : 'Evento BuonaCaccia'
 
-      let eventPayload: Partial<Evento> = {
+      const eventPayload: Partial<Evento> = {
         titolo: initialTitle,
         categoria: derivedMeta.categoria,
         branca: derivedMeta.branca,
@@ -328,7 +331,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     } finally {
       setIsImporting(false)
     }
-  }, [importUrl, supabase, fetchData])
+  }, [activeTab, fetchData, importUrl, isLinkModalOpen, linkModalTab, supabase])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -464,9 +467,6 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     }
     return { label: 'Nessuna Scadenza', color: 'bg-muted-foreground', icon: Calendar }
   }
-
-  const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
-  const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
 
   useEffect(() => {
     if (isLinkModalOpen) {

@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { google } from 'googleapis'
 import { Database } from '@/types/database.types'
 import { fetchPublicSheetValues, fetchPublicSheetTitles } from '@/lib/googleSheetsPublic'
+import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 
 async function getActiveGroqChatModels(apiKey: string): Promise<string[]> {
   try {
+    await requireRole(['admin', 'capo', 'tesoriere'])
     const res = await fetch('https://api.groq.com/openai/v1/models', {
       headers: { 'Authorization': `Bearer ${apiKey}` }
     })
@@ -356,6 +358,8 @@ REGOLE TASSATIVE E MANDATORIE DI MAPPATURA:
 
     return NextResponse.json({ success: true, mappings: mappingResult.mappings, sheetsData: compactSheetsData })
   } catch (error: unknown) {
+    const authResponse = authorizationErrorResponse(error)
+    if (authResponse) return authResponse
     const err = error as Error
     console.error('Errore AI map:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
+import { ReceiptOcrResult, scanReceiptLocally } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,14 +28,14 @@ import {
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
 
-export default function CassaClient({ 
+export default function CassaClient({
   initialSpese,
   initialCategorie,
-  saldi
-}: { 
+  initialBalances = { contanti: 0, banca: 0 },
+}: {
   initialSpese: Spesa[]
   initialCategorie: Categoria[]
-  saldi?: { entrateContanti: number, entrateBanca: number, usciteContanti: number, usciteBanca: number }
+  initialBalances?: { contanti: number; banca: number }
 }) {
   const [spese, setSpese] = useState<Spesa[]>(initialSpese)
   const [categorie, setCategorie] = useState<Categoria[]>(initialCategorie)
@@ -54,13 +55,7 @@ export default function CassaClient({
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [scannerFile, setScannerFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [ocrData, setOcrData] = useState<{
-    importo_totale?: string,
-    data?: string,
-    metodo_pagamento?: string,
-    fornitore_voce?: string,
-    categoria_suggerita?: string
-  } | null>(null)
+  const [ocrData, setOcrData] = useState<ReceiptOcrResult | null>(null)
   
   const [formData, setFormData] = useState<{
     voce_spesa: string;
@@ -124,12 +119,10 @@ export default function CassaClient({
   // Alias per compatibilità UI display
   const normalizeMetodoDisplay = toCanonicalMetodo
 
-  // Filtra ed escludi categoricamente il Censimento dai movimenti e dai saldi della Cassa
-  const cassaSpese = spese.filter(s => {
-    const voce = (s.voce_spesa || '').toLowerCase()
-    const note = (s.note || '').toLowerCase()
-    return !voce.includes('censimento') && !note.includes('censimento')
-  })
+  // La prima nota segue il principio di cassa e comprende anche le quote di censimento incassate.
+  const cassaSpese = spese.filter(
+    movimento => movimento.tipo_movimento === 'ENTRATA' || movimento.tipo_movimento === 'USCITA'
+  )
 
   // Spese filtrate in base al tab selezionato
   const speseFiltrate = cassaSpese.filter(s => activeTab === 'TUTTI' ? true : s.tipo_movimento === activeTab)
@@ -155,8 +148,8 @@ export default function CassaClient({
   // Integra con le entrate storiche calcolate a server se necessario, ma dato che ora tutto va in registro_spese 
   // e spese contiene tutti i record (il server li fetchava tutti), i saldi locali calcolati sono esatti per i dati presenti.
   // Tuttavia per sicurezza sommiamo il differenziale. In questo caso li calcoliamo ESCLUSIVAMENTE sulle spese.
-  const saldoContanti = saldoEntrateContanti - saldoUsciteContanti
-  const saldoBanca = saldoEntrateBanca - saldoUsciteBanca
+  const saldoContanti = initialBalances.contanti + saldoEntrateContanti - saldoUsciteContanti
+  const saldoBanca = initialBalances.banca + saldoEntrateBanca - saldoUsciteBanca
 
   // Helper per la sincronizzazione inversa da Cassa verso Eventi / Uscite / Partecipazioni
   const syncSpesaMetodoWithDB = async (spesa: Spesa, newMetodo: string) => {
@@ -164,7 +157,7 @@ export default function CassaClient({
 
     // 1. Se collegata a una specifica partecipazione evento
     if (spesa.partecipazione_evento_id) {
-      let res = await supabase.from('partecipazioni_eventi')
+      const res = await supabase.from('partecipazioni_eventi')
         .update({ metodo_pagamento: safeMetodo })
         .eq('id', spesa.partecipazione_evento_id)
       if (res.error && (res.error.code === '23514' || res.error.message?.includes('metodo'))) {
@@ -182,11 +175,11 @@ export default function CassaClient({
         const { data: evList } = await supabase.from('eventi').select('id').ilike('nome_evento', nomeEv)
         if (evList && evList.length > 0) {
           for (const ev of evList) {
-            let resEv = await supabase.from('eventi').update({ metodo_pagamento: safeMetodo }).eq('id', ev.id)
+            const resEv = await supabase.from('eventi').update({ metodo_pagamento: safeMetodo }).eq('id', ev.id)
             if (resEv.error && (resEv.error.code === '23514' || resEv.error.message?.includes('metodo'))) {
               await supabase.from('eventi').update({ metodo_pagamento: safeMetodo.toUpperCase() }).eq('id', ev.id)
             }
-            let resPart = await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo }).eq('evento_id', ev.id)
+            const resPart = await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo }).eq('evento_id', ev.id)
             if (resPart.error && (resPart.error.code === '23514' || resPart.error.message?.includes('metodo'))) {
               await supabase.from('partecipazioni_eventi').update({ metodo_pagamento: safeMetodo.toUpperCase() }).eq('evento_id', ev.id)
             }
@@ -251,6 +244,12 @@ export default function CassaClient({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const amount = Number(formData.importo)
+    const movementDate = formData.data || editingSpesa?.data || new Date().toISOString().split('T')[0]
+    if (!Number.isFinite(amount) || amount <= 0) return toast.error('Inserisci un importo maggiore di zero')
+    if (!formData.voce_spesa.trim()) return toast.error('Seleziona una voce di bilancio')
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(movementDate) ? new Date(`${movementDate}T00:00:00Z`) : null
+    if (!parsedDate || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== movementDate) return toast.error('Inserisci una data valida')
     
     if (editingSpesa) {
       const safeMetodo = toCanonicalMetodo(formData.metodo)
@@ -258,11 +257,12 @@ export default function CassaClient({
         .from('registro_spese')
         .update({
           voce_spesa: formData.voce_spesa,
-          importo: Number(formData.importo),
+          importo: amount,
           metodo: safeMetodo,
           momento_anno: formData.momento_anno,
           note: formData.note,
-          tipo_movimento: formData.tipo_movimento
+          tipo_movimento: formData.tipo_movimento,
+          data: formData.data || editingSpesa.data || new Date().toISOString().split('T')[0]
         })
         .eq('id', editingSpesa.id)
         .select()
@@ -273,11 +273,12 @@ export default function CassaClient({
           .from('registro_spese')
           .update({
             voce_spesa: formData.voce_spesa,
-            importo: Number(formData.importo),
+            importo: amount,
             metodo: safeMetodo.toUpperCase(),
             momento_anno: formData.momento_anno,
             note: formData.note,
-            tipo_movimento: formData.tipo_movimento
+            tipo_movimento: formData.tipo_movimento,
+            data: formData.data || editingSpesa.data || new Date().toISOString().split('T')[0]
           })
           .eq('id', editingSpesa.id)
           .select()
@@ -306,12 +307,12 @@ export default function CassaClient({
         .from('registro_spese')
         .insert({
           voce_spesa: formData.voce_spesa,
-          importo: Number(formData.importo),
+          importo: amount,
           metodo: safeMetodo,
           momento_anno: formData.momento_anno,
           note: formData.note,
           tipo_movimento: formData.tipo_movimento,
-          data: new Date().toISOString().split('T')[0],
+          data: formData.data || new Date().toISOString().split('T')[0],
         })
         .select()
         .single()
@@ -321,12 +322,12 @@ export default function CassaClient({
           .from('registro_spese')
           .insert({
             voce_spesa: formData.voce_spesa,
-            importo: Number(formData.importo),
+            importo: amount,
             metodo: safeMetodo.toUpperCase(),
             momento_anno: formData.momento_anno,
             note: formData.note,
             tipo_movimento: formData.tipo_movimento,
-            data: new Date().toISOString().split('T')[0],
+            data: formData.data || new Date().toISOString().split('T')[0],
           })
           .select()
           .single()
@@ -400,6 +401,12 @@ export default function CassaClient({
   const handleScannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+      const allowed = ['image/jpeg', 'image/png', 'image/webp']
+      if (!allowed.includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) {
+        toast.error('Carica un’immagine JPEG, PNG o WebP fino a 10 MB')
+        e.target.value = ''
+        return
+      }
       setScannerFile(file)
       await analyzeScontrino(file)
     }
@@ -410,36 +417,35 @@ export default function CassaClient({
     setOcrData(null)
     toast.info('Analisi scontrino in corso...', { id: 'ocr-scontrino' })
     try {
-      const bodyData = new FormData()
-      bodyData.append('file', fileToAnalyze)
-      bodyData.append('categorie', categorie.map(c => c.nome).join(', '))
-      
-      const res = await fetch('/api/ocr-scontrini', { method: 'POST', body: bodyData })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.details || errorData.error || 'Errore durante l\'analisi OCR')
-      }
-      
-      const data = await res.json()
+      const data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
       
       setOcrData(data)
       
       // Pre-compila formData per la revisione
       setFormData(prev => ({
         ...prev,
-        importo: data.importo_totale?.toString() || '',
+        importo: data.importo?.toString() || '',
         data: data.data || new Date().toISOString().split('T')[0],
-        metodo: ['Contanti', 'Carta', 'Bonifico'].includes(data.metodo_pagamento) ? data.metodo_pagamento : 'Contanti',
-        voce_spesa: categorie.find(c => c.nome === data.categoria_suggerita)?.nome || categorie[0]?.nome || '',
-        note: data.fornitore_voce || '',
+        metodo: 'Contanti',
+        voce_spesa: categorie.find(c => c.nome === data.voce_spesa)?.nome || categorie[0]?.nome || '',
+        note: data.fornitore || '',
         tipo_movimento: 'USCITA' // Assumiamo uscita per gli scontrini
       }))
 
-      toast.success('Scontrino letto con successo! Controlla i dati.', { id: 'ocr-scontrino' })
+      toast.success('Scontrino letto sul dispositivo. Controlla i dati.', { id: 'ocr-scontrino' })
     } catch (err: unknown) {
       console.error(err)
       const errMsg = err instanceof Error ? err.message : 'Errore sconosciuto'
       toast.error(`Impossibile analizzare lo scontrino: ${errMsg}`, { id: 'ocr-scontrino' })
+      setOcrData({
+        provider: 'paddleocr-browser',
+        importo: null,
+        data: null,
+        fornitore: null,
+        voce_spesa: null,
+        confidence: 0,
+        raw_text: '',
+      })
     } finally {
       setIsProcessing(false)
     }
@@ -447,24 +453,30 @@ export default function CassaClient({
 
   const handleSaveScannedScontrino = async () => {
     if (!scannerFile) return
+    const amount = Number(formData.importo)
+    if (!Number.isFinite(amount) || amount <= 0 || !formData.voce_spesa.trim()) {
+      toast.error('Controlla importo e categoria prima di salvare')
+      return
+    }
     setIsProcessing(true)
     toast.loading('Salvataggio scontrino in corso...', { id: 'save-scontrino' })
-    
+    let uploadedFileName: string | null = null
     try {
-      const fileExt = scannerFile.name.split('.').pop()
-      const fileName = `scontrino_${Date.now()}.${fileExt}`
+      const fileExt = scannerFile.type === 'image/png' ? 'png' : scannerFile.type === 'image/webp' ? 'webp' : 'jpg'
+      const fileName = `scontrino_${crypto.randomUUID()}.${fileExt}`
+      uploadedFileName = fileName
       const { error: uploadError } = await supabase.storage
         .from('scontrini')
         .upload(fileName, scannerFile)
         
       if (uploadError) throw uploadError
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('registro_spese')
         .insert({
           voce_spesa: formData.voce_spesa,
-          importo: Number(formData.importo),
-          metodo: formData.metodo,
+          importo: amount,
+          metodo: toCanonicalMetodo(formData.metodo),
           momento_anno: formData.momento_anno,
           note: formData.note,
           tipo_movimento: formData.tipo_movimento,
@@ -475,9 +487,25 @@ export default function CassaClient({
         .select()
         .single()
 
-      if (error) throw error
+      if (error && (error.code === '23514' || error.message?.toLowerCase().includes('metodo'))) {
+        const retry = await supabase.from('registro_spese').insert({
+          voce_spesa: formData.voce_spesa,
+          importo: amount,
+          metodo: toCanonicalMetodo(formData.metodo).toUpperCase(),
+          momento_anno: formData.momento_anno,
+          note: formData.note,
+          tipo_movimento: formData.tipo_movimento,
+          data: formData.data || new Date().toISOString().split('T')[0],
+          ricevuta_presente: true,
+          foto_scontrino_url: fileName,
+        }).select().single()
+        data = retry.data
+        error = retry.error
+      }
+      if (error || !data) throw error || new Error('Il movimento è stato inserito ma non è stato restituito dal database')
+      const saved = data
 
-      setSpese([data, ...spese])
+      setSpese([saved, ...spese])
       setIsScannerOpen(false)
       setScannerFile(null)
       toast.success('Scontrino salvato in cassa!', { id: 'save-scontrino' })
@@ -486,11 +514,12 @@ export default function CassaClient({
       fetch('/api/sheets/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: data.id, type: 'cassa' })
+        body: JSON.stringify({ id: saved.id, type: 'cassa' })
       }).catch(e => console.error("Errore background sync sheets:", e))
       
     } catch (error: unknown) {
       console.error(error)
+      if (uploadedFileName) await supabase.storage.from('scontrini').remove([uploadedFileName])
       toast.error('Errore salvataggio scontrino', { id: 'save-scontrino' })
     } finally {
       setIsProcessing(false)
@@ -519,9 +548,8 @@ export default function CassaClient({
       
       if (!res.ok) throw new Error(data.error || 'Errore importazione')
       
+      if (data.error) throw new Error(data.error)
       toast.success(data.message || 'Sincronizzazione completata!', { id: 'import-sheets' })
-      
-      // Ricarica i dati (hard refresh)
       window.location.reload()
       
     } catch (error: unknown) {
@@ -740,7 +768,7 @@ export default function CassaClient({
             <DialogHeader>
               <DialogTitle>Acquisisci Scontrino</DialogTitle>
               <DialogDescription>
-                Scatta o carica uno scontrino. Gemini estrarrà in automatico l&apos;importo e i dati.
+                Scatta o carica uno scontrino. PaddleOCR lo analizzerà direttamente sul dispositivo.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
@@ -748,8 +776,8 @@ export default function CassaClient({
                 <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50" onClick={() => document.getElementById('scontrino-upload')?.click()}>
                   <Camera className="w-12 h-12 text-muted-foreground mb-4" />
                   <p className="font-medium">Tocca per scattare una foto</p>
-                  <p className="text-sm text-muted-foreground mt-1">o carica un&apos;immagine o un PDF</p>
-                  <input id="scontrino-upload" type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleScannerFileChange} />
+                  <p className="text-sm text-muted-foreground mt-1">o carica un&apos;immagine JPEG, PNG o WebP</p>
+                  <input id="scontrino-upload" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleScannerFileChange} />
                 </div>
               ) : (
                 <div className="space-y-4">
