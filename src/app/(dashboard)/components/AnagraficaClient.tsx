@@ -279,21 +279,8 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
     }
   }
 
-  const handleImportSheets = async () => {
-    setIsSyncing(true)
-    try {
-      const res = await fetch('/api/sheets/sync-all', { method: 'POST' })
-      if (res.ok) {
-        toast.success("Sincronizzazione da Google Sheets completata!")
-        window.location.reload()
-      } else {
-        toast.error("Errore durante la sincronizzazione da Google Sheets")
-      }
-    } catch {
-      toast.error("Errore di connessione durante la sincronizzazione")
-    } finally {
-      setIsSyncing(false)
-    }
+  const handleImportSheets = () => {
+    window.location.href = '/impostazioni'
   }
 
   const handleAddSquadriglia = async (e: React.FormEvent) => {
