@@ -17,19 +17,15 @@ export interface NormalizedDocumentData {
   ricevuta_censimento: boolean
 }
 
-const text = (value: unknown) => {
-  if (typeof value !== 'string') return null
-  const normalized = value.trim().replace(/\s+/g, ' ')
-  return normalized || null
-}
+const text = (value: unknown) => typeof value === 'string' ? (value.trim().replace(/\s+/g, ' ') || null) : null
 
 const date = (value: unknown) => {
   const candidate = text(value)
   if (!candidate) return null
   const match = candidate.match(/^(\d{4})-(\d{2})-(\d{2})$/) || candidate.match(/^(\d{2})[\/. -](\d{2})[\/. -](\d{4})$/)
   if (!match) return null
-  const iso = match[1].length === 4 ? candidate : \`${match[3]}-${match[2]}-${match[1]}\`
-  const parsed = new Date(\`${iso}T00:00:00Z\`)
+  const iso = match[1].length === 4 ? candidate : [match[3], match[2], match[1]].join('-')
+  const parsed = new Date(iso + 'T00:00:00Z')
   return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso ? null : iso
 }
 
@@ -44,23 +40,14 @@ export function normalizeDocumentData(input: unknown): NormalizedDocumentData {
   const source = input && typeof input === 'object' ? input as Record<string, unknown> : {}
   const sesso = text(source.sesso)?.toUpperCase()
   const codice = text(source.codice_fiscale)?.replace(/\s/g, '').toUpperCase()
-
   return {
-    nome: text(source.nome),
-    cognome: text(source.cognome),
-    pattuglia: text(source.pattuglia),
-    sesso: sesso === 'M' || sesso === 'F' ? sesso : null,
-    data_nascita: date(source.data_nascita),
+    nome: text(source.nome), cognome: text(source.cognome), pattuglia: text(source.pattuglia),
+    sesso: sesso === 'M' || sesso === 'F' ? sesso : null, data_nascita: date(source.data_nascita),
     codice_fiscale: codice && /^[A-Z0-9]{16}$/.test(codice) ? codice : null,
-    telefono_ragazzo: phone(source.telefono_ragazzo),
-    genitore_1_nome: text(source.genitore_1_nome),
-    genitore_1_telefono: phone(source.genitore_1_telefono),
-    genitore_2_nome: text(source.genitore_2_nome),
-    genitore_2_telefono: phone(source.genitore_2_telefono),
-    tipo_documento_riconosciuto: text(source.tipo_documento_riconosciuto),
-    foglio_privacy_firmato: source.foglio_privacy_firmato === true,
-    scheda_medica_ci: source.scheda_medica_ci === true,
-    scheda_medica_ce: source.scheda_medica_ce === true,
-    ricevuta_censimento: source.ricevuta_censimento === true,
+    telefono_ragazzo: phone(source.telefono_ragazzo), genitore_1_nome: text(source.genitore_1_nome),
+    genitore_1_telefono: phone(source.genitore_1_telefono), genitore_2_nome: text(source.genitore_2_nome),
+    genitore_2_telefono: phone(source.genitore_2_telefono), tipo_documento_riconosciuto: text(source.tipo_documento_riconosciuto),
+    foglio_privacy_firmato: source.foglio_privacy_firmato === true, scheda_medica_ci: source.scheda_medica_ci === true,
+    scheda_medica_ce: source.scheda_medica_ce === true, ricevuta_censimento: source.ricevuta_censimento === true,
   }
 }
