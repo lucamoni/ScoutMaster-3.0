@@ -33,7 +33,10 @@ export function normalizeAnnoScout(raw?: string | null): string {
     .replace(/[\s/]+/g, '-')
 
   const match = normalized.match(/^(\d{4})-(\d{4})$/)
-  return match ? `${match[1]}-${match[2]}` : normalized
+  if (!match) return normalized
+  const start = Number(match[1])
+  const end = Number(match[2])
+  return end === start + 1 ? `${match[1]}-${match[2]}` : normalized
 }
 
 export function annoScoutVariants(raw?: string | null): string[] {
