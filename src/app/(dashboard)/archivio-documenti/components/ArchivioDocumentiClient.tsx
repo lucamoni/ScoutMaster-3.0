@@ -81,9 +81,10 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
   const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
     setArchivedFiles(newList)
-    await supabase.from('impostazioni').upsert([
+    const { error } = await supabase.from('impostazioni').upsert([
       { chiave: 'archivio_documenti_digitale', valore: JSON.stringify(newList) }
     ])
+    if (error) throw error
   }
 
   const cleanFileNameToTitle = (fileName: string) => {
@@ -108,7 +109,11 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
     setIsUploading(true)
     try {
-      const file = selectedFileObj
+    const file = selectedFileObj
+    if (file.size === 0 || file.size > 5 * 1024 * 1024) {
+      toast.error('Il documento deve avere una dimensione massima di 5 MB')
+      return
+    }
       const reader = new FileReader()
       reader.onload = async (e) => {
         const base64Url = e.target?.result as string
