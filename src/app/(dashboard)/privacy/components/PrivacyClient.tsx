@@ -188,7 +188,14 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   ) => {
     const newValue = !currentValue
     setRagazzi(prev => prev.map(r => r.id === id ? { ...r, [field]: newValue } : r))
-    await supabase.from('ragazzi').update({ [field]: newValue } as Database['public']['Tables']['ragazzi']['Update']).eq('id', id)
+    const { error } = await supabase
+      .from('ragazzi')
+      .update({ [field]: newValue } as Database['public']['Tables']['ragazzi']['Update'])
+      .eq('id', id)
+    if (error) {
+      setRagazzi(prev => prev.map(r => r.id === id ? { ...r, [field]: currentValue } : r))
+      toast.error('Impossibile salvare lo stato del documento')
+    }
   }
 
   // Scansione ed Analisi IA Documento
