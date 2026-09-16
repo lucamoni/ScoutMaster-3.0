@@ -291,12 +291,6 @@ export default function CassaClient({
         setIsOpen(false)
         await syncSpesaMetodoWithDB(editingSpesa, safeMetodo)
         
-        // Background Sync (Update)
-        fetch('/api/sheets/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: data.id, type: 'cassa' })
-        }).catch(e => console.error("Errore background sync sheets:", e))
       } else if (error) {
         toast.error(`Errore salvataggio: ${error.message}`)
       }
@@ -338,12 +332,6 @@ export default function CassaClient({
         setSpese([data, ...spese])
         setIsOpen(false)
         
-        // Background Sync (Insert)
-        fetch('/api/sheets/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: data.id, type: 'cassa' })
-        }).catch(e => console.error("Errore background sync sheets:", e))
       } else if (error) {
         toast.error(`Errore inserimento: ${error.message}`)
       }
@@ -509,12 +497,6 @@ export default function CassaClient({
       setScannerFile(null)
       toast.success('Scontrino salvato in cassa!', { id: 'save-scontrino' })
       
-      // Background Sync
-      fetch('/api/sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: saved.id, type: 'cassa' })
-      }).catch(e => console.error("Errore background sync sheets:", e))
       
     } catch (error: unknown) {
       console.error(error)
