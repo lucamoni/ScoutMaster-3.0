@@ -365,7 +365,7 @@ export default function CassaClient({
     if(!newCatName) return;
     const { data, error } = await supabase.from('categorie_spesa').insert({ nome: newCatName, tipo_movimento: newCatTipo }).select().single()
     if(error) {
-      alert("Errore inserimento categoria: " + error.message)
+      toast.error("Errore inserimento categoria: " + error.message)
     }
     if(!error && data) {
       setCategorie([...categorie, data].sort((a,b) => a.nome.localeCompare(b.nome)))
@@ -388,7 +388,7 @@ export default function CassaClient({
     }
     const { error } = await supabase.from('categorie_spesa').update({ nome: editingCatNome.trim(), tipo_movimento: editingCatTipo }).eq('id', id)
     if(error) {
-      alert("Errore modifica categoria: " + error.message)
+      toast.error("Errore modifica categoria: " + error.message)
     }
     if (!error) {
       setCategorie(prev => prev.map(c => c.id === id ? { ...c, nome: editingCatNome.trim(), tipo_movimento: editingCatTipo } : c).sort((a,b) => a.nome.localeCompare(b.nome)))

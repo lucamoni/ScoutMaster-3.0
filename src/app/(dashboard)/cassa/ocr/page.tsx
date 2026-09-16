@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Camera, UploadCloud, Loader2, ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { scanReceiptLocally } from '@/lib/ocr/receipt'
+import { toast } from 'sonner'
 
 export default function OCRScannerPage() {
   const router = useRouter()
@@ -64,7 +65,7 @@ export default function OCRScannerPage() {
       }))
     } catch (error) {
       console.error(error)
-      alert("Impossibile analizzare automaticamente lo scontrino. Puoi inserire i dati manualmente.")
+      toast.error("Impossibile analizzare automaticamente lo scontrino. Puoi inserire i dati manualmente.")
       setExtractedData({ manual: true })
     } finally {
       setLoading(false)
@@ -115,7 +116,7 @@ export default function OCRScannerPage() {
       router.push('/cassa')
     } catch (error) {
       console.error(error)
-      alert("Errore nel salvataggio della spesa.")
+      toast.error("Errore nel salvataggio della spesa.")
     } finally {
       setLoading(false)
     }

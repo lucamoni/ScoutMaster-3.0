@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, MessageCircle, Send } from 'lucide-react'
+import { toast } from 'sonner'
 
 type DebitoreData = {
   ragazzo: { nome: string; cognome: string }
@@ -29,7 +30,7 @@ export default function ReminderClient({ data }: { data: DebitoreData[] }) {
       if (result.message) {
         setMessage(result.message)
       } else {
-        alert("Errore nella generazione del messaggio.")
+        toast.error("Errore nella generazione del messaggio.")
       }
     } catch (error) {
       console.error(error)
