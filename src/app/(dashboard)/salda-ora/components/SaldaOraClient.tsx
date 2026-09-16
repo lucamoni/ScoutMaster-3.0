@@ -81,9 +81,10 @@ export default function SaldaOraClient({
   const [selectedBoyForModal, setSelectedBoyForModal] = useState<Ragazzo | null>(null)
   const [modalSelections, setModalSelections] = useState<{
     censimento: boolean
+    metodo: 'Contanti' | 'Bonifico'
     months: string[]
     eventi: string[]
-  }>({ censimento: false, months: [], eventi: [] })
+  }>({ censimento: false, metodo: 'Contanti', months: [], eventi: [] })
 
   const quotaMensileNum = Number(quotaMensileStandard) || 10
   const quotaCensimentoNum = Number(quotaCensimentoStandard) || 45
@@ -169,7 +170,8 @@ export default function SaldaOraClient({
     ragazzo: Ragazzo,
     quotaId: string,
     month: QuotaMonth,
-    paid: boolean
+    paid: boolean,
+    metodo: 'Contanti' | 'Bonifico' = 'Contanti'
   ) => {
     if (!paid) {
       const { error } = await supabase
@@ -193,7 +195,7 @@ export default function SaldaOraClient({
 
     const { error } = await supabase.from('registro_spese').insert({
       importo: quotaMensileNum,
-      metodo: 'Contanti',
+      metodo,
       voce_spesa: 'Quota Mensile',
       tipo_movimento: 'ENTRATA',
       data: new Date().toISOString().split('T')[0],
@@ -206,7 +208,7 @@ export default function SaldaOraClient({
     if (error) throw error
   }
 
-  const syncCensimentoMovement = async (ragazzo: Ragazzo, paid: boolean) => {
+  const syncCensimentoMovement = async (ragazzo: Ragazzo, paid: boolean, metodo: 'Contanti' | 'Bonifico' = 'Contanti') => {
     const accountingYear = normalizeAnnoScout(currentYear)
     const { data: existing, error: lookupError } = await supabase
       .from('registro_spese')
@@ -229,7 +231,7 @@ export default function SaldaOraClient({
 
     const movement = {
       importo: Number(ragazzo.importo_censimento ?? quotaCensimentoNum),
-      metodo: existing?.metodo || 'Contanti',
+      metodo: existing?.metodo || metodo,
       voce_spesa: 'Quota Censimento',
       tipo_movimento: 'ENTRATA',
       data: new Date().toISOString().split('T')[0],
@@ -331,6 +333,7 @@ export default function SaldaOraClient({
     setSelectedBoyForModal(ragazzo)
     setModalSelections({
       censimento: debt.censimentoDue,
+      metodo: 'Contanti',
       months: [...debt.unpaidMonths],
       eventi: debt.unpaidEventDetails
         .map(e => e.eventoId)
@@ -351,7 +354,7 @@ export default function SaldaOraClient({
       // Censimento: mantiene sincronizzati stato e prima nota.
       const censusPaid = !modalSelections.censimento
       const previousCensusPaid = r.quota_censimento === true
-      await syncCensimentoMovement(r, censusPaid)
+      await syncCensimentoMovement(r, censusPaid, modalSelections.metodo)
 
       const { error: censusError } = await supabase
         .from('ragazzi')
@@ -387,7 +390,7 @@ export default function SaldaOraClient({
       )
       try {
         for (const month of activeMonths) {
-          await syncQuotaMovement(r, savedQuote.id, month, !modalSelections.months.includes(month))
+          await syncQuotaMovement(r, savedQuote.id, month, !modalSelections.months.includes(month), modalSelections.metodo)
         }
       } catch (movementError) {
         const rollbackPayload = Object.fromEntries(
@@ -640,6 +643,18 @@ export default function SaldaOraClient({
             </DialogHeader>
 
             <div className="space-y-4 py-3">
+              <div className="mb-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <label className="text-xs font-bold text-slate-800">Metodo di pagamento</label>
+                <Select value={modalSelections.metodo} onValueChange={(value) => setModalSelections(prev => ({ ...prev, metodo: (value as 'Contanti' | 'Bonifico') || 'Contanti' }))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Contanti">Contanti</SelectItem>
+                    <SelectItem value="Bonifico">Bonifico / Carta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              
               {/* Sezione Censimento */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                 <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
