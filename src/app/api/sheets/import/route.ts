@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { google } from 'googleapis'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchPublicSheetValues } from '@/lib/googleSheetsPublic'
 import { normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
