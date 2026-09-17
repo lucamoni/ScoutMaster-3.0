@@ -4,6 +4,7 @@ import { fetchPublicSheetValues } from '@/lib/googleSheetsPublic'
 import { normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
 import { parseSheetAmount, parseSheetDate } from '@/lib/googleSheetsImport'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
+import type { Database } from '@/types/database.types'
 
 type ImportMapping = { sheetName?: string; tableName?: string; columnsMap?: Record<string, string> }
 type ImportRequest = {
