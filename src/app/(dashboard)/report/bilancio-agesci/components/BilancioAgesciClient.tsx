@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Database } from '@/types/database.types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
 
@@ -68,6 +69,23 @@ export default function BilancioAgesciClient({
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   
   const supabase = createClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('bilancio_agesci_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registro_spese' }, () => {
+        router.refresh()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'impostazioni' }, () => {
+        router.refresh()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router, supabase])
 
   // Saldi iniziali configurabili al 01/10
   const cassaInizialeKey = `saldo_iniziale_cassa_${selectedAnnoScout}`

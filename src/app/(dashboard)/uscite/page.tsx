@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import UsciteClient from './components/UsciteClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function UscitePage() {
   const supabase = await createClient()
   
