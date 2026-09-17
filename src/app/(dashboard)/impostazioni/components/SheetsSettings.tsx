@@ -67,14 +67,14 @@ export default function SheetsSettings({
   initialSheetName: string,
   initialSheetNameSpese: string
 }) {
-  const [spreadsheetId, setSpreadsheetId] = useState(initialSpreadsheetId)
-
-  // Estrae l'ID pulito da un URL Google Sheets oppure restituisce la stringa com'è se già un ID
+  // Estrae sempre l'ID pulito, anche quando nelle impostazioni è stato salvato il link completo.
   const extractSheetId = (raw: string): string => {
     const trimmed = raw.trim()
-    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
     return match ? match[1] : trimmed
   }
+
+  const [spreadsheetId, setSpreadsheetId] = useState(() => extractSheetId(initialSpreadsheetId))
   const [sheetName] = useState(initialSheetName)
   const [sheetNameSpese] = useState(initialSheetNameSpese)
   const [isSaving, setIsSaving] = useState(false)
@@ -186,8 +186,8 @@ export default function SheetsSettings({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          mappings: aiMappings, 
-          spreadsheetId,
+          mappings: aiMappings || [],
+          spreadsheetId: extractSheetId(spreadsheetId),
           selectedTables,
           selectedSheets,
           annoScout
@@ -198,12 +198,20 @@ export default function SheetsSettings({
 
       let totalInserted = 0
       let totalUpdated = 0
-      data.results?.forEach((r: { sheetName: string, tableName: string, inserted: number, updated: number, skipped: number }) => {
-        totalInserted += r.inserted
-        totalUpdated += r.updated
+      let totalSkipped = 0
+      const warnings: string[] = []
+      data.results?.forEach((r: { sheetName: string, tableName: string, inserted: number, updated: number, skipped: number, warning?: string }) => {
+        totalInserted += r.inserted || 0
+        totalUpdated += r.updated || 0
+        totalSkipped += r.skipped || 0
+        if (r.warning) warnings.push(`${r.tableName}: ${r.warning}`)
       })
 
-      toast.success(`Importazione completata con successo! Inseriti ${totalInserted} record e aggiornati ${totalUpdated}.`, { id: 'ai-import', duration: 10000 })
+      if (totalInserted === 0 && totalUpdated === 0) {
+        toast.warning(`Nessun record importato. Righe saltate: ${totalSkipped}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`, { id: 'ai-import', duration: 12000 })
+      } else {
+        toast.success(`Importazione completata! Inseriti ${totalInserted}, aggiornati ${totalUpdated}, saltati ${totalSkipped}.`, { id: 'ai-import', duration: 10000 })
+      }
     } catch (error: unknown) {
       const err = error as Error
       toast.error(err.message, { id: 'ai-import' })

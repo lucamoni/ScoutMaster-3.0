@@ -35,8 +35,8 @@ export async function fetchPublicSheetValues(spreadsheetId: string, sheetName?: 
       if (!r.c || !Array.isArray(r.c)) continue
       const rowVal: string[] = r.c.map((cell: { v?: unknown, f?: string } | null) => {
         if (!cell) return ''
+        if (cell.f !== undefined && cell.f !== null && String(cell.f).trim()) return String(cell.f)
         if (cell.v !== undefined && cell.v !== null) return String(cell.v)
-        if (cell.f !== undefined && cell.f !== null) return String(cell.f)
         return ''
       })
       rows.push(rowVal)
