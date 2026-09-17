@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchPublicSheetValues } from '@/lib/googleSheetsPublic'
-import { toCanonicalMetodo } from '@/lib/utils/payment'
+import { normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
 import { parseSheetAmount, parseSheetDate } from '@/lib/googleSheetsImport'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 
@@ -11,7 +11,9 @@ type ImportRequest = {
   spreadsheetId?: string
   selectedTables?: string[]
   selectedSheets?: string[]
+  annoScout?: string
 }
+type ImportCounts = { sheetName: string; tableName: string; inserted: number; updated: number; skipped: number; warning?: string }
 
 class ImportRequestError extends Error {
   status: number
@@ -23,7 +25,7 @@ class ImportRequestError extends Error {
   }
 }
 
-const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese']
+const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese', 'eventi']
 
 function extractSpreadsheetId(raw: string) {
   const trimmed = raw.trim()
@@ -532,11 +534,12 @@ export async function POST(request: Request) {
       throw new ImportRequestError('Parametri di importazione incompleti')
     }
 
-    const results = await importExpenses({
+    const results = await importData({
       mappings: body.mappings,
       spreadsheetId: body.spreadsheetId,
       selectedTables: body.selectedTables ?? DEFAULT_TABLES,
       selectedSheets: body.selectedSheets,
+      annoScout: normalizeAnnoScout(body.annoScout),
     })
     return NextResponse.json({ success: true, results })
   } catch (error: unknown) {
