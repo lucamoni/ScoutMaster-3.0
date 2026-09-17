@@ -66,16 +66,16 @@ export async function fetchPublicSheetTitles(spreadsheetId: string): Promise<str
     })
     if (res.ok) {
       const html = await res.text()
-      const tabMatches = Array.from(html.matchAll(/docs-sheet-tab-caption[^>]*>([\\s\\S]*?)<\\/div>/gi))
+      const tabMatches = Array.from(html.matchAll(/docs-sheet-tab-caption[^>]*>([\s\S]*?)<\/div>/gi))
       const tabTitles = tabMatches
         .map(match => decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '')))
         .filter(title => title && title.length < 100)
       if (tabTitles.length > 0) return Array.from(new Set(tabTitles))
 
-      const jsonMatches = html.match(/"name":\\s*"([^"]+)"/g)
+      const jsonMatches = html.match(/"name":\s*"([^"]+)"/g)
       if (jsonMatches) {
         const titles = jsonMatches
-          .map(match => decodeHtmlEntities(match.replace(/"name":\\s*"/, '').replace(/"$/, '')))
+          .map(match => decodeHtmlEntities(match.replace(/"name":\s*"/, '').replace(/"$/, '')))
           .filter(title => title && title.length < 100)
         if (titles.length > 0) return Array.from(new Set(titles))
       }
