@@ -465,7 +465,18 @@ async function importData(body: {
     return sheetCache.get(sheetName) || []
   }
 
-  for (const mapping of body.mappings) {
+  const importPriority: Record<string, number> = {
+    ragazzi: 1,
+    eventi: 2,
+    quote_mensili: 3,
+    partecipazioni_eventi: 4,
+    registro_spese: 5,
+  }
+  const orderedMappings = [...body.mappings].sort(
+    (left, right) => (importPriority[left.tableName || ''] ?? 99) - (importPriority[right.tableName || ''] ?? 99),
+  )
+
+  for (const mapping of orderedMappings) {
     if (!mapping.sheetName || !body.selectedSheets.includes(mapping.sheetName)) continue
     if (!mapping.tableName || !body.selectedTables.includes(mapping.tableName)) continue
 
