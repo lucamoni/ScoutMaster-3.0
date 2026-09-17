@@ -28,6 +28,7 @@ class ImportRequestError extends Error {
 }
 
 const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese', 'eventi']
+const MONTHS = ['ottobre', 'novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
 
 function extractSpreadsheetId(raw: string) {
   const trimmed = raw.trim()
