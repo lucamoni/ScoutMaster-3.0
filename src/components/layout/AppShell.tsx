@@ -11,7 +11,7 @@ import {
   FileSpreadsheet, 
   Download, 
   Bell, 
-  Lock, 
+
   Settings, 
   Menu, 
   X, 
