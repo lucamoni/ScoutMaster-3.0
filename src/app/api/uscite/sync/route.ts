@@ -13,7 +13,8 @@ export async function POST(request: Request) {
       statoPresenza, 
       riscosso, 
       metodoPagamento, 
-      quotaDovuta 
+      quotaDovuta,
+      aggiornaMetodoEvento
     } = body as {
       ragazziIds: string[]
       eventoId: string
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
       riscosso?: boolean
       metodoPagamento?: string
       quotaDovuta?: number | null
+      aggiornaMetodoEvento?: boolean
     }
 
     if (!eventoId || !ragazziIds || !Array.isArray(ragazziIds) || ragazziIds.length === 0) {
@@ -203,7 +205,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (metodoPagamento !== undefined && metodoPagamento !== null) {
+    if (metodoPagamento !== undefined && metodoPagamento !== null && aggiornaMetodoEvento !== false) {
       const { error: methodError } = await supabase
         .from('eventi')
         .update({ metodo_pagamento: targetEventoMetodo })
@@ -214,7 +216,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       updatedPartecipazioni: finalParts,
-      updatedEventoMetodo: targetEventoMetodo,
+      updatedEventoMetodo: aggiornaMetodoEvento === false ? null : targetEventoMetodo,
       count: finalParts.length
     })
 
