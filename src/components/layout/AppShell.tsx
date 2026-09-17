@@ -23,24 +23,17 @@ import {
   Compass,
   Landmark,
   Banknote,
-  Sparkles,
+  ScanLine,
   FileText,
   FileCheck,
   FolderArchive,
   Globe,
   CheckCircle2,
-  Zap
 } from 'lucide-react'
 import { CassaBot } from '@/components/CassaBot'
 import { cn } from '@/lib/utils'
 import { createBrowserClient } from '@supabase/ssr'
 import ScoutMasterLogo from '@/components/layout/Logo'
-
-interface SaldiState {
-  cassa: number
-  banca: number
-  totale: number
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
