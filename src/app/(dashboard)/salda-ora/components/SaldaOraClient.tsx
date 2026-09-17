@@ -141,7 +141,12 @@ export default function SaldaOraClient({
 
   const router = useRouter()
 
-  const syncEventoPagamento = async (ragazzoId: string, eventoId: string, riscosso: boolean) => {
+  const syncEventoPagamento = async (
+    ragazzoId: string,
+    eventoId: string,
+    riscosso: boolean,
+    metodo?: 'Contanti' | 'Bonifico'
+  ) => {
     const response = await fetch('/api/uscite/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -149,6 +154,10 @@ export default function SaldaOraClient({
         ragazziIds: [ragazzoId],
         eventoId,
         riscosso,
+        ...(metodo ? { metodoPagamento: metodo } : {}),
+        // Il metodo scelto per questo ragazzo non deve cambiare il metodo
+        // predefinito dell'evento per tutte le altre partecipazioni.
+        aggiornaMetodoEvento: false,
       }),
     })
 
@@ -171,7 +180,7 @@ export default function SaldaOraClient({
     quotaId: string,
     month: QuotaMonth,
     paid: boolean,
-    metodo: 'Contanti' | 'Bonifico' = 'Contanti'
+    metodo?: 'Contanti' | 'Bonifico'
   ) => {
     if (!paid) {
       const { error } = await supabase
@@ -185,17 +194,28 @@ export default function SaldaOraClient({
 
     const { data: existing, error: lookupError } = await supabase
       .from('registro_spese')
-      .select('id')
+      .select('id, metodo')
       .eq('quota_mensile_id', quotaId)
       .eq('riferimento_quota', month)
       .maybeSingle()
 
     if (lookupError) throw lookupError
-    if (existing) return
+
+    const effectiveMetodo = metodo ?? existing?.metodo ?? 'Contanti'
+    if (existing) {
+      if (metodo && existing.metodo !== effectiveMetodo) {
+        const { error } = await supabase
+          .from('registro_spese')
+          .update({ metodo: effectiveMetodo })
+          .eq('id', existing.id)
+        if (error) throw error
+      }
+      return
+    }
 
     const { error } = await supabase.from('registro_spese').insert({
       importo: quotaMensileNum,
-      metodo,
+      metodo: effectiveMetodo,
       voce_spesa: 'Quota Mensile',
       tipo_movimento: 'ENTRATA',
       data: new Date().toISOString().split('T')[0],
@@ -208,7 +228,11 @@ export default function SaldaOraClient({
     if (error) throw error
   }
 
-  const syncCensimentoMovement = async (ragazzo: Ragazzo, paid: boolean, metodo: 'Contanti' | 'Bonifico' = 'Contanti') => {
+  const syncCensimentoMovement = async (
+    ragazzo: Ragazzo,
+    paid: boolean,
+    metodo?: 'Contanti' | 'Bonifico'
+  ) => {
     const accountingYear = normalizeAnnoScout(currentYear)
     const { data: existing, error: lookupError } = await supabase
       .from('registro_spese')
@@ -229,9 +253,10 @@ export default function SaldaOraClient({
       return
     }
 
+    const effectiveMetodo = metodo ?? existing?.metodo ?? 'Contanti'
     const movement = {
       importo: Number(ragazzo.importo_censimento ?? quotaCensimentoNum),
-      metodo: existing?.metodo || metodo,
+      metodo: effectiveMetodo,
       voce_spesa: 'Quota Censimento',
       tipo_movimento: 'ENTRATA',
       data: new Date().toISOString().split('T')[0],
@@ -417,7 +442,7 @@ export default function SaldaOraClient({
         const eventoId = participation.evento_id
         if (!eventoId) continue
         const isPaid = !modalSelections.eventi.includes(eventoId)
-        await syncEventoPagamento(r.id, eventoId, isPaid)
+        await syncEventoPagamento(r.id, eventoId, isPaid, modalSelections.metodo)
       }
 
       router.refresh()
