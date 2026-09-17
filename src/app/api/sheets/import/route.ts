@@ -52,7 +52,7 @@ async function fetchSheetRows(spreadsheetId: string, sheetName: string) {
       const safeTitle = sheetName.replace(/'/g, "''")
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: \`'${safeTitle}'!A1:AZ2001\`,
+        range: `'${safeTitle}'!A1:AZ2001`,
       })
       if (response.data.values?.length) {
         return response.data.values.map(row => row.map(cell => String(cell ?? '')))
