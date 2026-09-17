@@ -231,7 +231,11 @@ BEGIN
     '-'
   );
 
-  census_amount := coalesce(\n    NEW.importo_censimento,\n    nullif((SELECT valore FROM public.impostazioni WHERE chiave = 'quota_censimento_standard'), '')::numeric,\n    45\n  );
+  census_amount := coalesce(
+    NEW.importo_censimento,
+    nullif((SELECT valore FROM public.impostazioni WHERE chiave = 'quota_censimento_standard'), '')::numeric,
+    45
+  );
 
   SELECT id, metodo
   INTO existing_id, existing_method
