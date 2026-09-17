@@ -5,6 +5,108 @@ import { Database } from '@/types/database.types'
 import { fetchPublicSheetValues, fetchPublicSheetTitles } from '@/lib/googleSheetsPublic'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 
+type KnownSheetMapping = {
+  sheetName: string
+  tableName: string
+  columnsMap: Record<string, string>
+}
+
+function normalizeSheetHeader(value: unknown) {
+  return String(value ?? '').trim().toLowerCase().replace(/\\s+/g, ' ')
+}
+
+function columnKey(index: number) {
+  return `__col_${index}`
+}
+
+function buildKnownSheetMapping(sheetName: string, rawHeaders: string[]): KnownSheetMapping | null {
+  const normalizedName = sheetName.trim().toUpperCase()
+  const headers = rawHeaders.map(header => String(header ?? '').trim())
+  const normalizedHeaders = headers.map(normalizeSheetHeader)
+  const columnsMap: Record<string, string> = {}
+  const nameIndex = normalizedHeaders.findIndex(header => header === 'nome' || header.includes('nome ragazzo') || header.includes('nome_cognome'))
+
+  if (nameIndex >= 0) columnsMap[columnKey(nameIndex)] = 'nome_cognome_ragazzo'
+
+  if (normalizedName.includes('QUOTE')) {
+    for (const month of ['ottobre', 'novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']) {
+      const index = normalizedHeaders.findIndex(header => header === month)
+      if (index >= 0) columnsMap[columnKey(index)] = month
+    }
+    return { sheetName, tableName: 'quote_mensili', columnsMap }
+  }
+
+  if (normalizedName === 'CENSIMENTO') {
+    const censusIndex = normalizedHeaders.findIndex(header => header.includes('censimento'))
+    const receiptIndex = normalizedHeaders.findIndex(header => header.includes('ricevuta'))
+    if (censusIndex >= 0) columnsMap[columnKey(censusIndex)] = 'quota_censimento'
+    if (receiptIndex >= 0) columnsMap[columnKey(receiptIndex)] = 'ricevuta_censimento'
+    return { sheetName, tableName: 'ragazzi', columnsMap }
+  }
+
+  if (normalizedName.includes('PRIVACY')) {
+    const targets: Array<[string, string]> = [
+      ['foglio privacy', 'foglio_privacy_firmato'],
+      ['partecipazione ci', 'partecipazione_ci'],
+      ['scheda medica ci', 'scheda_medica_ci'],
+      ['partecipazione ce', 'partecipazione_ce'],
+      ['scheda medica ce', 'scheda_medica_ce'],
+    ]
+    for (const [headerPart, target] of targets) {
+      const index = normalizedHeaders.findIndex(header => header.includes(headerPart))
+      if (index >= 0) columnsMap[columnKey(index)] = target
+    }
+    return { sheetName, tableName: 'ragazzi', columnsMap }
+  }
+
+  if (normalizedName === 'CI' || normalizedName === 'CE') {
+    const target = normalizedName === 'CI' ? 'partecipazione_ci' : 'partecipazione_ce'
+    const index = normalizedHeaders.findIndex(header => header.includes('saldo'))
+    if (index >= 0) columnsMap[columnKey(index)] = target
+    return { sheetName, tableName: 'ragazzi', columnsMap }
+  }
+
+  if (normalizedName === 'USCITE' || normalizedName.includes('CON.CA')) {
+    for (let index = Math.max(nameIndex + 1, 2); index < headers.length; index += 1) {
+      const eventName = headers[index].trim()
+      if (!eventName || ['saldo totale', 'quote versate'].includes(normalizeSheetHeader(eventName))) continue
+      const eventTarget = `evento:${eventName}`
+      columnsMap[columnKey(index)] = eventTarget
+      if (normalizeSheetHeader(headers[index + 1]).includes('quota')) {
+        columnsMap[columnKey(index + 1)] = `quota_evento:${eventName}`
+      }
+      if (normalizeSheetHeader(headers[index + 2]).includes('riscosso')) {
+        columnsMap[columnKey(index + 2)] = `riscosso_evento:${eventName}`
+      }
+      index += 2
+    }
+    return { sheetName, tableName: 'partecipazioni_eventi', columnsMap }
+  }
+
+  if (normalizedName === 'SPESE') {
+    const targetByHeader: Array<[string, string]> = [
+      ['voce di spesa', 'voce_spesa'],
+      ['descrizione', 'voce_spesa'],
+      ['causale', 'voce_spesa'],
+      ['data', 'data'],
+      ['importo', 'importo'],
+      ['momento anno', 'momento_anno'],
+      ['carta', 'metodo'],
+      ['metodo', 'metodo'],
+      ['ricevuta', 'ricevuta_presente'],
+      ['note', 'note'],
+      ['tipo movimento', 'tipo_movimento'],
+    ]
+    for (const [headerPart, target] of targetByHeader) {
+      const index = normalizedHeaders.findIndex(header => header.includes(headerPart))
+      if (index >= 0) columnsMap[columnKey(index)] = target
+    }
+    return { sheetName, tableName: 'registro_spese', columnsMap }
+  }
+
+  return null
+}
+
 async function getActiveGroqChatModels(apiKey: string): Promise<string[]> {
   try {
     await requireRole(['admin', 'capo', 'tesoriere'])
@@ -139,14 +241,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Nessun dato o foglio leggibile trovato nel Google Spreadsheet.' }, { status: 400 })
     }
 
-    // Compattazione dei dati per non eccedere il contesto dell'LLM
+    // Mantieni intatte le intestazioni: l'importazione deve poterle ritrovare per indice.
+    // Accorciamo solo i valori di esempio, non la prima riga.
     const compactSheetsData: Record<string, string[][]> = {}
     for (const [sheetTitle, rows] of Object.entries(rawSheetsData)) {
       const slicedRows = rows.slice(0, 3)
-      compactSheetsData[sheetTitle] = slicedRows.map(row => 
-        (row || []).slice(0, 25).map(cell => {
-          const str = String(cell || '').trim()
-          return str.length > 30 ? str.substring(0, 30) + '...' : str
+      compactSheetsData[sheetTitle] = slicedRows.map((row, rowIndex) =>
+        (row || []).slice(0, 50).map(cell => {
+          const value = String(cell || '').trim()
+          return rowIndex === 0 || value.length <= 80 ? value : value.substring(0, 80) + '...'
         })
       )
     }
@@ -320,6 +423,18 @@ REGOLE TASSATIVE E MANDATORIE DI MAPPATURA:
     const mappingResult = JSON.parse(text)
     if (!mappingResult.mappings || !Array.isArray(mappingResult.mappings)) {
       mappingResult.mappings = []
+    }
+
+    // Per i fogli scout standard usiamo una mappatura deterministica.
+    // Evita che l'AI confonda tab riepilogative o colonne duplicate (QUOTA/RISCOSSO).
+    for (const [sheetTitle, rows] of Object.entries(rawSheetsData)) {
+      const headers = ((rows[0] || []) as unknown[]).map(value => String(value ?? ''))
+      const knownMapping = buildKnownSheetMapping(sheetTitle, headers)
+      if (!knownMapping) continue
+      mappingResult.mappings = mappingResult.mappings.filter(
+        (mapping: { sheetName?: string }) => mapping?.sheetName !== sheetTitle,
+      )
+      mappingResult.mappings.push(knownMapping)
     }
 
     // GARANZIA SPESE: Se esiste un foglio Spese/SPESE/Cassa, assicurati che sia mappato su registro_spese

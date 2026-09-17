@@ -46,9 +46,19 @@ export async function fetchPublicSheetValues(spreadsheetId: string, sheetName?: 
   return rows
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim()
+}
+
 export async function fetchPublicSheetTitles(spreadsheetId: string): Promise<string[]> {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?usp=sharing`
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -56,18 +66,22 @@ export async function fetchPublicSheetTitles(spreadsheetId: string): Promise<str
     })
     if (res.ok) {
       const html = await res.text()
-      const matches = html.match(/"name":\s*"([^"]+)"/g)
-      if (matches) {
-        const titles = matches
-          .map(m => m.replace(/"name":\s*"/, '').replace(/"$/, ''))
-          .filter(t => t && t.length < 50 && !['sheet', 'spreadsheet', 'grid'].includes(t.toLowerCase()))
-        if (titles.length > 0) {
-          return Array.from(new Set(titles))
-        }
+      const tabMatches = Array.from(html.matchAll(/docs-sheet-tab-caption[^>]*>([\\s\\S]*?)<\\/div>/gi))
+      const tabTitles = tabMatches
+        .map(match => decodeHtmlEntities(match[1].replace(/<[^>]+>/g, '')))
+        .filter(title => title && title.length < 100)
+      if (tabTitles.length > 0) return Array.from(new Set(tabTitles))
+
+      const jsonMatches = html.match(/"name":\\s*"([^"]+)"/g)
+      if (jsonMatches) {
+        const titles = jsonMatches
+          .map(match => decodeHtmlEntities(match.replace(/"name":\\s*"/, '').replace(/"$/, '')))
+          .filter(title => title && title.length < 100)
+        if (titles.length > 0) return Array.from(new Set(titles))
       }
     }
   } catch (err) {
     console.warn('Errore lettura titoli fogli pubblici:', err)
   }
-  return ['Foglio1', 'Cassa', 'Anagrafica', 'Quote', 'Uscite']
+  return ['Foglio1']
 }
