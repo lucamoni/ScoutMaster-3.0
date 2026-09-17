@@ -198,12 +198,20 @@ export default function SheetsSettings({
 
       let totalInserted = 0
       let totalUpdated = 0
-      data.results?.forEach((r: { sheetName: string, tableName: string, inserted: number, updated: number, skipped: number }) => {
-        totalInserted += r.inserted
-        totalUpdated += r.updated
+      let totalSkipped = 0
+      const warnings: string[] = []
+      data.results?.forEach((r: { sheetName: string, tableName: string, inserted: number, updated: number, skipped: number, warning?: string }) => {
+        totalInserted += r.inserted || 0
+        totalUpdated += r.updated || 0
+        totalSkipped += r.skipped || 0
+        if (r.warning) warnings.push(`${r.tableName}: ${r.warning}`)
       })
 
-      toast.success(`Importazione completata con successo! Inseriti ${totalInserted} record e aggiornati ${totalUpdated}.`, { id: 'ai-import', duration: 10000 })
+      if (totalInserted === 0 && totalUpdated === 0) {
+        toast.warning(`Nessun record importato. Righe saltate: ${totalSkipped}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`, { id: 'ai-import', duration: 12000 })
+      } else {
+        toast.success(`Importazione completata! Inseriti ${totalInserted}, aggiornati ${totalUpdated}, saltati ${totalSkipped}.`, { id: 'ai-import', duration: 10000 })
+      }
     } catch (error: unknown) {
       const err = error as Error
       toast.error(err.message, { id: 'ai-import' })
