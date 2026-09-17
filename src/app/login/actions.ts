@@ -5,6 +5,14 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 export async function login(formData: FormData) {
+  const hasSupabaseConfig =
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+
+  if (!hasSupabaseConfig) {
+    redirect('/login?error=' + encodeURIComponent('Configurazione Supabase mancante su Vercel.'))
+  }
+
   const supabase = await createClient()
 
   const data = {
