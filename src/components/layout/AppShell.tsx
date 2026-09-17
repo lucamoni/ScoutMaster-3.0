@@ -109,9 +109,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     {
       groupLabel: 'AMMINISTRAZIONE',
       links: [
-        { name: '⚡ Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
+        { name: 'Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
-        { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: Sparkles },
+        { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: ScanLine },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
         { name: 'Censimento', href: '/censimento', icon: ShieldCheck },
         { name: 'Panoramica Mancanti', href: '/panoramica-mancanti', icon: AlertTriangle },
@@ -187,7 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       key={link.href}
                       href={link.href}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative",
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative",
                         isActive 
                           ? "bg-agesci-blue-light text-scout-gold font-semibold shadow-xs border-l-4 border-scout-gold" 
                           : "text-slate-200 hover:bg-agesci-blue-light/70 hover:text-white"
@@ -217,7 +217,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {!collapsed && (
           <div className="p-3 border-t border-agesci-blue-light/60 bg-agesci-blue text-xs text-slate-300/70 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-scout-gold" />
+              <ShieldCheck className="h-3.5 w-3.5 text-scout-gold" />
               <span>Stile AGESCI</span>
             </span>
             <span className="text-[10px] bg-agesci-blue-light px-2 py-0.5 rounded-full text-slate-200 font-semibold">
@@ -230,12 +230,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header Superiore Sticky */}
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/95 backdrop-blur px-4 md:px-6 shadow-2xs">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white px-4 md:px-6 shadow-2xs">
           {/* Mobile Left Logo & Toggle */}
           <div className="flex items-center gap-3 md:hidden">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 touch-min flex items-center justify-center"
+              className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 touch-min flex items-center justify-center"
               aria-label="Apri Menu"
             >
               <Menu className="h-6 w-6 text-agesci-blue" />
@@ -251,7 +251,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <select
                 value={annoScout}
                 onChange={(e) => setAnnoScout(e.target.value)}
-                className="appearance-none bg-slate-100 hover:bg-slate-200/80 text-agesci-blue font-semibold text-xs md:text-sm py-1.5 pl-3 pr-8 rounded-full border border-slate-200 transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-agesci-blue"
+                className="appearance-none bg-slate-100 hover:bg-slate-200/80 text-agesci-blue font-semibold text-xs md:text-sm py-1.5 pl-3 pr-8 rounded-lg border border-slate-200 transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-agesci-blue"
               >
                 <option value="2025/2026">Anno Scout 2025/2026</option>
                 <option value="2024/2025">Anno Scout 2024/2025</option>
@@ -263,7 +263,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Indicatori Cassa Live (Mini-Widget con Icone Premium) */}
           <div className="hidden sm:flex items-center gap-3">
-            <Link href="/cassa" className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/90 px-3 py-1.5 rounded-full transition-all text-xs shadow-2xs group">
+            <Link href="/cassa" className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/90 px-3 py-1.5 rounded-lg transition-colors text-xs shadow-2xs group">
               <Banknote className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
               <span className="font-medium text-slate-600">Cassa:</span>
               <span className="font-bold tabular-nums text-emerald-900">{formatCurrency(saldi.cassa)}</span>
@@ -304,11 +304,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="p-4 bg-agesci-blue-light/50 border-b border-agesci-blue-light space-y-2">
               <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Saldi Live</div>
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-emerald-950/60 border border-emerald-500/30 rounded-xl p-2.5 flex flex-col">
+                <div className="bg-emerald-950/60 border border-emerald-500/30 rounded-lg p-2.5 flex flex-col">
                   <span className="text-[10px] text-emerald-300 font-medium">Cassa Contanti</span>
                   <span className="text-sm font-bold text-emerald-200 tabular-nums">{formatCurrency(saldi.cassa)}</span>
                 </div>
-                <div className="bg-sky-950/60 border border-sky-500/30 rounded-xl p-2.5 flex flex-col">
+                <div className="bg-sky-950/60 border border-sky-500/30 rounded-lg p-2.5 flex flex-col">
                   <span className="text-[10px] text-sky-300 font-medium">Banca / POS</span>
                   <span className="text-sm font-bold text-sky-200 tabular-nums">{formatCurrency(saldi.banca)}</span>
                 </div>
@@ -332,7 +332,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           href={link.href}
                           onClick={() => setMobileMenuOpen(false)}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-min",
+                            "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors touch-min",
                             isActive 
                               ? "bg-agesci-blue-light text-scout-gold font-semibold border-l-4 border-scout-gold" 
                               : "text-slate-200 hover:bg-agesci-blue-light/60 hover:text-white"
@@ -352,7 +352,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Mobile Bottom Navigation Bar (Fixed 4 Quick Buttons) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 border-t border-slate-200 bg-white md:hidden shadow-lg">
         <Link
           href="/uscite"
           className={cn(
