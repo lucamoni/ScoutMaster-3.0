@@ -67,14 +67,14 @@ export default function SheetsSettings({
   initialSheetName: string,
   initialSheetNameSpese: string
 }) {
-  const [spreadsheetId, setSpreadsheetId] = useState(initialSpreadsheetId)
-
-  // Estrae l'ID pulito da un URL Google Sheets oppure restituisce la stringa com'è se già un ID
+  // Estrae sempre l'ID pulito, anche quando nelle impostazioni è stato salvato il link completo.
   const extractSheetId = (raw: string): string => {
     const trimmed = raw.trim()
-    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
     return match ? match[1] : trimmed
   }
+
+  const [spreadsheetId, setSpreadsheetId] = useState(() => extractSheetId(initialSpreadsheetId))
   const [sheetName] = useState(initialSheetName)
   const [sheetNameSpese] = useState(initialSheetNameSpese)
   const [isSaving, setIsSaving] = useState(false)
@@ -186,8 +186,8 @@ export default function SheetsSettings({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          mappings: aiMappings, 
-          spreadsheetId,
+          mappings: aiMappings || [],
+          spreadsheetId: extractSheetId(spreadsheetId),
           selectedTables,
           selectedSheets,
           annoScout
