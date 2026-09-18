@@ -27,27 +27,13 @@ import {
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { getScoutMonthsUpTo } from '@/lib/utils/debts'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Evento = Database['public']['Tables']['eventi']['Row']
 type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row']
 type Quota = Database['public']['Tables']['quote_mensili']['Row']
 type Pattuglia = Database['public']['Tables']['pattuglie']['Row']
-
-const MONTH_ORDER = ['novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
-
-const getCurrentScoutMonthIndex = () => {
-  const m = new Date().getMonth()
-  if (m === 10) return 0
-  if (m === 11) return 1
-  if (m === 0) return 2
-  if (m === 1) return 3
-  if (m === 2) return 4
-  if (m === 3) return 5
-  if (m === 4) return 6
-  if (m === 5) return 7
-  return 7
-}
 
 export function PanoramicaClient({
   initialRagazzi,
@@ -85,9 +71,15 @@ export function PanoramicaClient({
     const channel = supabase
       .channel('panoramica_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ragazzi' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
+        if (payload.eventType === 'INSERT') {
+          const inserted = payload.new as Ragazzo
+          setRagazzi(prev => prev.some(r => r.id === inserted.id) ? prev : [...prev, inserted])
+        } else if (payload.eventType === 'UPDATE') {
           const updated = payload.new as Ragazzo
           setRagazzi(prev => prev.map(r => r.id === updated.id ? updated : r))
+        } else if (payload.eventType === 'DELETE') {
+          const deleted = payload.old as Ragazzo
+          setRagazzi(prev => prev.filter(r => r.id !== deleted.id))
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quote_mensili' }, (payload) => {
@@ -97,6 +89,9 @@ export function PanoramicaClient({
             const filtered = prev.filter(q => q.id !== updated.id)
             return [...filtered, updated]
           })
+        } else if (payload.eventType === 'DELETE') {
+          const deleted = payload.old as Quota
+          setQuoteState(prev => prev.filter(q => q.id !== deleted.id))
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partecipazioni_eventi' }, (payload) => {
@@ -106,6 +101,9 @@ export function PanoramicaClient({
             const filtered = prev.filter(p => p.id !== updated.id)
             return [...filtered, updated]
           })
+        } else if (payload.eventType === 'DELETE') {
+          const deleted = payload.old as Partecipazione
+          setPartecipazioniState(prev => prev.filter(p => p.id !== deleted.id))
         }
       })
       .subscribe()
@@ -120,7 +118,7 @@ export function PanoramicaClient({
 
   const quotaMensileNum = Number(quotaMensileStandard) || 0
   const quotaCensimentoNum = Number(initialQuotaCensimento) || 0
-  const elapsedMonths = MONTH_ORDER.slice(0, getCurrentScoutMonthIndex() + 1)
+  const elapsedMonths = getScoutMonthsUpTo()
 
   const toggleCensimento = (ragazzoId: string) => {
     setSelections(prev => {
