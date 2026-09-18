@@ -43,45 +43,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [saldi, setSaldi] = useState({ cassa: 0, banca: 0 })
 
   useEffect(() => {
+    const fetchSaldi = async () => {
+      try {
+        const response = await fetch('/api/cassa/summary', { cache: 'no-store' })
+        if (!response.ok) return
+
+        const summary = await response.json()
+        if (!summary.success) return
+
+        setSaldi({
+          cassa: Number(summary.cassa) || 0,
+          banca: Number(summary.banca) || 0,
+        })
+        if (summary.annoScout) setAnnoScout(summary.annoScout)
+      } catch (error) {
+        console.error('[AppShell] Impossibile aggiornare i saldi:', error)
+      }
+    }
+
+    void fetchSaldi()
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
     if (!supabaseUrl || !supabaseAnonKey) return
 
     const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
-
-    const fetchSaldi = async () => {
-      const { data: spese } = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo')
-      if (!spese) return
-
-      let cassa = 0
-      let banca = 0
-
-      spese.forEach((s) => {
-        const isEntrata = s.tipo_movimento === 'ENTRATA'
-        const metodo = (s.metodo || '').trim().toUpperCase()
-        const isBanca = metodo.includes('BONIF') || metodo.includes('BANC') || metodo.includes('CART') || metodo.includes('POS')
-        const val = Number(s.importo) || 0
-
-        if (!isBanca) {
-          if (isEntrata) cassa += val
-          else cassa -= val
-        } else {
-          if (isEntrata) banca += val
-          else banca -= val
-        }
-      })
-
-      setSaldi({ cassa, banca })
+    const refreshSaldi = () => {
+      void fetchSaldi()
     }
-
-    fetchSaldi()
 
     const channel = supabase
       .channel('appshell_cassa_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'registro_spese' }, () => {
-        fetchSaldi()
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registro_spese' }, refreshSaldi)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'impostazioni' }, refreshSaldi)
       .subscribe()
 
     return () => {

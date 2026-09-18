@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
+import { resolveInitialBalances } from '@/lib/utils/cassa'
 import CassaClient from './components/CassaClient'
 
 export const dynamic = 'force-dynamic'
@@ -17,30 +18,27 @@ export default async function CassaPage() {
   const [startYear, endYear] = currentYear.split('-').map(Number)
   const startDate = `${startYear}-10-01`
   const endDate = `${endYear}-09-30`
-  const legacyYear = currentYear.replace('-', '/')
 
-  const { data: spese, error } = await supabase
-    .from('registro_spese')
-    .select('*')
-    .gte('data', startDate)
-    .lte('data', endDate)
-    .order('data', { ascending: false })
+  const [{ data: spese, error }, { data: saldiMovimenti, error: saldiError }] = await Promise.all([
+    supabase
+      .from('registro_spese')
+      .select('*')
+      .gte('data', startDate)
+      .lte('data', endDate)
+      .order('data', { ascending: false }),
+    supabase
+      .from('registro_spese')
+      .select('importo, tipo_movimento, metodo, data'),
+  ])
 
-  if (error) {
+  if (error || saldiError) {
     return <div>Errore nel caricamento della prima nota.</div>
   }
 
-  const initialCash = Number(
-    settings.get('saldo_iniziale_contanti') ||
-    settings.get(`saldo_iniziale_cassa_${currentYear}`) ||
-    settings.get(`saldo_iniziale_cassa_${legacyYear}`) ||
-    0
-  )
-  const initialBank = Number(
-    settings.get('saldo_iniziale_banca') ||
-    settings.get(`saldo_iniziale_banca_${currentYear}`) ||
-    settings.get(`saldo_iniziale_banca_${legacyYear}`) ||
-    0
+  const initialBalances = resolveInitialBalances(
+    settings,
+    currentYear,
+    saldiMovimenti || []
   )
 
   return (
@@ -54,7 +52,7 @@ export default async function CassaPage() {
       <CassaClient
         initialSpese={spese || []}
         initialCategorie={categorie || []}
-        initialBalances={{ contanti: initialCash, banca: initialBank }}
+        initialBalances={initialBalances}
       />
     </div>
   )
