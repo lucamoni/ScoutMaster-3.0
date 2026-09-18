@@ -490,9 +490,10 @@ async function importCampi(
       inserted += 1
     }
 
+    const participationUpdate = { [participationFlag]: true } as Database['public']['Tables']['ragazzi']['Update']
     const { error: flagError } = await supabase
       .from('ragazzi')
-      .update({ [participationFlag]: true })
+      .update(participationUpdate)
       .eq('id', person.id)
     if (flagError) throw flagError
   }
