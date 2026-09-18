@@ -91,7 +91,7 @@ function buildKnownSheetMapping(sheetName: string, rawHeaders: string[]): KnownS
       ['data', 'data'],
       ['importo', 'importo'],
       ['momento anno', 'momento_anno'],
-      ['carta', 'metodo'],
+      ['carta', 'carta'],
       ['metodo', 'metodo'],
       ['ricevuta', 'ricevuta_presente'],
       ['note', 'note'],

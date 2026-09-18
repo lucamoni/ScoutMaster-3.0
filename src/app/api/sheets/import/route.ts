@@ -359,6 +359,20 @@ async function importPartecipazioni(
       if (!event) event = (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
 
       const amount = parseSheetAmount(reader(`quota_evento:${eventName}`) || reader('quota_dovuta')) ?? event.quota_standard
+
+      // L'evento deve avere la stessa quota mostrata nel foglio: così intestazioni,
+      // presenze, debiti e registro cassa usano un'unica fonte.
+      if (amount !== null && Number(event.quota_standard) !== Number(amount)) {
+        const { error: eventUpdateError } = await supabase
+          .from('eventi')
+          .update({ quota_standard: amount })
+          .eq('id', event.id)
+        if (eventUpdateError) throw eventUpdateError
+        event = { ...event, quota_standard: amount }
+        const eventIndex = events.findIndex(item => item.id === event.id)
+        if (eventIndex >= 0) events[eventIndex] = event
+      }
+
       const paidValue = reader(`riscosso_evento:${eventName}`) || reader('riscosso')
       const payload: Database['public']['Tables']['partecipazioni_eventi']['Insert'] = {
         ragazzo_id: person.id,
@@ -426,7 +440,7 @@ async function importRegistroSpese(
       data: date,
       voce_spesa: voce,
       momento_anno: momentoAnno,
-      metodo: toCanonicalMetodo(reader('metodo')),
+      metodo: toCanonicalMetodo(reader('metodo') || (readBoolean(reader('carta')) ? 'Carta' : 'Contanti')),
       tipo_movimento: normalizeKey(reader('tipo_movimento')) === 'entrata' ? 'ENTRATA' : 'USCITA',
       ricevuta_presente: readBoolean(reader('ricevuta_presente')),
       note: [marker, sourceNote, 'Importazione da Google Sheets'].filter(Boolean).join(' '),
