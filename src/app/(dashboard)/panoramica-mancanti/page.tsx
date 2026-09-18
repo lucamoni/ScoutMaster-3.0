@@ -7,10 +7,6 @@ export const dynamic = 'force-dynamic'
 export default async function PanoramicaMancantiPage() {
   const supabase = await createClient()
   
-  const defaultCurrentYear = new Date().getMonth() >= 8 
-    ? `${new Date().getFullYear()}-${new Date().getFullYear() + 1}` 
-    : `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`
-
   const [
     { data: ragazzi },
     { data: eventi },
