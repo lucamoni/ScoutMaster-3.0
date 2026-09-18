@@ -98,7 +98,7 @@ function createReader(headers: string[], row: string[], columnsMap: Record<strin
   return (target: string) => {
     const entry = entries.find(([, mapped]) => normalizeKey(mapped) === normalizeKey(target))
     if (!entry) return ''
-    const explicitColumn = entry[0].match(/^__col_(\\d+)$/)
+    const explicitColumn = entry[0].match(/^__col_(\d+)$/)
     const position = explicitColumn ? Number(explicitColumn[1]) : headers.indexOf(entry[0])
     return position >= 0 ? row[position] || '' : ''
   }
@@ -171,16 +171,17 @@ async function upsertPerson(
   }
   if (!hasMappedTarget(columnsMap, 'attivo')) values.attivo = true
 
+  const importPayload = values as Database['public']['Tables']['ragazzi']['Insert']
   const existing = findPerson(people, `${nome} ${cognome}`)
   if (existing) {
-    const { error } = await supabase.from('ragazzi').update(payload).eq('id', existing.id)
+    const { error } = await supabase.from('ragazzi').update(importPayload).eq('id', existing.id)
     if (error) throw error
     existing.nome = nome
     existing.cognome = cognome
     return 'updated' as const
   }
 
-  const { data, error } = await supabase.from('ragazzi').insert(payload).select('id, nome, cognome').single()
+  const { data, error } = await supabase.from('ragazzi').insert(importPayload).select('id, nome, cognome').single()
   if (error) throw error
   if (data) people.push(data as Person)
   return 'inserted' as const
@@ -441,7 +442,7 @@ async function importRegistroSpese(
       data: date,
       voce_spesa: voce,
       momento_anno: momentoAnno,
-      metodo: toCanonicalMetodo(reader('metodo') || (readBoolean(reader('carta')) ? 'Carta' : 'Contanti')),
+      metodo: toCanonicalMetodo(reader('metodo') || reader('carta') || (readBoolean(reader('carta')) ? 'Carta' : 'Contanti')),
       tipo_movimento: normalizeKey(reader('tipo_movimento')) === 'entrata' ? 'ENTRATA' : 'USCITA',
       ricevuta_presente: readBoolean(reader('ricevuta_presente')),
       note: [marker, sourceNote, 'Importazione da Google Sheets'].filter(Boolean).join(' '),
