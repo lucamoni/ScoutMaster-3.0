@@ -355,8 +355,8 @@ async function importPartecipazioni(
       const rawPresence = reader(target)
       if (!rawPresence) continue
       const eventName = target.slice('evento:'.length).trim()
-      let event = findEvent(events, eventName)
-      if (!event) event = (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
+      const existingEvent = findEvent(events, eventName)
+      const event = existingEvent || (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
       if (!event) throw new Error(`Impossibile creare l'evento importato: ${eventName}`)
 
       const amount = parseSheetAmount(reader(`quota_evento:${eventName}`) || reader('quota_dovuta')) ?? event.quota_standard
@@ -369,9 +369,9 @@ async function importPartecipazioni(
           .update({ quota_standard: amount })
           .eq('id', event.id)
         if (eventUpdateError) throw eventUpdateError
-        event = { ...event, quota_standard: amount }
+        const updatedEvent = { ...event, quota_standard: amount }
         const eventIndex = events.findIndex(item => item.id === event.id)
-        if (eventIndex >= 0) events[eventIndex] = event
+        if (eventIndex >= 0) events[eventIndex] = updatedEvent
       }
 
       const paidValue = reader(`riscosso_evento:${eventName}`) || reader('riscosso')
