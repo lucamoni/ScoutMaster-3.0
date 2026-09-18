@@ -357,6 +357,7 @@ async function importPartecipazioni(
       const eventName = target.slice('evento:'.length).trim()
       let event = findEvent(events, eventName)
       if (!event) event = (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
+      if (!event) throw new Error(`Impossibile creare l'evento importato: ${eventName}`)
 
       const amount = parseSheetAmount(reader(`quota_evento:${eventName}`) || reader('quota_dovuta')) ?? event.quota_standard
 
