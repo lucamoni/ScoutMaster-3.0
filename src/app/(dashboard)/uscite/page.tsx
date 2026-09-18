@@ -6,10 +6,14 @@ export const dynamic = 'force-dynamic'
 export default async function UscitePage() {
   const supabase = await createClient()
   
-  const { data: eventi } = await supabase
+  const { data: eventiTutti } = await supabase
     .from('eventi')
     .select('*')
     .order('data_inizio', { ascending: false })
+
+  const eventi = (eventiTutti || []).filter(evento =>
+    !['CAMPO_INVERNALE', 'CAMPO_ESTIVO'].includes(String(evento.tipo_evento || '').toUpperCase())
+  )
 
   const { data: ragazzi } = await supabase
     .from('ragazzi')

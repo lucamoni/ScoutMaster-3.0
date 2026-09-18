@@ -60,10 +60,37 @@ function buildKnownSheetMapping(sheetName: string, rawHeaders: string[]): KnownS
   }
 
   if (normalizedName === 'CI' || normalizedName === 'CE') {
-    const target = normalizedName === 'CI' ? 'partecipazione_ci' : 'partecipazione_ce'
-    const index = normalizedHeaders.findIndex(header => header.includes('saldo'))
-    if (index >= 0) columnsMap[columnKey(index)] = target
-    return { sheetName, tableName: 'ragazzi', columnsMap }
+    const nomeIndex = normalizedHeaders.findIndex(header => header === 'nome' || header.startsWith('nome '))
+    const cognomeIndex = normalizedHeaders.findIndex(header => header === 'cognome' || header.startsWith('cognome '))
+    const fullNameIndex = normalizedHeaders.findIndex(header =>
+      header.includes('nome e cognome') ||
+      header.includes('nome cognome') ||
+      header.includes('nome_cognome') ||
+      header.includes('ragazzo')
+    )
+
+    if (nomeIndex >= 0 && cognomeIndex >= 0) {
+      columnsMap[columnKey(nomeIndex)] = 'nome'
+      columnsMap[columnKey(cognomeIndex)] = 'cognome'
+    } else if (fullNameIndex >= 0) {
+      columnsMap[columnKey(fullNameIndex)] = 'nome_cognome_ragazzo'
+    }
+
+    const findIndex = (parts: string[]) =>
+      normalizedHeaders.findIndex(header => parts.some(part => header.includes(part)))
+    const presenceIndex = findIndex(['presenz', 'partecipaz', 'stato'])
+    const quotaIndex = findIndex(['quota dovuta', 'quota', 'costo', 'importo'])
+    const paidIndex = findIndex(['riscosso', 'pagat', 'versat', 'saldo'])
+    const methodIndex = findIndex(['metodo', 'modalit'])
+    const dateIndex = findIndex(['data', 'inizio'])
+
+    if (presenceIndex >= 0) columnsMap[columnKey(presenceIndex)] = 'campo_stato_presenza'
+    if (quotaIndex >= 0) columnsMap[columnKey(quotaIndex)] = 'campo_quota_dovuta'
+    if (paidIndex >= 0) columnsMap[columnKey(paidIndex)] = 'campo_riscosso'
+    if (methodIndex >= 0) columnsMap[columnKey(methodIndex)] = 'campo_metodo_pagamento'
+    if (dateIndex >= 0) columnsMap[columnKey(dateIndex)] = 'campo_data'
+
+    return { sheetName, tableName: 'campi', columnsMap }
   }
 
   if (normalizedName === 'USCITE' || normalizedName.includes('CON.CA')) {
@@ -297,7 +324,7 @@ Restituisci SOLO UN OGGETTO JSON con la seguente struttura:
   "mappings": [
     {
       "sheetName": "Nome Foglio Originale",
-      "tableName": "ragazzi | registro_spese | quote_mensili | eventi | partecipazioni_eventi",
+      "tableName": "ragazzi | registro_spese | quote_mensili | eventi | partecipazioni_eventi | campi",
       "columnsMap": {
         "Intestazione Foglio": "nome_colonna_supabase"
       }
@@ -310,6 +337,9 @@ REGOLE TASSATIVE E MANDATORIE DI MAPPATURA:
    - Mappa l'Anagrafica SOLO dal foglio "Anagrafica" per ragazzi.
    - Mappa le Quote Mensili ESCLUSIVAMENTE dal foglio "Quote" per quote_mensili. NON mappare MAI "Foglio1", "Cassa", "Foglio Gestione" o "Entrate e Saldi" a quote_mensili!
    - Mappa le Presenze Eventi ESCLUSIVAMENTE dal foglio "Uscite" per partecipazioni_eventi.
+   - Mappa i fogli "CI" e "CE" ESCLUSIVAMENTE al modulo "campi". Non mapparli a ragazzi, privacy o quote mensili.
+   - Per "campi", usa nome/cognome oppure nome_cognome_ragazzo, più campo_stato_presenza, campo_quota_dovuta, campo_riscosso, campo_metodo_pagamento e campo_data quando presenti.
+   - Le righe dei fogli CI/CE rappresentano partecipazioni ai rispettivi campi: il sistema creerà/aggiornerà automaticamente Campo Invernale o Campo Estivo.
    - Mappa le Spese ESCLUSIVAMENTE dal foglio "Spese", "SPESE", "Cassa" o "Uscite Cassa" per registro_spese.
 2. NESSUNA MAPPATURA SU ID FITTIZI:
    - NON mappare MAI le colonne del foglio di tipo "ID", "N°", "Num", "Numero" su "id" o "ragazzo_id". Quelle colonne contengono numeri progressivi del foglio, NON UUID.

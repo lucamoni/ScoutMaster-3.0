@@ -27,7 +27,7 @@ class ImportRequestError extends Error {
   }
 }
 
-const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese', 'eventi']
+const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'campi', 'registro_spese', 'eventi']
 const MONTHS = ['ottobre', 'novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
 
 function extractSpreadsheetId(raw: string) {
@@ -409,6 +409,97 @@ async function importPartecipazioni(
   return { sheetName: mapping.sheetName || '', tableName: 'partecipazioni_eventi', inserted, updated, skipped }
 }
 
+function readPaidStatus(value: unknown) {
+  const normalized = normalizeKey(value)
+  if (readBoolean(value)) return true
+  if (['no', 'non pagato', 'da pagare', 'false', '0', '-'].includes(normalized)) return false
+  const amount = parseSheetAmount(value)
+  return amount !== null && amount > 0
+}
+
+async function importCampi(
+  supabase: ReturnType<typeof createAdminClient>,
+  people: Person[],
+  events: ScoutEvent[],
+  mapping: ImportMapping,
+  rows: string[][],
+): Promise<ImportCounts> {
+  const headers = rows[0] || []
+  const columnsMap = mapping.columnsMap || {}
+  const normalizedSheetName = normalizeKey(mapping.sheetName)
+  const isInvernale = normalizedSheetName === 'ci' || normalizedSheetName.includes('invern')
+  const eventName = isInvernale ? 'Campo Invernale' : 'Campo Estivo'
+  const eventType = isInvernale ? 'CAMPO_INVERNALE' : 'CAMPO_ESTIVO'
+  const participationFlag = isInvernale ? 'partecipazione_ci' : 'partecipazione_ce'
+  const firstReader = createReader(headers, rows[1] || [], columnsMap)
+  const firstQuota = parseSheetAmount(firstReader('campo_quota_dovuta'))
+  const firstDate = parseSheetDate(firstReader('campo_data'))
+  const eventResult = await upsertEvent(
+    supabase,
+    events,
+    eventName,
+    firstQuota,
+    'Contanti',
+    eventType,
+    firstDate,
+  )
+  const event = eventResult.event
+
+  let inserted = 0
+  let updated = 0
+  let skipped = 0
+  const hasPaidColumn = hasMappedTarget(columnsMap, 'campo_riscosso')
+
+  for (const row of rows.slice(1, 2001)) {
+    const reader = createReader(headers, row, columnsMap)
+    const fullName = reader('nome_cognome_ragazzo') || `${reader('nome')} ${reader('cognome')}`
+    const person = findPerson(people, fullName)
+    if (!person) {
+      skipped += 1
+      continue
+    }
+
+    const rawPresence = reader('campo_stato_presenza')
+    const amount = parseSheetAmount(reader('campo_quota_dovuta')) ?? event.quota_standard ?? 0
+    const paidValue = reader('campo_riscosso')
+    const payload: Database['public']['Tables']['partecipazioni_eventi']['Insert'] = {
+      ragazzo_id: person.id,
+      evento_id: event.id,
+      stato_presenza: rawPresence ? readPresence(rawPresence) : 'Presente',
+      quota_dovuta: amount,
+      riscosso: hasPaidColumn ? readPaidStatus(paidValue) : false,
+      metodo_pagamento: toCanonicalMetodo(reader('campo_metodo_pagamento') || event.metodo_pagamento || 'Contanti'),
+    }
+
+    const { data: existing, error: lookupError } = await supabase
+      .from('partecipazioni_eventi')
+      .select('id')
+      .eq('ragazzo_id', person.id)
+      .eq('evento_id', event.id)
+      .limit(1)
+      .maybeSingle()
+    if (lookupError) throw lookupError
+
+    if (existing) {
+      const { error } = await supabase.from('partecipazioni_eventi').update(payload).eq('id', existing.id)
+      if (error) throw error
+      updated += 1
+    } else {
+      const { error } = await supabase.from('partecipazioni_eventi').insert(payload)
+      if (error) throw error
+      inserted += 1
+    }
+
+    const { error: flagError } = await supabase
+      .from('ragazzi')
+      .update({ [participationFlag]: true })
+      .eq('id', person.id)
+    if (flagError) throw flagError
+  }
+
+  return { sheetName: mapping.sheetName || '', tableName: 'campi', inserted, updated, skipped }
+}
+
 async function importRegistroSpese(
   supabase: ReturnType<typeof createAdminClient>,
   mapping: ImportMapping,
@@ -493,8 +584,9 @@ async function importData(body: {
     ragazzi: 1,
     eventi: 2,
     quote_mensili: 3,
-    partecipazioni_eventi: 4,
-    registro_spese: 5,
+    partecipazioni_eventi: 5,
+    campi: 4,
+    registro_spese: 6,
   }
   const orderedMappings = [...body.mappings].sort(
     (left, right) => (importPriority[left.tableName || ''] ?? 99) - (importPriority[right.tableName || ''] ?? 99),
@@ -513,6 +605,8 @@ async function importData(body: {
       results.push(await importEventi(supabase, events, mapping, rows))
     } else if (mapping.tableName === 'partecipazioni_eventi') {
       results.push(await importPartecipazioni(supabase, people, events, mapping, rows))
+    } else if (mapping.tableName === 'campi') {
+      results.push(await importCampi(supabase, people, events, mapping, rows))
     } else if (mapping.tableName === 'registro_spese') {
       results.push(await importRegistroSpese(supabase, mapping, rows))
     } else {

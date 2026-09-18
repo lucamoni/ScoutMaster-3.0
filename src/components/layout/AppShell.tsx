@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   AlertTriangle,
   Compass,
+  Tent,
   Landmark,
   Banknote,
   ScanLine,
@@ -90,6 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         { name: 'Anagrafica', href: '/', icon: Users },
         { name: 'Panoramica & Bento', href: '/panoramica', icon: LayoutDashboard },
         { name: 'Presenze & Uscite', href: '/uscite', icon: Calendar },
+        { name: 'Campi CI / CE', href: '/campi', icon: Tent },
         { name: 'BuonaCaccia', href: '/buonacaccia', icon: Compass },
       ]
     },

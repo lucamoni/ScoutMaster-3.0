@@ -25,13 +25,16 @@ type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row
 export default function UsciteClient({ 
   initialEventi, 
   ragazzi: initialRagazzi, 
-  initialPartecipazioni 
+  initialPartecipazioni,
+  campiOnly = false
 }: { 
   initialEventi: Evento[],
   ragazzi: Ragazzo[],
-  initialPartecipazioni: Partecipazione[]
+  initialPartecipazioni: Partecipazione[],
+  campiOnly?: boolean
 }) {
   const router = useRouter()
+  const defaultTipoEvento = campiOnly ? 'CAMPO_INVERNALE' : 'CI'
   const [eventi, setEventi] = useState<Evento[]>(initialEventi)
   const [ragazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [partecipazioni, setPartecipazioni] = useState<Partecipazione[]>(initialPartecipazioni)
@@ -43,7 +46,7 @@ export default function UsciteClient({
   const [formData, setFormData] = useState({
     nome_evento: '',
     quota_standard: '',
-    tipo_evento: 'CI',
+    tipo_evento: defaultTipoEvento,
     data_inizio: '',
     metodo_pagamento: 'Contanti'
   })
@@ -447,7 +450,7 @@ export default function UsciteClient({
 
         setEventi(eventi.map(ev => ev.id === editingEvento.id ? data : ev))
         setEditingEvento(null)
-        setFormData({ nome_evento: '', quota_standard: '', tipo_evento: 'CI', data_inizio: '', metodo_pagamento: 'Contanti' })
+        setFormData({ nome_evento: '', quota_standard: '', tipo_evento: defaultTipoEvento, data_inizio: '', metodo_pagamento: 'Contanti' })
         router.refresh()
       }
     } else {
@@ -470,7 +473,7 @@ export default function UsciteClient({
           tipo_movimento: 'ENTRATA' 
         })
 
-        setFormData({ nome_evento: '', quota_standard: '', tipo_evento: 'CI', data_inizio: '', metodo_pagamento: 'Contanti' })
+        setFormData({ nome_evento: '', quota_standard: '', tipo_evento: defaultTipoEvento, data_inizio: '', metodo_pagamento: 'Contanti' })
         setTimeout(() => router.refresh(), 500) 
       }
     }
@@ -523,8 +526,12 @@ export default function UsciteClient({
       {/* Intestazione e Controlli Globali in Aggregato */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 bg-muted/40 p-4 rounded-xl border">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Presenze & Quote Uscite</h1>
-          <p className="text-xs text-muted-foreground">Gestisci presenze, quote e metodo di pagamento (con quote ridotte per Pendolari)</p>
+          <h1 className="text-xl font-bold tracking-tight">{campiOnly ? 'Campi Invernale & Estivo' : 'Presenze & Quote Uscite'}</h1>
+          <p className="text-xs text-muted-foreground">
+            {campiOnly
+              ? 'Gestisci partecipanti, presenze, quote e pagamenti dei campi CI e CE.'
+              : 'Gestisci presenze, quote e metodo di pagamento (con quote ridotte per Pendolari)'}
+          </p>
         </div>
 
         {/* Toolbar Azioni in Aggregato */}
@@ -586,10 +593,10 @@ export default function UsciteClient({
           </Button>
 
           <Dialog open={isEventiOpen} onOpenChange={open => { setIsEventiOpen(open); if(!open) setEditingEvento(null); }}>
-            <DialogTrigger render={<Button size="sm" variant="outline" className="h-8 text-xs"><Settings2 className="mr-1 h-3.5 w-3.5" /> Gestisci Eventi</Button>} />
+            <DialogTrigger render={<Button size="sm" variant="outline" className="h-8 text-xs"><Settings2 className="mr-1 h-3.5 w-3.5" /> {campiOnly ? 'Gestisci Campi' : 'Gestisci Eventi'}</Button>} />
             <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
               <DialogHeader>
-                <DialogTitle>Gestione Eventi e Uscite Reparto</DialogTitle>
+                <DialogTitle>{campiOnly ? 'Gestione Campi' : 'Gestione Eventi e Uscite Reparto'}</DialogTitle>
               </DialogHeader>
               <div className="flex-1 overflow-auto space-y-4">
                 <form onSubmit={handleEventSubmit} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
@@ -613,13 +620,22 @@ export default function UsciteClient({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Tipo</Label>
-                    <Select value={formData.tipo_evento} onValueChange={v => setFormData({...formData, tipo_evento: v || 'CI'})}>
+                    <Select value={formData.tipo_evento} onValueChange={v => setFormData({...formData, tipo_evento: v || defaultTipoEvento})}>
                       <SelectTrigger className="h-8 text-xs min-w-[80px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CI">CI (Invernale)</SelectItem>
-                        <SelectItem value="CE">CE (Estivo)</SelectItem>
-                        <SelectItem value="USCITA">Uscita</SelectItem>
-                        <SelectItem value="ALTRO">Altro</SelectItem>
+                        {campiOnly ? (
+                          <>
+                            <SelectItem value="CAMPO_INVERNALE">CI (Campo Invernale)</SelectItem>
+                            <SelectItem value="CAMPO_ESTIVO">CE (Campo Estivo)</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="CI">CI (Invernale)</SelectItem>
+                            <SelectItem value="CE">CE (Estivo)</SelectItem>
+                            <SelectItem value="USCITA">Uscita</SelectItem>
+                            <SelectItem value="ALTRO">Altro</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -648,7 +664,7 @@ export default function UsciteClient({
                           <td className="p-2 flex gap-1">
                             <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => {
                               setEditingEvento(ev)
-                              setFormData({ nome_evento: ev.nome_evento, quota_standard: ev.quota_standard?.toString()||'', tipo_evento: ev.tipo_evento||'USCITA', data_inizio: ev.data_inizio||'', metodo_pagamento: ev.metodo_pagamento || 'Contanti' })
+                              setFormData({ nome_evento: ev.nome_evento, quota_standard: ev.quota_standard?.toString()||'', tipo_evento: ev.tipo_evento||defaultTipoEvento, data_inizio: ev.data_inizio||'', metodo_pagamento: ev.metodo_pagamento || 'Contanti' })
                             }}>
                               <Pencil className="h-3 w-3" />
                             </Button>

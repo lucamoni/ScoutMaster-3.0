@@ -56,6 +56,12 @@ const MODULE_INFO: Record<string, { title: string, description: string, icon: Re
     description: 'Uscite reali di cassa (Data, Voce, Importo, Metodo e Categoria).',
     icon: Receipt,
     badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200'
+  },
+  campi: {
+    title: 'Campi CI / CE',
+    description: 'Partecipanti, presenze, quote e pagamenti del Campo Invernale e del Campo Estivo.',
+    icon: Tent,
+    badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200'
   }
 }
 
@@ -87,7 +93,7 @@ export default function SheetsSettings({
   const [aiMappings, setAiMappings] = useState<ColumnMapping[] | null>(null)
   
   // Selezione personalizzata dei moduli e dei fogli
-  const [selectedTables, setSelectedTables] = useState<string[]>(['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese'])
+  const [selectedTables, setSelectedTables] = useState<string[]>(['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'campi', 'registro_spese'])
   const [selectedSheets, setSelectedSheets] = useState<string[]>([])
   const [annoScout, setAnnoScout] = useState<string>(initialAnnoScout || getCurrentAnnoScout())
   const [showDetails, setShowDetails] = useState<boolean>(false)
