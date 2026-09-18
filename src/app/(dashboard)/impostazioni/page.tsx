@@ -32,6 +32,8 @@ export default async function ImpostazioniPage() {
         initialCensimentoStandard={settings.quota_censimento_standard || '45'}
         initialCensimentoFratelli={settings.quota_censimento_fratelli || '35'}
         initialMensileStandard={settings.quota_mensile_standard || '10'}
+        initialSaldoContanti={settings.saldo_iniziale_contanti || '0'}
+        initialSaldoBanca={settings.saldo_iniziale_banca || '0'}
       />
 
       <AuditSettings />
@@ -40,6 +42,7 @@ export default async function ImpostazioniPage() {
         initialSpreadsheetId={settings.spreadsheet_id || ''}
         initialSheetName={settings.sheet_name || 'Foglio1'}
         initialSheetNameSpese={settings.sheet_name_spese || 'SPESE'}
+        initialAnnoScout={settings.anno_scout_corrente || ''}
       />
 
       <DataResetSettings />

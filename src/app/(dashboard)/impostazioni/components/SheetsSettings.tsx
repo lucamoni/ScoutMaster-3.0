@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/types/database.types'
+import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { 
   Save, 
   FileSpreadsheet, 
@@ -61,11 +62,13 @@ const MODULE_INFO: Record<string, { title: string, description: string, icon: Re
 export default function SheetsSettings({ 
   initialSpreadsheetId, 
   initialSheetName,
-  initialSheetNameSpese
+  initialSheetNameSpese,
+  initialAnnoScout
 }: { 
   initialSpreadsheetId: string, 
   initialSheetName: string,
-  initialSheetNameSpese: string
+  initialSheetNameSpese: string,
+  initialAnnoScout?: string
 }) {
   // Estrae sempre l'ID pulito, anche quando nelle impostazioni è stato salvato il link completo.
   const extractSheetId = (raw: string): string => {
@@ -86,7 +89,7 @@ export default function SheetsSettings({
   // Selezione personalizzata dei moduli e dei fogli
   const [selectedTables, setSelectedTables] = useState<string[]>(['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese'])
   const [selectedSheets, setSelectedSheets] = useState<string[]>([])
-  const [annoScout, setAnnoScout] = useState<string>('2024-2025')
+  const [annoScout, setAnnoScout] = useState<string>(initialAnnoScout || getCurrentAnnoScout())
   const [showDetails, setShowDetails] = useState<boolean>(false)
 
   const supabase = createBrowserClient<Database>(

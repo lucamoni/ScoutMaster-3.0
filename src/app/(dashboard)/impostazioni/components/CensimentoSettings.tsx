@@ -13,15 +13,21 @@ import { Database } from '@/types/database.types'
 export default function CensimentoSettings({
   initialCensimentoStandard = '45',
   initialCensimentoFratelli = '35',
-  initialMensileStandard = '10'
+  initialMensileStandard = '10',
+  initialSaldoContanti = '0',
+  initialSaldoBanca = '0'
 }: {
   initialCensimentoStandard?: string
   initialCensimentoFratelli?: string
   initialMensileStandard?: string
+  initialSaldoContanti?: string
+  initialSaldoBanca?: string
 }) {
   const [censimentoStandard, setCensimentoStandard] = useState(initialCensimentoStandard)
   const [censimentoFratelli, setCensimentoFratelli] = useState(initialCensimentoFratelli)
   const [mensileStandard, setMensileStandard] = useState(initialMensileStandard)
+  const [saldoContanti, setSaldoContanti] = useState(initialSaldoContanti)
+  const [saldoBanca, setSaldoBanca] = useState(initialSaldoBanca)
   const [loading, setLoading] = useState(false)
 
   const supabase = createBrowserClient<Database>(
@@ -32,12 +38,15 @@ export default function CensimentoSettings({
   const handleSave = async () => {
     setLoading(true)
     try {
-      await supabase.from('impostazioni').upsert([
+      const { error } = await supabase.from('impostazioni').upsert([
         { chiave: 'quota_censimento_standard', valore: censimentoStandard },
         { chiave: 'quota_censimento_fratelli', valore: censimentoFratelli },
-        { chiave: 'quota_mensile_standard', valore: mensileStandard }
+        { chiave: 'quota_mensile_standard', valore: mensileStandard },
+        { chiave: 'saldo_iniziale_contanti', valore: saldoContanti || '0' },
+        { chiave: 'saldo_iniziale_banca', valore: saldoBanca || '0' }
       ])
-      toast.success('Quote standard e scontate salvate con successo!')
+      if (error) throw error
+      toast.success('Quote e saldi iniziali salvati con successo!')
     } catch (err) {
       console.error(err)
       toast.error('Errore durante il salvataggio delle impostazioni')
@@ -96,6 +105,29 @@ export default function CensimentoSettings({
               placeholder="10"
             />
             <p className="text-[11px] text-muted-foreground">Quota mensile ordinaria di reparto</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Saldi iniziali</h3>
+            <p className="text-xs text-muted-foreground">
+              Inserisci quanto era già disponibile prima dei movimenti importati. Verrà incluso nei totali della cassa.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                Saldo iniziale contanti (€)
+              </Label>
+              <Input type="number" step="0.01" value={saldoContanti} onChange={e => setSaldoContanti(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                Saldo iniziale banca / bonifici (€)
+              </Label>
+              <Input type="number" step="0.01" value={saldoBanca} onChange={e => setSaldoBanca(e.target.value)} placeholder="0,00" />
+            </div>
           </div>
         </div>
 

@@ -31,11 +31,13 @@ export default async function CassaPage() {
   }
 
   const initialCash = Number(
+    settings.get('saldo_iniziale_contanti') ||
     settings.get(`saldo_iniziale_cassa_${currentYear}`) ||
     settings.get(`saldo_iniziale_cassa_${legacyYear}`) ||
     0
   )
   const initialBank = Number(
+    settings.get('saldo_iniziale_banca') ||
     settings.get(`saldo_iniziale_banca_${currentYear}`) ||
     settings.get(`saldo_iniziale_banca_${legacyYear}`) ||
     0

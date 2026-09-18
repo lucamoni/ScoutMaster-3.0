@@ -75,14 +75,14 @@ function normalizeKey(value: unknown) {
 
 function readBoolean(value: unknown) {
   const normalized = normalizeKey(value)
-  return ['1', 'true', 'vero', 'si', 'sì', 'yes', 'y', 'x', 'pagato', 'presente', 'p'].includes(normalized)
+  return ['1', 'true', 'vero', 'si', 'sì', 'yes', 'y', 'x', '✔', '✓', '☑', 'pagato', 'presente', 'p'].includes(normalized)
 }
 
 function readPresence(value: unknown) {
   const raw = String(value ?? '').trim()
   const normalized = normalizeKey(value)
   if (['a', 'assente', 'no', 'non presente', '-', '0'].includes(normalized)) return 'Assente'
-  if (['p', 'presente', 'si', 'sì', 'yes', 'x', '1', 'pagato'].includes(normalized)) return 'Presente'
+  if (['p', 'presente', 'si', 'sì', 'yes', 'x', '1', '✔', '✓', '☑', 'pagato'].includes(normalized)) return 'Presente'
   if (normalized.includes('pendol')) return 'Pendolare'
   return raw || 'Presente'
 }
@@ -98,7 +98,8 @@ function createReader(headers: string[], row: string[], columnsMap: Record<strin
   return (target: string) => {
     const entry = entries.find(([, mapped]) => normalizeKey(mapped) === normalizeKey(target))
     if (!entry) return ''
-    const position = headers.indexOf(entry[0])
+    const explicitColumn = entry[0].match(/^__col_(\\d+)$/)
+    const position = explicitColumn ? Number(explicitColumn[1]) : headers.indexOf(entry[0])
     return position >= 0 ? row[position] || '' : ''
   }
 }
@@ -354,17 +355,33 @@ async function importPartecipazioni(
       const rawPresence = reader(target)
       if (!rawPresence) continue
       const eventName = target.slice('evento:'.length).trim()
-      let event = findEvent(events, eventName)
-      if (!event) event = (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
+      const existingEvent = findEvent(events, eventName)
+      const event = existingEvent || (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
+      if (!event) throw new Error(`Impossibile creare l'evento importato: ${eventName}`)
 
-      const amount = parseSheetAmount(reader('quota_dovuta')) ?? event.quota_standard
+      const amount = parseSheetAmount(reader(`quota_evento:${eventName}`) || reader('quota_dovuta')) ?? event.quota_standard
+
+      // L'evento deve avere la stessa quota mostrata nel foglio: così intestazioni,
+      // presenze, debiti e registro cassa usano un'unica fonte.
+      if (amount !== null && Number(event.quota_standard) !== Number(amount)) {
+        const { error: eventUpdateError } = await supabase
+          .from('eventi')
+          .update({ quota_standard: amount })
+          .eq('id', event.id)
+        if (eventUpdateError) throw eventUpdateError
+        const updatedEvent = { ...event, quota_standard: amount }
+        const eventIndex = events.findIndex(item => item.id === event.id)
+        if (eventIndex >= 0) events[eventIndex] = updatedEvent
+      }
+
+      const paidValue = reader(`riscosso_evento:${eventName}`) || reader('riscosso')
       const payload: Database['public']['Tables']['partecipazioni_eventi']['Insert'] = {
         ragazzo_id: person.id,
         evento_id: event.id,
         stato_presenza: readPresence(rawPresence),
         quota_dovuta: amount,
-        riscosso: reader('riscosso') ? readBoolean(reader('riscosso')) : normalizeKey(rawPresence) === 'pagato',
-        metodo_pagamento: toCanonicalMetodo(reader('metodo_pagamento') || event.metodo_pagamento || 'Contanti'),
+        riscosso: paidValue ? readBoolean(paidValue) : normalizeKey(rawPresence) === 'pagato',
+        metodo_pagamento: toCanonicalMetodo(reader(`metodo_evento:${eventName}`) || reader('metodo_pagamento') || event.metodo_pagamento || 'Contanti'),
       }
 
       const { data: existing, error: lookupError } = await supabase
@@ -414,14 +431,20 @@ async function importRegistroSpese(
     }
 
     const marker = `[Google Sheets:${mapping.sheetName}:${index + 2}]`
+    const momentoValue = normalizeKey(reader('momento_anno')).toUpperCase()
+    const momentoAnno = ['ANNO', 'CE', 'CI'].includes(momentoValue)
+      ? (momentoValue as 'ANNO' | 'CE' | 'CI')
+      : null
+    const sourceNote = String(reader('note') || '').trim()
     const payload: Database['public']['Tables']['registro_spese']['Insert'] = {
       importo: amount,
       data: date,
       voce_spesa: voce,
-      metodo: toCanonicalMetodo(reader('metodo')),
+      momento_anno: momentoAnno,
+      metodo: toCanonicalMetodo(reader('metodo') || (readBoolean(reader('carta')) ? 'Carta' : 'Contanti')),
       tipo_movimento: normalizeKey(reader('tipo_movimento')) === 'entrata' ? 'ENTRATA' : 'USCITA',
-      ricevuta_presente: false,
-      note: `${marker} Importazione da Google Sheets`,
+      ricevuta_presente: readBoolean(reader('ricevuta_presente')),
+      note: [marker, sourceNote, 'Importazione da Google Sheets'].filter(Boolean).join(' '),
     }
     const { data: existing, error: lookupError } = await supabase
       .from('registro_spese')
