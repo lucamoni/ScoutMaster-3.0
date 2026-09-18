@@ -108,6 +108,7 @@ export function resolveInitialBalances(
   movimenti: CassaMovement[]
 ): CassaBalances {
   const configuredYear = normalizeAnnoScout(settings.get('anno_scout_corrente') || annoScout)
+  const genericBalanceYear = normalizeAnnoScout(settings.get('saldo_iniziale_anno') || configuredYear)
   const memo = new Map<string, CassaBalances>()
 
   const resolve = (year: string, depth = 0): CassaBalances => {
@@ -119,10 +120,10 @@ export function resolveInitialBalances(
 
     const specificCash = getSpecificInitialBalance(settings, canonicalYear, 'contanti')
     const specificBank = getSpecificInitialBalance(settings, canonicalYear, 'banca')
-    const genericCash = canonicalYear === configuredYear
+    const genericCash = canonicalYear === genericBalanceYear
       ? readNumberSetting(settings, ['saldo_iniziale_contanti'])
       : null
-    const genericBank = canonicalYear === configuredYear
+    const genericBank = canonicalYear === genericBalanceYear
       ? readNumberSetting(settings, ['saldo_iniziale_banca'])
       : null
 

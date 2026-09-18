@@ -3,6 +3,7 @@ import DataResetSettings from './components/DataResetSettings'
 import AuditSettings from './components/AuditSettings'
 import CensimentoSettings from './components/CensimentoSettings'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,7 @@ export default async function ImpostazioniPage() {
         initialMensileStandard={settings.quota_mensile_standard || '10'}
         initialSaldoContanti={settings.saldo_iniziale_contanti || '0'}
         initialSaldoBanca={settings.saldo_iniziale_banca || '0'}
+        initialSaldoAnno={normalizeAnnoScout(settings.saldo_iniziale_anno || settings.anno_scout_corrente || getCurrentAnnoScout())}
       />
 
       <AuditSettings />
