@@ -720,13 +720,18 @@ export default function UsciteClient({
                 )
               })}
               <th className="px-3 py-2 font-bold border-b border-slate-200/80 text-center bg-slate-50 sticky right-0 z-20 w-28 text-[11px] text-slate-600 uppercase tracking-wider">
-                Totale Pagato
+                Totale Pagato CI/CE
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {ragazziFiltrati.map((r, i) => {
-              const rowParts = partecipazioni.filter(p => p.ragazzo_id === r.id && p.riscosso)
+              const rowParts = partecipazioni.filter(p => {
+                if (p.ragazzo_id !== r.id || !p.riscosso) return false
+                const ev = eventi.find(e => e.id === p.evento_id)
+                const tipoEvento = String(ev?.tipo_evento || '').toUpperCase()
+                return tipoEvento === 'CI' || tipoEvento === 'CE'
+              })
               const totalRow = rowParts.reduce((acc, p) => {
                 const ev = eventi.find(e => e.id === p.evento_id)
                 const quotaEffettiva = (p.quota_dovuta !== null && p.quota_dovuta !== undefined) 
@@ -861,7 +866,12 @@ export default function UsciteClient({
       {/* Vista Card Mobile */}
       <div className="md:hidden space-y-4">
         {ragazziFiltrati.map((r) => {
-          const rowParts = partecipazioni.filter(p => p.ragazzo_id === r.id && p.riscosso)
+          const rowParts = partecipazioni.filter(p => {
+                if (p.ragazzo_id !== r.id || !p.riscosso) return false
+                const ev = eventi.find(e => e.id === p.evento_id)
+                const tipoEvento = String(ev?.tipo_evento || '').toUpperCase()
+                return tipoEvento === 'CI' || tipoEvento === 'CE'
+              })
           const totalRow = rowParts.reduce((acc, p) => {
             const ev = eventi.find(e => e.id === p.evento_id)
             const quotaEffettiva = (p.quota_dovuta !== null && p.quota_dovuta !== undefined) 
@@ -878,7 +888,7 @@ export default function UsciteClient({
                   <span className="text-xs text-slate-500 font-medium">{r.pattuglia || 'Senza Pattuglia'}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Tot. Versato</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Tot. Versato CI/CE</span>
                   <span className="text-sm font-bold text-emerald-600 tabular-nums">€{totalRow}</span>
                 </div>
               </div>
