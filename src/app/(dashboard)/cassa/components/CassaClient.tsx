@@ -902,6 +902,25 @@ export default function CassaClient({
             <TabsTrigger value="USCITA" className="text-red-600 data-[state=active]:text-red-700">Solo Uscite</TabsTrigger>
           </TabsList>
           
+          {selectedIds.size > 0 && (
+            <Button variant="destructive" size="sm" onClick={async () => {
+              if (confirm(`Sei sicuro di voler eliminare in modo definitivo ${selectedIds.size} movimenti? Questa azione è irreversibile.`)) {
+                toast.loading('Eliminazione in corso...', { id: 'bulk-delete' })
+                const { error } = await supabase.from('registro_spese').delete().in('id', Array.from(selectedIds))
+                if (error) {
+                  toast.error('Errore durante l\'eliminazione: ' + error.message, { id: 'bulk-delete' })
+                } else {
+                  setSpese(spese.filter(s => !selectedIds.has(s.id)))
+                  setSelectedIds(new Set())
+                  toast.success(`${selectedIds.size} movimenti eliminati.`, { id: 'bulk-delete' })
+                }
+              }
+            }}>
+              <Trash2 className="w-4 h-4 mr-2" /> Elimina selezionati ({selectedIds.size})
+            </Button>
+          )}
+        </div>
+
           <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -993,25 +1012,6 @@ export default function CassaClient({
               </div>
             </div>
           </div>
-
-          {selectedIds.size > 0 && (
-            <Button variant="destructive" size="sm" onClick={async () => {
-              if (confirm(`Sei sicuro di voler eliminare in modo definitivo ${selectedIds.size} movimenti? Questa azione è irreversibile.`)) {
-                toast.loading('Eliminazione in corso...', { id: 'bulk-delete' })
-                const { error } = await supabase.from('registro_spese').delete().in('id', Array.from(selectedIds))
-                if (error) {
-                  toast.error('Errore durante l\'eliminazione: ' + error.message, { id: 'bulk-delete' })
-                } else {
-                  setSpese(spese.filter(s => !selectedIds.has(s.id)))
-                  setSelectedIds(new Set())
-                  toast.success(`${selectedIds.size} movimenti eliminati.`, { id: 'bulk-delete' })
-                }
-              }
-            }}>
-              <Trash2 className="w-4 h-4 mr-2" /> Elimina selezionati ({selectedIds.size})
-            </Button>
-          )}
-        </div>
 
         {/* Vista Tabellare Desktop */}
         <div className="hidden md:block rounded-md border bg-card overflow-hidden">
