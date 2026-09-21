@@ -51,11 +51,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
     const fetchSaldi = async () => {
-      const { data: spese } = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo')
-      if (!spese) return
+      const [speseRes, settingsRes] = await Promise.all([
+        supabase.from('registro_spese').select('importo, tipo_movimento, metodo, data'),
+        supabase.from('impostazioni').select('chiave, valore')
+      ])
+      if (speseRes.error || !speseRes.data) return
 
-      let cassa = 0
-      let banca = 0
+      const [startYear, endYear] = annoScout.split('/').map(Number)
+      const startDate = `${startYear}-10-01`
+      const endDate = `${endYear}-09-30`
+      const spese = speseRes.data.filter(s => s.data >= startDate && s.data <= endDate)
+      const settings = new Map((settingsRes.data || []).map(item => [item.chiave, item.valore]))
+      const initialCash = Number(settings.get('saldo_iniziale_contanti') || settings.get(`saldo_iniziale_cassa_${annoScout.replace('/', '-')}`) || 0)
+      const initialBank = Number(settings.get('saldo_iniziale_banca') || settings.get(`saldo_iniziale_banca_${annoScout.replace('/', '-')}`) || 0)
+
+      let cassa = initialCash
+      let banca = initialBank
 
       spese.forEach((s) => {
         const isEntrata = s.tipo_movimento === 'ENTRATA'
