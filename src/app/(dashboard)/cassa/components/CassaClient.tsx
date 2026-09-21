@@ -936,7 +936,7 @@ export default function CassaClient({
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-              <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+              <Select value={filterCategoria} onValueChange={v => setFilterCategoria(v || 'TUTTE')}>
                 <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TUTTE">Tutte le categorie</SelectItem>
@@ -946,7 +946,7 @@ export default function CassaClient({
                 </SelectContent>
               </Select>
 
-              <Select value={filterMomento} onValueChange={setFilterMomento}>
+              <Select value={filterMomento} onValueChange={v => setFilterMomento(v || 'TUTTI')}>
                 <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Momento" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TUTTI">Tutti i momenti</SelectItem>
@@ -959,7 +959,7 @@ export default function CassaClient({
                 </SelectContent>
               </Select>
 
-              <Select value={filterMetodo} onValueChange={setFilterMetodo}>
+              <Select value={filterMetodo} onValueChange={v => setFilterMetodo(v || 'TUTTI')}>
                 <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Metodo" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TUTTI">Tutti i metodi</SelectItem>
