@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Camera, Plus, Trash2, Settings2, Pencil, Check, X, Loader2, Receipt, Paperclip } from 'lucide-react'
+import { Camera, Plus, Trash2, Settings2, Pencil, Check, X, Loader2, Receipt, Paperclip, Filter, Search } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
@@ -48,6 +48,14 @@ export default function CassaClient({
   const [editingCatTipo, setEditingCatTipo] = useState('USCITA')
   const [editingSpesa, setEditingSpesa] = useState<Spesa | null>(null)
   const [activeTab, setActiveTab] = useState('TUTTI')
+  const [filterCategoria, setFilterCategoria] = useState('TUTTE')
+  const [filterMomento, setFilterMomento] = useState('TUTTI')
+  const [filterMetodo, setFilterMetodo] = useState('TUTTI')
+  const [filterDataDa, setFilterDataDa] = useState('')
+  const [filterDataA, setFilterDataA] = useState('')
+  const [filterImportoMin, setFilterImportoMin] = useState('')
+  const [filterImportoMax, setFilterImportoMax] = useState('')
+  const [filterRicerca, setFilterRicerca] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Scanner Scontrino State
@@ -123,8 +131,70 @@ export default function CassaClient({
     movimento => movimento.tipo_movimento === 'ENTRATA' || movimento.tipo_movimento === 'USCITA'
   )
 
-  // Spese filtrate in base al tab selezionato
-  const speseFiltrate = cassaSpese.filter(s => activeTab === 'TUTTI' ? true : s.tipo_movimento === activeTab)
+  const categorieDisponibili = Array.from(new Set([
+    ...categorie.map(c => c.nome),
+    ...cassaSpese.map(s => s.voce_spesa),
+  ])).filter((value): value is string => Boolean(value)).sort((a, b) => a.localeCompare(b))
+
+  const momentiDisponibili = Array.from(new Set(
+    cassaSpese.map(s => s.momento_anno).filter((value): value is string => Boolean(value))
+  )).sort()
+
+  // I filtri sono combinabili: tipo movimento, categoria, momento dell'anno,
+  // metodo di pagamento, intervallo date, intervallo importi e ricerca libera.
+  const speseFiltrate = cassaSpese.filter((spesa) => {
+    if (activeTab !== 'TUTTI' && spesa.tipo_movimento !== activeTab) return false
+    if (filterCategoria !== 'TUTTE' && spesa.voce_spesa !== filterCategoria) return false
+    if (filterMomento !== 'TUTTI' && spesa.momento_anno !== filterMomento) return false
+
+    const metodo = normalizeMetodoDisplay(spesa.metodo)
+    if (filterMetodo === 'Contanti' && metodo !== 'Contanti') return false
+    if (filterMetodo === 'Bonifico' && metodo !== 'Bonifico') return false
+    if (filterMetodo === 'Carta' && metodo !== 'Carta') return false
+    if (filterMetodo === 'Bonifico/Carta' && metodo !== 'Bonifico' && metodo !== 'Carta') return false
+
+    const dataMovimento = spesa.data || ''
+    if (filterDataDa && (!dataMovimento || dataMovimento < filterDataDa)) return false
+    if (filterDataA && (!dataMovimento || dataMovimento > filterDataA)) return false
+
+    const importo = Number(spesa.importo) || 0
+    if (filterImportoMin !== '' && importo < Number(filterImportoMin)) return false
+    if (filterImportoMax !== '' && importo > Number(filterImportoMax)) return false
+
+    const ricerca = filterRicerca.trim().toLowerCase()
+    if (ricerca) {
+      const testo = [
+        spesa.voce_spesa,
+        spesa.note,
+        spesa.tipo_movimento,
+        spesa.momento_anno,
+        metodo,
+      ].filter(Boolean).join(' ').toLowerCase()
+      if (!testo.includes(ricerca)) return false
+    }
+
+    return true
+  })
+
+  const filtroEntrate = speseFiltrate
+    .filter(spesa => spesa.tipo_movimento === 'ENTRATA')
+    .reduce((totale, spesa) => totale + (Number(spesa.importo) || 0), 0)
+  const filtroUscite = speseFiltrate
+    .filter(spesa => spesa.tipo_movimento === 'USCITA')
+    .reduce((totale, spesa) => totale + (Number(spesa.importo) || 0), 0)
+
+  const resetFiltri = () => {
+    setActiveTab('TUTTI')
+    setFilterCategoria('TUTTE')
+    setFilterMomento('TUTTI')
+    setFilterMetodo('TUTTI')
+    setFilterDataDa('')
+    setFilterDataA('')
+    setFilterImportoMin('')
+    setFilterImportoMax('')
+    setFilterRicerca('')
+    setSelectedIds(new Set())
+  }
 
   // Calcolo Dinamico dei Saldi in base allo stato locale "cassaSpese"
   let saldoEntrateContanti = 0
@@ -824,7 +894,7 @@ export default function CassaClient({
         </Dialog>
       </div>
 
-      <Tabs defaultValue="TUTTI" onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex justify-between items-center mb-4">
           <TabsList>
             <TabsTrigger value="TUTTI">Tutti i Movimenti</TabsTrigger>
@@ -850,6 +920,98 @@ export default function CassaClient({
             </Button>
           )}
         </div>
+
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <Filter className="h-4 w-4 text-primary" />
+                Filtri movimenti
+                <span className="text-xs font-normal text-slate-500">
+                  ({speseFiltrate.length} di {cassaSpese.length})
+                </span>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={resetFiltri} className="h-8 text-xs">
+                Azzera filtri
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+              <Select value={filterCategoria} onValueChange={v => setFilterCategoria(v || 'TUTTE')}>
+                <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TUTTE">Tutte le categorie</SelectItem>
+                  {categorieDisponibili.map(categoria => (
+                    <SelectItem key={categoria} value={categoria}>{categoria}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterMomento} onValueChange={v => setFilterMomento(v || 'TUTTI')}>
+                <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Momento" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TUTTI">Tutti i momenti</SelectItem>
+                  <SelectItem value="ANNO">Anno</SelectItem>
+                  <SelectItem value="CI">Campo Invernale</SelectItem>
+                  <SelectItem value="CE">Campo Estivo</SelectItem>
+                  {momentiDisponibili.filter(momento => !['ANNO', 'CI', 'CE'].includes(momento)).map(momento => (
+                    <SelectItem key={momento} value={momento}>{momento}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterMetodo} onValueChange={v => setFilterMetodo(v || 'TUTTI')}>
+                <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Metodo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TUTTI">Tutti i metodi</SelectItem>
+                  <SelectItem value="Contanti">Contanti</SelectItem>
+                  <SelectItem value="Bonifico/Carta">Bonifico / Carta</SelectItem>
+                  <SelectItem value="Bonifico">Solo bonifico</SelectItem>
+                  <SelectItem value="Carta">Solo carta</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="relative sm:col-span-2 lg:col-span-1">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  value={filterRicerca}
+                  onChange={e => setFilterRicerca(e.target.value)}
+                  placeholder="Cerca voce o nota..."
+                  className="h-9 bg-white pl-8 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Input type="date" value={filterDataDa} onChange={e => setFilterDataDa(e.target.value)} className="h-9 bg-white text-xs" aria-label="Data da" />
+                <span className="text-xs text-slate-400">—</span>
+                <Input type="date" value={filterDataA} onChange={e => setFilterDataA(e.target.value)} className="h-9 bg-white text-xs" aria-label="Data a" />
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Input type="number" min="0" step="0.01" value={filterImportoMin} onChange={e => setFilterImportoMin(e.target.value)} placeholder="Importo min" className="h-9 bg-white text-xs" aria-label="Importo minimo" />
+                <span className="text-xs text-slate-400">—</span>
+                <Input type="number" min="0" step="0.01" value={filterImportoMax} onChange={e => setFilterImportoMax(e.target.value)} placeholder="Importo max" className="h-9 bg-white text-xs" aria-label="Importo massimo" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+              <div className="rounded-lg bg-white px-3 py-2 text-slate-600">
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Movimenti</span>
+                <strong className="text-slate-900">{speseFiltrate.length}</strong>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 text-green-700">
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Entrate filtrate</span>
+                <strong>€{filtroEntrate.toFixed(2)}</strong>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 text-red-700">
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Uscite filtrate</span>
+                <strong>€{filtroUscite.toFixed(2)}</strong>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2 text-primary">
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Saldo selezionato</span>
+                <strong>€{(filtroEntrate - filtroUscite).toFixed(2)}</strong>
+              </div>
+            </div>
+          </div>
 
         {/* Vista Tabellare Desktop */}
         <div className="hidden md:block rounded-md border bg-card overflow-hidden">
