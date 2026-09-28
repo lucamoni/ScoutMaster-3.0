@@ -1,5 +1,6 @@
 'use client'
 
+import { Toaster } from 'sonner'
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -98,6 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       links: [
         { name: 'Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
+        { name: 'Archivio Scontrini e File', href: '/cassa/archivio', icon: FolderArchive },
         { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: ScanLine },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
         { name: 'Censimento', href: '/censimento', icon: ShieldCheck },
@@ -387,6 +389,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       <CassaBot />
+      <Toaster richColors position="top-center" />
     </div>
   )
 }

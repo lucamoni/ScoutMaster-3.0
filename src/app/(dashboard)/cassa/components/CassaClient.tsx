@@ -1,6 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
+import { ReceiptDialog } from '@/components/receipts/ReceiptDialog'
+import { ReceiptFilePicker } from '@/components/receipts/ReceiptFilePicker'
+import { receiptFileName, withReceiptUpload } from '@/lib/receipts'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
@@ -42,6 +46,12 @@ export default function CassaClient({
   initialCategorie: Categoria[]
   initialBalances?: { contanti: number; banca: number }
 }) {
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptExpense, setReceiptExpense] = useState<Spesa | null>(null)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const [keepScannedPhoto, setKeepScannedPhoto] = useState(true)
+  const [scannerPreview, setScannerPreview] = useState<string | null>(null)
   const [spese, setSpese] = useState<Spesa[]>(initialSpese)
   const [categorie, setCategorie] = useState<Categoria[]>(initialCategorie)
   const [isOpen, setIsOpen] = useState(false)
@@ -70,6 +80,13 @@ export default function CassaClient({
   const [scannerFile, setScannerFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [ocrData, setOcrData] = useState<ReceiptOcrResult | null>(null)
+  useEffect(() => {
+    if (!scannerFile) { setScannerPreview(null); return }
+    const url = URL.createObjectURL(scannerFile)
+    setScannerPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [scannerFile])
+
   
   const [formData, setFormData] = useState<{
     voce_spesa: string;
@@ -305,113 +322,48 @@ export default function CassaClient({
     }
   }
 
+  const saveMovement = async (expense: Spesa | null, file: File | null) => {
+    const amount = Number(formData.importo)
+    const movementDate = formData.data || expense?.data || new Date().toISOString().split('T')[0]
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('Inserisci un importo maggiore di zero')
+    if (!formData.voce_spesa.trim()) throw new Error('Seleziona una voce di bilancio')
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(movementDate) ? new Date(`${movementDate}T00:00:00Z`) : null
+    if (!parsedDate || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== movementDate) throw new Error('Inserisci una data valida')
+    return withReceiptUpload(supabase, file, async path => {
+      const payload = {
+        voce_spesa: formData.voce_spesa, importo: amount,
+        metodo: toCanonicalMetodo(formData.metodo), momento_anno: formData.momento_anno,
+        note: formData.note, tipo_movimento: formData.tipo_movimento, data: movementDate,
+        ...(path ? { foto_scontrino_url: path, ricevuta_presente: true } : {}),
+      }
+      const write = (metodo: string) => {
+        if (!expense) return supabase.from('registro_spese').insert({ ...payload, metodo }).select('*').single()
+        let query = supabase.from('registro_spese').update({ ...payload, metodo }).eq('id', expense.id)
+        if (path) query = expense.foto_scontrino_url === null
+          ? query.is('foto_scontrino_url', null) : query.eq('foto_scontrino_url', expense.foto_scontrino_url)
+        return query.select('*').single()
+      }
+      let result = await write(payload.metodo)
+      if (result.error && (result.error.code === '23514' || result.error.message?.toLowerCase().includes('metodo'))) result = await write(payload.metodo.toUpperCase())
+      if (result.error || !result.data) throw new Error(result.error?.message || 'Movimento non salvato: ricarica la pagina e riprova')
+      return result.data
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const amount = Number(formData.importo)
-    const movementDate = formData.data || editingSpesa?.data || new Date().toISOString().split('T')[0]
-    if (!Number.isFinite(amount) || amount <= 0) return toast.error('Inserisci un importo maggiore di zero')
-    if (!formData.voce_spesa.trim()) return toast.error('Seleziona una voce di bilancio')
-    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(movementDate) ? new Date(`${movementDate}T00:00:00Z`) : null
-    if (!parsedDate || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== movementDate) return toast.error('Inserisci una data valida')
-    
-    if (editingSpesa) {
-      const safeMetodo = toCanonicalMetodo(formData.metodo)
-      let { data, error } = await supabase
-        .from('registro_spese')
-        .update({
-          voce_spesa: formData.voce_spesa,
-          importo: amount,
-          metodo: safeMetodo,
-          momento_anno: formData.momento_anno,
-          note: formData.note,
-          tipo_movimento: formData.tipo_movimento,
-          data: formData.data || editingSpesa.data || new Date().toISOString().split('T')[0]
-        })
-        .eq('id', editingSpesa.id)
-        .select()
-        .single()
-
-      if (error && (error.code === '23514' || error.message?.includes('metodo'))) {
-        const retry = await supabase
-          .from('registro_spese')
-          .update({
-            voce_spesa: formData.voce_spesa,
-            importo: amount,
-            metodo: safeMetodo.toUpperCase(),
-            momento_anno: formData.momento_anno,
-            note: formData.note,
-            tipo_movimento: formData.tipo_movimento,
-            data: formData.data || editingSpesa.data || new Date().toISOString().split('T')[0]
-          })
-          .eq('id', editingSpesa.id)
-          .select()
-          .single()
-        data = retry.data
-        error = retry.error
-      }
-
-      if (!error && data) {
-        setSpese(spese.map(s => s.id === editingSpesa.id ? data : s))
-        setIsOpen(false)
-        await syncSpesaMetodoWithDB(editingSpesa, safeMetodo)
-        
-        // Background Sync (Update)
-        fetch('/api/sheets/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: data.id, type: 'cassa' })
-        }).catch(e => console.error("Errore background sync sheets:", e))
-      } else if (error) {
-        toast.error(`Errore salvataggio: ${error.message}`)
-      }
-    } else {
-      const safeMetodo = toCanonicalMetodo(formData.metodo)
-      let { data, error } = await supabase
-        .from('registro_spese')
-        .insert({
-          voce_spesa: formData.voce_spesa,
-          importo: amount,
-          metodo: safeMetodo,
-          momento_anno: formData.momento_anno,
-          note: formData.note,
-          tipo_movimento: formData.tipo_movimento,
-          data: formData.data || new Date().toISOString().split('T')[0],
-        })
-        .select()
-        .single()
-
-      if (error && (error.code === '23514' || error.message?.includes('metodo'))) {
-        const retry = await supabase
-          .from('registro_spese')
-          .insert({
-            voce_spesa: formData.voce_spesa,
-            importo: amount,
-            metodo: safeMetodo.toUpperCase(),
-            momento_anno: formData.momento_anno,
-            note: formData.note,
-            tipo_movimento: formData.tipo_movimento,
-            data: formData.data || new Date().toISOString().split('T')[0],
-          })
-          .select()
-          .single()
-        data = retry.data
-        error = retry.error
-      }
-
-      if (!error && data) {
-        setSpese([data, ...spese])
-        setIsOpen(false)
-        
-        // Background Sync (Insert)
-        fetch('/api/sheets/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: data.id, type: 'cassa' })
-        }).catch(e => console.error("Errore background sync sheets:", e))
-      } else if (error) {
-        toast.error(`Errore inserimento: ${error.message}`)
-      }
-    }
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      const saved = await saveMovement(editingSpesa, receiptFile)
+      setSpese(prev => [saved, ...prev.filter(s => s.id !== saved.id)])
+      setReceiptFile(null)
+      setIsOpen(false)
+      toast.success(receiptFile ? 'Movimento e allegato salvati' : 'Movimento salvato')
+      if (editingSpesa) await syncSpesaMetodoWithDB(editingSpesa, toCanonicalMetodo(formData.metodo))
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Salvataggio non riuscito') }
+    finally { savingRef.current = false; setSaving(false) }
   }
 
   const deleteSpesa = async (id: string) => {
@@ -515,95 +467,24 @@ export default function CassaClient({
   }
 
   const handleSaveScannedScontrino = async () => {
-    if (!scannerFile) return
-    const amount = Number(formData.importo)
-    if (!Number.isFinite(amount) || amount <= 0 || !formData.voce_spesa.trim()) {
-      toast.error('Controlla importo e categoria prima di salvare')
-      return
-    }
+    if (!scannerFile || savingRef.current) return
+    savingRef.current = true
     setIsProcessing(true)
-    toast.loading('Salvataggio scontrino in corso...', { id: 'save-scontrino' })
-    let uploadedFileName: string | null = null
     try {
-      const fileExt = scannerFile.type === 'image/png' ? 'png' : scannerFile.type === 'image/webp' ? 'webp' : 'jpg'
-      const fileName = `scontrino_${crypto.randomUUID()}.${fileExt}`
-      uploadedFileName = fileName
-      const { error: uploadError } = await supabase.storage
-        .from('scontrini')
-        .upload(fileName, scannerFile)
-        
-      if (uploadError) throw uploadError
-
-      let { data, error } = await supabase
-        .from('registro_spese')
-        .insert({
-          voce_spesa: formData.voce_spesa,
-          importo: amount,
-          metodo: toCanonicalMetodo(formData.metodo),
-          momento_anno: formData.momento_anno,
-          note: formData.note,
-          tipo_movimento: formData.tipo_movimento,
-          data: formData.data || new Date().toISOString().split('T')[0],
-          ricevuta_presente: true,
-          foto_scontrino_url: fileName
-        })
-        .select()
-        .single()
-
-      if (error && (error.code === '23514' || error.message?.toLowerCase().includes('metodo'))) {
-        const retry = await supabase.from('registro_spese').insert({
-          voce_spesa: formData.voce_spesa,
-          importo: amount,
-          metodo: toCanonicalMetodo(formData.metodo).toUpperCase(),
-          momento_anno: formData.momento_anno,
-          note: formData.note,
-          tipo_movimento: formData.tipo_movimento,
-          data: formData.data || new Date().toISOString().split('T')[0],
-          ricevuta_presente: true,
-          foto_scontrino_url: fileName,
-        }).select().single()
-        data = retry.data
-        error = retry.error
-      }
-      if (error || !data) throw error || new Error('Il movimento è stato inserito ma non è stato restituito dal database')
-      const saved = data
-
-      setSpese([saved, ...spese])
+      const saved = await saveMovement(null, keepScannedPhoto ? scannerFile : null)
+      setSpese(prev => [saved, ...prev.filter(s => s.id !== saved.id)])
       setIsScannerOpen(false)
       setScannerFile(null)
-      toast.success('Scontrino salvato in cassa!', { id: 'save-scontrino' })
-      
-      // Background Sync
-      fetch('/api/sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: saved.id, type: 'cassa' })
-      }).catch(e => console.error("Errore background sync sheets:", e))
-      
-    } catch (error: unknown) {
-      console.error(error)
-      if (uploadedFileName) await supabase.storage.from('scontrini').remove([uploadedFileName])
-      toast.error('Errore salvataggio scontrino', { id: 'save-scontrino' })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const viewSecureScontrino = async (fileUrl: string) => {
-    try {
-      const { data, error } = await supabase.storage.from('scontrini').createSignedUrl(fileUrl, 60)
-      if (error || !data) {
-        toast.error('Impossibile accedere allo scontrino protetto.')
-      } else {
-        window.open(data.signedUrl, '_blank')
-      }
-    } catch (err) {
-      console.error(err)
-    }
+      setOcrData(null)
+      toast.success(keepScannedPhoto ? 'Spesa salvata con la foto dello scontrino' : 'Spesa salvata senza allegato')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Errore salvataggio scontrino') }
+    finally { savingRef.current = false; setIsProcessing(false) }
   }
 
   return (
     <div className="space-y-6">
+      {receiptExpense && <ReceiptDialog key={receiptExpense.id} expense={receiptExpense} onClose={() => setReceiptExpense(null)} onSaved={saved => setSpese(prev => prev.map(s => s.id === saved.id ? saved : s))} />}
+      <div className="flex justify-end"><Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> Archivio scontrini e file</Link></div>
       {/* Dashboard Saldi */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-purple-50 dark:bg-purple-950/20 border-purple-200 shadow-sm">
@@ -640,8 +521,9 @@ export default function CassaClient({
       </div>
 
       <div className="flex flex-wrap gap-4">
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if(!open) setEditingSpesa(null); }}>
+        <Dialog open={isOpen} onOpenChange={(open) => { if (saving) return; setIsOpen(open); if(!open) { setEditingSpesa(null); setReceiptFile(null); } }}>
           <DialogTrigger className="flex-1 md:flex-none inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2" onClick={() => {
+            setReceiptFile(null)
             setEditingSpesa(null)
             setFormData({
               voce_spesa: categorie[0]?.nome || '',
@@ -662,11 +544,11 @@ export default function CassaClient({
           >
             <Settings2 className="mr-2 h-4 w-4" /> Configura importazione Sheets
           </Button>
-          <DialogContent>
+          <DialogContent className="max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingSpesa ? 'Modifica Movimento' : 'Registra Movimento'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit}><fieldset disabled={saving} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo Movimento</Label>
@@ -722,13 +604,17 @@ export default function CassaClient({
                 <Label>Note</Label>
                 <Input value={formData.note || ''} onChange={e => setFormData({...formData, note: e.target.value})} placeholder="Es. Chiodi dal ferramenta..." />
               </div>
-              <Button type="submit" className="w-full">Salva</Button>
-            </form>
+              {editingSpesa?.foto_scontrino_url && <p className="text-xs text-muted-foreground break-all">Allegato attuale: {receiptFileName(editingSpesa.foto_scontrino_url)}. Carica un file per sostituirlo.</p>}
+              <ReceiptFilePicker file={receiptFile} onChange={setReceiptFile} disabled={saving} />
+              <Button type="submit" className="w-full" disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salva movimento{receiptFile ? ' e allegato' : ''}</Button>
+            </fieldset></form>
           </DialogContent>
         </Dialog>
 
         <Button variant="secondary" className="flex-1 md:flex-none text-blue-600 bg-blue-100 hover:bg-blue-200" onClick={() => {
           setScannerFile(null)
+          setKeepScannedPhoto(true)
+          setFormData({ voce_spesa: '', importo: '', metodo: 'Contanti', momento_anno: 'ANNO', note: '', tipo_movimento: 'USCITA' })
           setOcrData(null)
           setIsScannerOpen(true)
         }}>
@@ -803,21 +689,21 @@ export default function CassaClient({
         </Dialog>
 
         {/* MODAL SCANNER SCONTRINO */}
-        <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+        <Dialog open={isScannerOpen} onOpenChange={open => { if (!isProcessing) setIsScannerOpen(open) }}>
+          <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Acquisisci Scontrino</DialogTitle>
               <DialogDescription>
-                Scatta o carica uno scontrino. PaddleOCR lo analizzerà direttamente sul dispositivo.
+                Scatta o carica uno scontrino per compilare la spesa. Puoi conservare la foto come allegato.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
               {!scannerFile ? (
-                <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50" onClick={() => document.getElementById('scontrino-upload')?.click()}>
-                  <Camera className="w-12 h-12 text-muted-foreground mb-4" />
-                  <p className="font-medium">Tocca per scattare una foto</p>
-                  <p className="text-sm text-muted-foreground mt-1">o carica un&apos;immagine JPEG, PNG o WebP</p>
-                  <input id="scontrino-upload" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleScannerFileChange} />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => document.getElementById('scontrino-camera')?.click()}><Camera className="mr-2 h-4 w-4" /> Scatta foto</Button>
+                  <Button variant="outline" onClick={() => document.getElementById('scontrino-upload')?.click()}><Paperclip className="mr-2 h-4 w-4" /> Scegli foto</Button>
+                  <input id="scontrino-camera" aria-label="Fotografa scontrino da scansionare" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleScannerFileChange} />
+                  <input id="scontrino-upload" aria-label="Carica foto da scansionare" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleScannerFileChange} />
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -828,6 +714,10 @@ export default function CassaClient({
                     </div>
                   )}
 
+                  {/* Local photo preview: do not send the blob through an image proxy. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {scannerPreview && <img src={scannerPreview} alt="Foto dello scontrino da registrare" className="max-h-40 w-full rounded border object-contain" />}
+                  <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={keepScannedPhoto} disabled={isProcessing} onChange={e => setKeepScannedPhoto(e.target.checked)} /> Conserva la foto come allegato della spesa, disponibile anche nell’archivio</label>
                   {ocrData && (
                     <div className="space-y-4 animate-in fade-in">
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-md mb-2">
@@ -876,11 +766,11 @@ export default function CassaClient({
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsScannerOpen(false)}>Annulla</Button>
+              <Button variant="outline" disabled={isProcessing} onClick={() => setIsScannerOpen(false)}>Annulla</Button>
               {scannerFile && ocrData && (
                 <Button onClick={handleSaveScannedScontrino} disabled={isProcessing}>
                   {isProcessing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Conferma e Salva
+                  {keepScannedPhoto ? 'Salva spesa e foto' : 'Salva solo la spesa'}
                 </Button>
               )}
             </DialogFooter>
@@ -1072,15 +962,9 @@ export default function CassaClient({
                   </Select>
                 </TableCell>
                 <TableCell className="border-r px-2 py-0 text-center">
-                  {spesa.foto_scontrino_url ? (
-                    <div 
-                      className="inline-flex items-center justify-center p-1 rounded-md bg-secondary text-primary cursor-pointer hover:bg-secondary/80" 
-                      onClick={() => viewSecureScontrino(spesa.foto_scontrino_url!)}
-                      title="Vedi scontrino allegato"
-                    >
-                      <Paperclip className="w-4 h-4" />
-                    </div>
-                  ) : spesa.ricevuta_presente ? 'SI' : ''}
+                  <Button variant="ghost" size="sm" className="h-7 px-1 text-xs" onClick={() => setReceiptExpense(spesa)} aria-label={`${spesa.foto_scontrino_url ? 'Apri allegato' : 'Aggiungi allegato'}: ${spesa.voce_spesa}`}>
+                    <Paperclip className="mr-1 h-4 w-4" />{spesa.foto_scontrino_url ? 'Apri' : 'Allega'}
+                  </Button>
                 </TableCell>
                 <TableCell className={`text-right font-bold px-2 py-0 ${spesa.tipo_movimento === 'ENTRATA' ? 'text-green-600' : 'text-red-600'}`}>
                   {spesa.tipo_movimento === 'ENTRATA' ? '+' : '-'}€{spesa.importo.toFixed(2)}
@@ -1088,6 +972,7 @@ export default function CassaClient({
                 <TableCell className="text-center px-1 py-0">
                   <div className="flex justify-center">
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => {
+                      setReceiptFile(null)
                       setEditingSpesa(spesa)
                       setFormData({
                         voce_spesa: spesa.voce_spesa || '',
@@ -1145,13 +1030,12 @@ export default function CassaClient({
                 </span>
 
                 <div className="flex items-center gap-1">
-                  {spesa.foto_scontrino_url && (
-                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => viewSecureScontrino(spesa.foto_scontrino_url!)}>
-                      <Paperclip className="w-3.5 h-3.5" /> Allegato
-                    </Button>
-                  )}
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => setReceiptExpense(spesa)}>
+                    <Paperclip className="w-3.5 h-3.5" /> {spesa.foto_scontrino_url ? 'Allegato' : 'Allega'}
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 touch-min" onClick={() => {
-                    setEditingSpesa(spesa)
+                    setReceiptFile(null)
+                      setEditingSpesa(spesa)
                     setFormData({
                       voce_spesa: spesa.voce_spesa || '',
                       importo: spesa.importo.toString(),
