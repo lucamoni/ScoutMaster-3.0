@@ -86,8 +86,8 @@ export default function SaldaOraClient({
     eventi: string[]
   }>({ censimento: false, metodo: 'Contanti', months: [], eventi: [] })
 
-  const quotaMensileNum = Number(quotaMensileStandard) || 10
-  const quotaCensimentoNum = Number(quotaCensimentoStandard) || 45
+  const quotaMensileNum = Number(quotaMensileStandard)
+  const quotaCensimentoNum = Number(quotaCensimentoStandard)
   const activeMonths = getScoutMonthsUpTo(new Date(), currentYear)
 
   const router = useRouter()

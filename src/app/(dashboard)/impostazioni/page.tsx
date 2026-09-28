@@ -33,7 +33,7 @@ export default async function ImpostazioniPage() {
       </div>
 
       <CensimentoSettings
-        currentYear={period.currentYear} 
+        currentYear={period.currentYear}
         initialCensimentoStandard={settings.quota_censimento_standard || '45'}
         initialCensimentoFratelli={settings.quota_censimento_fratelli || '35'}
         initialMensileStandard={settings.quota_mensile_standard || '10'}

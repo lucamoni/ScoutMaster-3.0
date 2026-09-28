@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Camera, Plus, Trash2, Settings2, Pencil, Check, X, Loader2, Receipt, Paperclip, Filter, Search } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -91,6 +91,7 @@ export default function CassaClient({
   const supabase = createClient()
 
   const searchParams = useSearchParams()
+  const router = useRouter()
 
   // Auto-open scanner from query parameter
   useEffect(() => {
@@ -123,12 +124,16 @@ export default function CassaClient({
           }
         }
       )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'impostazioni' }, () => router.refresh())
       .subscribe()
 
+    const refresh = () => router.refresh()
+    window.addEventListener('focus', refresh)
     return () => {
+      window.removeEventListener('focus', refresh)
       supabase.removeChannel(channel)
     }
-  }, [supabase, startDate, endDate])
+  }, [supabase, startDate, endDate, router])
 
   // Alias per compatibilità UI display
   const normalizeMetodoDisplay = toCanonicalMetodo
