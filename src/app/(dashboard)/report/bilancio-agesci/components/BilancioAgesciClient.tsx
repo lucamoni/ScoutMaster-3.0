@@ -24,7 +24,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
-import { calculateAccountingBalances } from '@/lib/utils/accounting'
+import { calculateAccountingBalances, getAccountingPeriod } from '@/lib/utils/accounting'
 
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -66,6 +66,7 @@ export default function BilancioAgesciClient({
   const configuredYear = normalizeAnnoScout(initialSettings.anno_scout_corrente || getCurrentAnnoScout())
   const [selectedAnnoScout, setSelectedAnnoScout] = useState<string>(configuredYear)
   const [settings, setSettings] = useState<Record<string, string>>(initialSettings)
+  useEffect(() => { setSettings(initialSettings) }, [initialSettings])
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   
   const supabase = createClient()
@@ -94,8 +95,9 @@ export default function BilancioAgesciClient({
   const cassaEffettivaKey = `saldo_effettivo_cassa_${selectedAnnoScout}`
   const bancaEffettivaKey = `saldo_effettivo_banca_${selectedAnnoScout}`
 
-  const saldoInizialeCassa = parseFloat(settings[cassaInizialeKey] || '0') || 0
-  const saldoInizialeBanca = parseFloat(settings[bancaInizialeKey] || '0') || 0
+  const { initialCash: saldoInizialeCassa, initialBank: saldoInizialeBanca } = getAccountingPeriod(
+    new Map(Object.entries({ ...settings, saldo_iniziale_contanti: selectedAnnoScout === configuredYear ? settings.saldo_iniziale_contanti : '', saldo_iniziale_banca: selectedAnnoScout === configuredYear ? settings.saldo_iniziale_banca : '', anno_scout_corrente: selectedAnnoScout })), selectedAnnoScout
+  )
   const hasSaldoEffettivoCassa = settings[cassaEffettivaKey]?.trim() !== '' && Number.isFinite(Number(settings[cassaEffettivaKey]))
   const hasSaldoEffettivoBanca = settings[bancaEffettivaKey]?.trim() !== '' && Number.isFinite(Number(settings[bancaEffettivaKey]))
   const saldoEffettivoCassa = hasSaldoEffettivoCassa ? Number(settings[cassaEffettivaKey]) : 0

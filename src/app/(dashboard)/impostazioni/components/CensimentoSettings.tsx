@@ -11,12 +11,14 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/types/database.types'
 
 export default function CensimentoSettings({
+  currentYear,
   initialCensimentoStandard = '45',
   initialCensimentoFratelli = '35',
   initialMensileStandard = '10',
   initialSaldoContanti = '0',
   initialSaldoBanca = '0'
 }: {
+  currentYear: string
   initialCensimentoStandard?: string
   initialCensimentoFratelli?: string
   initialMensileStandard?: string
@@ -42,8 +44,8 @@ export default function CensimentoSettings({
         { chiave: 'quota_censimento_standard', valore: censimentoStandard },
         { chiave: 'quota_censimento_fratelli', valore: censimentoFratelli },
         { chiave: 'quota_mensile_standard', valore: mensileStandard },
-        { chiave: 'saldo_iniziale_contanti', valore: saldoContanti || '0' },
-        { chiave: 'saldo_iniziale_banca', valore: saldoBanca || '0' }
+        { chiave: `saldo_iniziale_cassa_${currentYear}`, valore: saldoContanti || '0' },
+        { chiave: `saldo_iniziale_banca_${currentYear}`, valore: saldoBanca || '0' }
       ])
       if (error) throw error
       toast.success('Quote e saldi iniziali salvati con successo!')
@@ -63,7 +65,7 @@ export default function CensimentoSettings({
           <CardTitle className="text-xl">Configurazione Quote Censimento e Mensili</CardTitle>
         </div>
         <CardDescription>
-          Imposta le quote predefinite per il censimento AGESCI (quota intera e quota scontata per fratelli) e le quote mensili di reparto.
+          Saldi iniziali riferiti all’anno {currentYear}. Imposta le quote predefinite per il censimento AGESCI (quota intera e quota scontata per fratelli) e le quote mensili di reparto.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

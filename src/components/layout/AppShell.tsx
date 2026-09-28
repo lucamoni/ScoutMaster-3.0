@@ -17,7 +17,6 @@ import {
   X, 
   ChevronLeft, 
   ChevronRight, 
-  ChevronDown,
   LayoutDashboard,
   AlertTriangle,
   Compass,
@@ -33,13 +32,15 @@ import {
 import { CassaBot } from '@/components/CassaBot'
 import { cn } from '@/lib/utils'
 import { createBrowserClient } from '@supabase/ssr'
+import { getCurrentAnnoScout } from '@/lib/utils/payment'
+import { getAccountingPeriod, calculateAccountingBalances } from '@/lib/utils/accounting'
 import ScoutMasterLogo from '@/components/layout/Logo'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [annoScout, setAnnoScout] = useState('2025/2026')
+  const [annoScout, setAnnoScout] = useState(getCurrentAnnoScout())
   const [saldi, setSaldi] = useState({ cassa: 0, banca: 0 })
 
   useEffect(() => {
@@ -51,38 +52,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
     const fetchSaldi = async () => {
-      const [speseRes, settingsRes] = await Promise.all([
-        supabase.from('registro_spese').select('importo, tipo_movimento, metodo, data'),
-        supabase.from('impostazioni').select('chiave, valore')
-      ])
+      const settingsRes = await supabase.from('impostazioni').select('chiave, valore')
+      if (settingsRes.error) return
+      const settings = new Map<string, string | null>((settingsRes.data || []).map(item => [item.chiave, item.valore]))
+      const period = getAccountingPeriod(settings, getCurrentAnnoScout())
+      const speseRes = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo')
+        .gte('data', period.startDate).lte('data', period.endDate)
       if (speseRes.error || !speseRes.data) return
-
-      const [startYear, endYear] = annoScout.split('/').map(Number)
-      const startDate = `${startYear}-10-01`
-      const endDate = `${endYear}-09-30`
-      const spese = speseRes.data.filter(s => s.data >= startDate && s.data <= endDate)
-      const settings = new Map((settingsRes.data || []).map(item => [item.chiave, item.valore]))
-      const initialCash = Number(settings.get('saldo_iniziale_contanti') || settings.get(`saldo_iniziale_cassa_${annoScout.replace('/', '-')}`) || 0)
-      const initialBank = Number(settings.get('saldo_iniziale_banca') || settings.get(`saldo_iniziale_banca_${annoScout.replace('/', '-')}`) || 0)
-
-      let cassa = initialCash
-      let banca = initialBank
-
-      spese.forEach((s) => {
-        const isEntrata = s.tipo_movimento === 'ENTRATA'
-        const metodo = (s.metodo || '').trim().toUpperCase()
-        const isBanca = metodo.includes('BONIF') || metodo.includes('BANC') || metodo.includes('CART') || metodo.includes('POS')
-        const val = Number(s.importo) || 0
-
-        if (!isBanca) {
-          if (isEntrata) cassa += val
-          else cassa -= val
-        } else {
-          if (isEntrata) banca += val
-          else banca -= val
-        }
-      })
-
+      const balances = calculateAccountingBalances(speseRes.data, period.initialCash, period.initialBank)
+      setAnnoScout(period.currentYear)
+      const cassa = balances.saldoFinaleCassa
+      const banca = balances.saldoFinaleBanca
       setSaldi({ cassa, banca })
     }
 
@@ -93,12 +73,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registro_spese' }, () => {
         fetchSaldi()
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'impostazioni' }, fetchSaldi)
       .subscribe()
 
+    window.addEventListener('focus', fetchSaldi)
     return () => {
+      window.removeEventListener('focus', fetchSaldi)
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [pathname])
 
   const navGroups = [
     {
@@ -252,16 +235,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* Center/Right Anno Scout Selector */}
           <div className="flex items-center gap-3 ml-auto md:ml-0">
             <div className="relative inline-flex items-center">
-              <select
-                value={annoScout}
-                onChange={(e) => setAnnoScout(e.target.value)}
-                className="appearance-none bg-slate-100 hover:bg-slate-200/80 text-agesci-blue font-semibold text-xs md:text-sm py-1.5 pl-3 pr-8 rounded-lg border border-slate-200 transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-agesci-blue"
-              >
-                <option value="2025/2026">Anno Scout 2025/2026</option>
-                <option value="2024/2025">Anno Scout 2024/2025</option>
-                <option value="2023/2024">Anno Scout 2023/2024</option>
-              </select>
-              <ChevronDown className="h-3.5 w-3.5 text-slate-500 absolute right-2.5 pointer-events-none" />
+              <Link href="/impostazioni" title="Modifica anno scout nelle Impostazioni" className="text-agesci-blue font-semibold text-xs md:text-sm bg-slate-100 px-3 py-1.5 rounded-lg">
+                Anno Scout {annoScout.replace('-', '/')}
+              </Link>
             </div>
           </div>
 

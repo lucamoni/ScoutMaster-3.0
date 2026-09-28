@@ -1,4 +1,4 @@
-import { normalizeAnnoScout } from './payment'
+import { getCurrentAnnoScout, normalizeAnnoScout } from './payment'
 
 export const SCOUT_FEE_MONTHS = [
   'novembre',
@@ -35,6 +35,7 @@ type DebtParticipation = {
   evento_id: string | null
   riscosso: boolean | null
   quota_dovuta: number | null
+  stato_presenza?: string | null
 }
 
 const validAmount = (value: unknown, fallback = 0) => {
@@ -42,9 +43,13 @@ const validAmount = (value: unknown, fallback = 0) => {
   return Number.isFinite(amount) && amount >= 0 ? amount : fallback
 }
 
-export function getScoutMonthsUpTo(referenceDate = new Date()): ScoutFeeMonth[] {
+export function getScoutMonthsUpTo(referenceDate = new Date(), currentYear = getCurrentAnnoScout(referenceDate)): ScoutFeeMonth[] {
+  const year = normalizeAnnoScout(currentYear)
+  const actualYear = getCurrentAnnoScout(referenceDate)
+  if (year < actualYear) return [...SCOUT_FEE_MONTHS]
+  if (year > actualYear) return []
   const month = referenceDate.getMonth()
-  if (month === 8 || month === 9) return []
+  if (month === 9) return []
   if (month === 10) return SCOUT_FEE_MONTHS.slice(0, 1)
   if (month === 11) return SCOUT_FEE_MONTHS.slice(0, 2)
   if (month >= 0 && month <= 5) return SCOUT_FEE_MONTHS.slice(0, month + 3)
@@ -71,14 +76,14 @@ export function calculateScoutDebt({
   censusFee: number
 }) {
   const normalizedYear = normalizeAnnoScout(currentYear)
-  const scoutQuote = quote.find(item =>
+  const scoutQuote = quote.filter(item =>
     item.ragazzo_id === scout.id && normalizeAnnoScout(item.anno_scout) === normalizedYear
   )
-  const unpaidMonths = activeMonths.filter(month => scoutQuote?.[month] !== true)
+  const unpaidMonths = activeMonths.filter(month => !scoutQuote.some(item => item[month] === true))
   const quoteDebt = unpaidMonths.length * validAmount(monthlyFee)
 
   const unpaidEventDetails = participations
-    .filter(item => item.ragazzo_id === scout.id && item.riscosso !== true)
+    .filter(item => item.ragazzo_id === scout.id && item.riscosso !== true && item.stato_presenza !== 'Assente' && events.some(event => event.id === item.evento_id))
     .map(item => {
       const event = events.find(candidate => candidate.id === item.evento_id)
       const eventFee = validAmount(event?.quota_standard)

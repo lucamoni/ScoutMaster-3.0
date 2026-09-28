@@ -86,44 +86,25 @@ export default function SaldaOraClient({
     eventi: string[]
   }>({ censimento: false, metodo: 'Contanti', months: [], eventi: [] })
 
-  const quotaMensileNum = Number(quotaMensileStandard) || 10
-  const quotaCensimentoNum = Number(quotaCensimentoStandard) || 45
-  const activeMonths = getScoutMonthsUpTo()
+  const quotaMensileNum = Number(quotaMensileStandard)
+  const quotaCensimentoNum = Number(quotaCensimentoStandard)
+  const activeMonths = getScoutMonthsUpTo(new Date(), currentYear)
 
-  // Realtime Syncing
+  const router = useRouter()
+  useEffect(() => { setRagazzi(initialRagazzi) }, [initialRagazzi])
+  useEffect(() => { setQuote(initialQuote) }, [initialQuote])
+  useEffect(() => { setPartecipazioni(initialPartecipazioni) }, [initialPartecipazioni])
   useEffect(() => {
-    const channel = supabase
-      .channel('salda_ora_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'partecipazioni_eventi' }, (payload) => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const updated = payload.new as Partecipazione
-          setPartecipazioni(prev => {
-            const filtered = prev.filter(p => !(p.ragazzo_id === updated.ragazzo_id && p.evento_id === updated.evento_id))
-            return [...filtered, updated]
-          })
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quote_mensili' }, (payload) => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const updated = payload.new as Quota
-          setQuote(prev => {
-            const filtered = prev.filter(q => q.id !== updated.id)
-            return [...filtered, updated]
-          })
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ragazzi' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          const updated = payload.new as Ragazzo
-          setRagazzi(prev => prev.map(r => r.id === updated.id ? updated : r))
-        }
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
+    let timer: ReturnType<typeof setTimeout>
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(() => router.refresh(), 150) }
+    let channel = supabase.channel('salda_ora_realtime')
+    for (const table of ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'eventi', 'impostazioni']) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
     }
-  }, [supabase])
+    channel.subscribe()
+    window.addEventListener('focus', refresh)
+    return () => { clearTimeout(timer); window.removeEventListener('focus', refresh); supabase.removeChannel(channel) }
+  }, [supabase, router])
 
   // Helper per calcolare le pendenze dettagliate di un ragazzo
   const computeBoyDebt = (ragazzo: Ragazzo) => {
@@ -139,7 +120,7 @@ export default function SaldaOraClient({
     })
   }
 
-  const router = useRouter()
+
 
   const syncEventoPagamento = async (
     ragazzoId: string,
