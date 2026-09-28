@@ -1,4 +1,4 @@
-import { toCanonicalMetodo } from './payment'
+import { normalizeAnnoScout, toCanonicalMetodo } from './payment'
 
 export type AccountingMovement = {
   importo: number | null
@@ -53,5 +53,23 @@ export function calculateAccountingBalances(
     saldoFinaleBanca,
     saldoFinaleTotale: saldoFinaleCassa + saldoFinaleBanca,
     risultatoEsercizio: entrateContanti + entrateBanca - usciteContanti - usciteBanca,
+  }
+}
+
+export function getAccountingPeriod(settings: Map<string, string | null>, fallbackYear: string) {
+  const currentYear = normalizeAnnoScout(settings.get('anno_scout_corrente') || fallbackYear)
+  const [start, end] = currentYear.split('-')
+  const legacyYear = currentYear.replace('-', '/')
+  const amount = (keys: string[]) => {
+    for (const key of keys) {
+      const value = settings.get(key)
+      if (value != null && value !== '' && Number.isFinite(Number(value))) return Number(value)
+    }
+    return 0
+  }
+  return {
+    currentYear, startDate: `${start}-10-01`, endDate: `${end}-09-30`,
+    initialCash: amount([`saldo_iniziale_cassa_${currentYear}`, `saldo_iniziale_cassa_${legacyYear}`, 'saldo_iniziale_contanti']),
+    initialBank: amount([`saldo_iniziale_banca_${currentYear}`, `saldo_iniziale_banca_${legacyYear}`, 'saldo_iniziale_banca']),
   }
 }

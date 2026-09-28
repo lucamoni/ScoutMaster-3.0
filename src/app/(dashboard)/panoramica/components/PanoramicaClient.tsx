@@ -26,6 +26,8 @@ import {
 } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
+import { calculateScoutDebt, getScoutMonthsUpTo } from '@/lib/utils/debts'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -33,21 +35,6 @@ type Evento = Database['public']['Tables']['eventi']['Row']
 type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row']
 type Quota = Database['public']['Tables']['quote_mensili']['Row']
 type Pattuglia = Database['public']['Tables']['pattuglie']['Row']
-
-const MONTH_ORDER = ['novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
-
-const getCurrentScoutMonthIndex = () => {
-  const m = new Date().getMonth()
-  if (m === 10) return 0
-  if (m === 11) return 1
-  if (m === 0) return 2
-  if (m === 1) return 3
-  if (m === 2) return 4
-  if (m === 3) return 5
-  if (m === 4) return 6
-  if (m === 5) return 7
-  return 7
-}
 
 export function PanoramicaClient({
   initialRagazzi,
@@ -81,46 +68,28 @@ export function PanoramicaClient({
   const [filtroPattuglia, setFiltroPattuglia] = useState<string>('TUTTE')
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
 
+  const router = useRouter()
+  useEffect(() => { setRagazzi(initialRagazzi) }, [initialRagazzi])
+  useEffect(() => { setQuoteState(quote) }, [quote])
+  useEffect(() => { setPartecipazioniState(partecipazioni) }, [partecipazioni])
   useEffect(() => {
-    const channel = supabase
-      .channel('panoramica_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ragazzi' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          const updated = payload.new as Ragazzo
-          setRagazzi(prev => prev.map(r => r.id === updated.id ? updated : r))
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quote_mensili' }, (payload) => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const updated = payload.new as Quota
-          setQuoteState(prev => {
-            const filtered = prev.filter(q => q.id !== updated.id)
-            return [...filtered, updated]
-          })
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'partecipazioni_eventi' }, (payload) => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const updated = payload.new as Partecipazione
-          setPartecipazioniState(prev => {
-            const filtered = prev.filter(p => p.id !== updated.id)
-            return [...filtered, updated]
-          })
-        }
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
+    let timer: ReturnType<typeof setTimeout>
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(() => router.refresh(), 150) }
+    let channel = supabase.channel('panoramica_realtime')
+    for (const table of ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'eventi', 'impostazioni']) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
     }
-  }, [supabase])
+    channel.subscribe()
+    window.addEventListener('focus', refresh)
+    return () => { clearTimeout(timer); window.removeEventListener('focus', refresh); supabase.removeChannel(channel) }
+  }, [supabase, router])
 
   type RagazzoSelection = { censimento: boolean, months: string[], eventi: string[] }
   const [selections, setSelections] = useState<Record<string, RagazzoSelection>>({})
 
   const quotaMensileNum = Number(quotaMensileStandard) || 0
   const quotaCensimentoNum = Number(initialQuotaCensimento) || 0
-  const elapsedMonths = MONTH_ORDER.slice(0, getCurrentScoutMonthIndex() + 1)
+  const elapsedMonths = getScoutMonthsUpTo(new Date(), currentYear)
 
   const toggleCensimento = (ragazzoId: string) => {
     setSelections(prev => {
@@ -163,78 +132,44 @@ export function PanoramicaClient({
 
     setIsProcessing(ragazzoId)
     const ragazzo = ragazzi.find(r => r.id === ragazzoId)
-    const dateStr = new Date().toISOString().split('T')[0]
-
     try {
       if (sel.censimento) {
-        setRagazzi(prev => prev.map(r => r.id === ragazzoId ? { ...r, quota_censimento: true } : r))
-        await supabase.from('ragazzi').update({ quota_censimento: true } as unknown as Database['public']['Tables']['ragazzi']['Update']).eq('id', ragazzoId)
+        const { error } = await supabase.from('ragazzi').update({ quota_censimento: true }).eq('id', ragazzoId)
+        if (error) throw error
+        const { data: movements, error: ledgerError } = await supabase.from('registro_spese').update({ metodo: method })
+          .eq('ragazzo_id', ragazzoId).eq('riferimento_censimento_anno', normalizeAnnoScout(currentYear)).select('id')
+        if (ledgerError) throw ledgerError
+        if (!movements?.length) throw new Error('Movimento di cassa mancante: verificare la sincronizzazione del database')
       }
-
       if (sel.months.length > 0) {
-        setQuoteState(prev => {
-          const normCurrent = normalizeAnnoScout(currentYear)
-          const existing = prev.find(q => q.ragazzo_id === ragazzoId && normalizeAnnoScout(q.anno_scout) === normCurrent)
-          if (existing) {
-            const updated = { ...existing } as Record<string, unknown>
-            sel.months.forEach(m => updated[m] = true)
-            return prev.map(q => q.ragazzo_id === ragazzoId ? (updated as Quota) : q)
-          } else {
-            const newRecord = { ragazzo_id: ragazzoId, anno_scout: currentYear } as Record<string, unknown>
-            sel.months.forEach(m => newRecord[m] = true)
-            return [...prev, newRecord as Quota]
-          }
-        })
-
-        const updatesForSupabase = sel.months.reduce((acc, m) => ({ ...acc, [m]: true }), {})
-        const { data: quoteData } = await supabase.from('quote_mensili')
-          .upsert({ ragazzo_id: ragazzoId, anno_scout: currentYear, ...updatesForSupabase } as unknown as Database['public']['Tables']['quote_mensili']['Insert'], { onConflict: 'ragazzo_id,anno_scout' })
-          .select('id').single()
-
-        if (quoteData) {
-          for (const month of sel.months) {
-            await supabase.from('registro_spese').insert({
-              importo: quotaMensileNum,
-              metodo: method,
-              voce_spesa: 'Quota Mensile',
-              tipo_movimento: 'ENTRATA',
-              data: dateStr,
-              ragazzo_id: ragazzoId,
-              quota_mensile_id: quoteData.id,
-              riferimento_quota: month,
-              note: `Quota ${month.substring(0,3).toUpperCase()} - ${ragazzo?.nome} ${ragazzo?.cognome}`
-            })
-          }
-        }
+        const existing = quoteState.find(q => q.ragazzo_id === ragazzoId && normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(currentYear))
+        const changes = Object.fromEntries(sel.months.map(m => [m, true])) as Database['public']['Tables']['quote_mensili']['Update']
+        const query = existing
+          ? supabase.from('quote_mensili').update(changes).eq('id', existing.id)
+          : supabase.from('quote_mensili').upsert({ ragazzo_id: ragazzoId, anno_scout: normalizeAnnoScout(currentYear), ...changes }, { onConflict: 'ragazzo_id,anno_scout' })
+        const { data, error } = await query.select('id').single()
+        if (error || !data) throw error || new Error('Quota non salvata')
+        const { data: movements, error: ledgerError } = await supabase.from('registro_spese').update({ metodo: method })
+          .eq('quota_mensile_id', data.id).in('riferimento_quota', sel.months).select('id')
+        if (ledgerError) throw ledgerError
+        if (movements?.length !== sel.months.length) throw new Error('Movimenti di cassa incompleti: verificare la sincronizzazione del database')
       }
-
-      if (sel.eventi.length > 0) {
-        setPartecipazioniState(prev => prev.map(p => 
-          (p.ragazzo_id === ragazzoId && p.evento_id != null && sel.eventi.includes(p.evento_id)) ? { ...p, riscosso: true, metodo_pagamento: method } : p
-        ))
-
-        for (const evId of sel.eventi) {
-          const evData = eventiDataMap[evId]
-          await fetch('/api/uscite/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ragazziIds: [ragazzoId],
-              eventoId: evId,
-              riscosso: true,
-              metodoPagamento: method,
-              quotaDovuta: evData?.quota
-            })
-          })
-        }
+      for (const evId of sel.eventi) {
+        const response = await fetch('/api/uscite/sync', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ragazziIds: [ragazzoId], eventoId: evId, riscosso: true,
+            metodoPagamento: method, aggiornaMetodoEvento: false, quotaDovuta: eventiDataMap[evId]?.quota }),
+        })
+        if (!response.ok) throw new Error('Pagamento evento non salvato')
       }
 
       setSelections(prev => ({ ...prev, [ragazzoId]: { censimento: false, months: [], eventi: [] } }))
       toast.success(`Quote saldate con successo per ${ragazzo?.nome}!`)
     } catch (err: unknown) {
       console.error(err)
-      toast.error("Errore durante il salvataggio del saldo")
+      toast.error("Saldo non completato. Alcune voci potrebbero essere state salvate: controlla le pendenze aggiornate.")
     } finally {
+      router.refresh()
       setIsProcessing(null)
     }
   }
@@ -270,24 +205,14 @@ export function PanoramicaClient({
   let inRegolaCount = 0
   let totaleDebitoGenerale = 0
 
+  const debtFor = (scout: Ragazzo) => calculateScoutDebt({
+    scout, quote: quoteState, events: eventi, participations: partecipazioniState,
+    currentYear, activeMonths: elapsedMonths, monthlyFee: quotaMensileNum, censusFee: quotaCensimentoNum,
+  })
   ragazzi.forEach(r => {
-    const normCurrent = normalizeAnnoScout(currentYear)
-    const boyQuotes = quoteState.filter(q => q.ragazzo_id === r.id && normalizeAnnoScout(q.anno_scout) === normCurrent)
-    const isMonthPaid = (m: string) => boyQuotes.some(q => (q as Record<string, unknown>)[m] === true)
-    const unpaidMonths = elapsedMonths.filter(m => !isMonthPaid(m))
-    const missingCensimento = !r.quota_censimento
-    const unpaidEventsParts = partecipazioniState.filter(p => 
-      p.ragazzo_id === r.id && (p.stato_presenza === 'Presente' || p.stato_presenza === 'Pendolare') && !p.riscosso
-    )
-    
-    let deb = unpaidMonths.length * quotaMensileNum + (missingCensimento ? (Number(r.importo_censimento) || quotaCensimentoNum) : 0)
-    unpaidEventsParts.forEach(p => {
-      const ev = eventi.find(e => e.id === p.evento_id)
-      deb += p.quota_dovuta || ev?.quota_standard || 0
-    })
-
-    if (deb === 0) inRegolaCount++
-    totaleDebitoGenerale += deb
+    const { totalDebt } = debtFor(r)
+    if (totalDebt === 0) inRegolaCount++
+    totaleDebitoGenerale += totalDebt
   })
 
   const percentualeInRegola = totalBoys > 0 ? Math.round((inRegolaCount / totalBoys) * 100) : 100
@@ -435,32 +360,10 @@ export function PanoramicaClient({
         <TabsContent value="ragazzo" className="space-y-4">
           <Accordion type="multiple" className="w-full space-y-3">
             {ragazziFiltrati.map((ragazzoItem) => {
-              const ragazzo = ragazzoItem as any
-              const normCurrent = normalizeAnnoScout(currentYear)
-              const boyQuotes = quoteState.filter(q => q.ragazzo_id === ragazzo.id && normalizeAnnoScout(q.anno_scout) === normCurrent)
-              
-              const isMonthPaid = (m: string) => boyQuotes.some(q => (q as Record<string, unknown>)[m] === true)
-              const unpaidMonths = elapsedMonths.filter(m => !isMonthPaid(m))
-
-              const unpaidEventsParts = partecipazioniState.filter(p => 
-                p.ragazzo_id === ragazzo.id && 
-                (p.stato_presenza === 'Presente' || p.stato_presenza === 'Pendolare') && 
-                !p.riscosso
-              )
-
-              const missingCensimento = !ragazzo.quota_censimento
-              const quotaCensimentoRagazzo = (ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined && Number(ragazzo.importo_censimento) > 0)
-                ? Number(ragazzo.importo_censimento)
-                : quotaCensimentoNum
-
-              let totaleDebito = (unpaidMonths.length * quotaMensileNum) + (missingCensimento ? quotaCensimentoRagazzo : 0)
-              
-              const unpaidEventsData = unpaidEventsParts.map(p => {
-                const ev = eventi.find(e => e.id === p.evento_id)
-                const quota = p.quota_dovuta || ev?.quota_standard || 0
-                totaleDebito += quota
-                return { id: p.evento_id || p.id, nome: ev?.nome_evento || 'Evento Sconosciuto', quota }
-              })
+              const ragazzo = ragazzoItem
+              const debt = debtFor(ragazzo)
+              const { unpaidMonths, censimentoDue: missingCensimento, censimentoCost: quotaCensimentoRagazzo, totalDebt: totaleDebito } = debt
+              const unpaidEventsData = debt.unpaidEventDetails.map(e => ({ id: e.eventoId!, nome: e.nome, quota: e.cost }))
 
               if (totaleDebito === 0) {
                 return (

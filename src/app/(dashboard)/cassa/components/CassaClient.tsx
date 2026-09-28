@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
+import { calculateAccountingBalances } from '@/lib/utils/accounting'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 import { ReceiptOcrResult, scanReceiptLocally } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,9 +31,13 @@ type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
 
 export default function CassaClient({
   initialSpese,
+  startDate,
+  endDate,
   initialCategorie,
   initialBalances = { contanti: 0, banca: 0 },
 }: {
+  startDate: string
+  endDate: string
   initialSpese: Spesa[]
   initialCategorie: Categoria[]
   initialBalances?: { contanti: number; banca: number }
@@ -57,6 +62,8 @@ export default function CassaClient({
   const [filterImportoMax, setFilterImportoMax] = useState('')
   const [filterRicerca, setFilterRicerca] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => { setSpese(initialSpese) }, [initialSpese])
 
   // Scanner Scontrino State
   const [isScannerOpen, setIsScannerOpen] = useState(false)
@@ -106,10 +113,10 @@ export default function CassaClient({
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newSpesa = payload.new as Spesa
-            setSpese(prev => prev.some(s => s.id === newSpesa.id) ? prev : [newSpesa, ...prev])
+            setSpese(prev => prev.some(s => s.id === newSpesa.id) || !newSpesa.data || newSpesa.data < startDate || newSpesa.data > endDate ? prev : [newSpesa, ...prev])
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as Spesa
-            setSpese(prev => prev.map(s => s.id === updated.id ? updated : s))
+            setSpese(prev => [...prev.filter(s => s.id !== updated.id), ...(updated.data && updated.data >= startDate && updated.data <= endDate ? [updated] : [])])
           } else if (payload.eventType === 'DELETE') {
             const deleted = payload.old as Spesa
             setSpese(prev => prev.filter(s => s.id !== deleted.id))
@@ -121,7 +128,7 @@ export default function CassaClient({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase])
+  }, [supabase, startDate, endDate])
 
   // Alias per compatibilità UI display
   const normalizeMetodoDisplay = toCanonicalMetodo
@@ -196,29 +203,11 @@ export default function CassaClient({
     setSelectedIds(new Set())
   }
 
-  // Calcolo Dinamico dei Saldi in base allo stato locale "cassaSpese"
-  let saldoEntrateContanti = 0
-  let saldoEntrateBanca = 0
-  let saldoUsciteContanti = 0
-  let saldoUsciteBanca = 0
+  const { entrateContanti: saldoEntrateContanti, entrateBanca: saldoEntrateBanca,
+    usciteContanti: saldoUsciteContanti, usciteBanca: saldoUsciteBanca,
+    saldoFinaleCassa: saldoContanti, saldoFinaleBanca: saldoBanca,
+  } = calculateAccountingBalances(cassaSpese, initialBalances.contanti, initialBalances.banca)
 
-  cassaSpese.forEach((spesa) => {
-    const isEntrata = spesa.tipo_movimento === 'ENTRATA'
-    const met = normalizeMetodoDisplay(spesa.metodo)
-    if (met === 'Contanti') {
-      if (isEntrata) saldoEntrateContanti += Number(spesa.importo)
-      else saldoUsciteContanti += Number(spesa.importo)
-    } else {
-      if (isEntrata) saldoEntrateBanca += Number(spesa.importo)
-      else saldoUsciteBanca += Number(spesa.importo)
-    }
-  })
-
-  // Integra con le entrate storiche calcolate a server se necessario, ma dato che ora tutto va in registro_spese 
-  // e spese contiene tutti i record (il server li fetchava tutti), i saldi locali calcolati sono esatti per i dati presenti.
-  // Tuttavia per sicurezza sommiamo il differenziale. In questo caso li calcoliamo ESCLUSIVAMENTE sulle spese.
-  const saldoContanti = initialBalances.contanti + saldoEntrateContanti - saldoUsciteContanti
-  const saldoBanca = initialBalances.banca + saldoEntrateBanca - saldoUsciteBanca
 
   // Helper per la sincronizzazione inversa da Cassa verso Eventi / Uscite / Partecipazioni
   const syncSpesaMetodoWithDB = async (spesa: Spesa, newMetodo: string) => {

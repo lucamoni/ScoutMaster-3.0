@@ -1,3 +1,5 @@
+import { getAccountingPeriod } from '@/lib/utils/accounting'
+import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import SheetsSettings from './components/SheetsSettings'
 import DataResetSettings from './components/DataResetSettings'
 import AuditSettings from './components/AuditSettings'
@@ -19,6 +21,8 @@ export default async function ImpostazioniPage() {
     })
   }
 
+  const period = getAccountingPeriod(new Map(Object.entries(settings)), getCurrentAnnoScout())
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-8">
       <div>
@@ -28,12 +32,13 @@ export default async function ImpostazioniPage() {
         </p>
       </div>
 
-      <CensimentoSettings 
+      <CensimentoSettings
+        currentYear={period.currentYear} 
         initialCensimentoStandard={settings.quota_censimento_standard || '45'}
         initialCensimentoFratelli={settings.quota_censimento_fratelli || '35'}
         initialMensileStandard={settings.quota_mensile_standard || '10'}
-        initialSaldoContanti={settings.saldo_iniziale_contanti || '0'}
-        initialSaldoBanca={settings.saldo_iniziale_banca || '0'}
+        initialSaldoContanti={String(period.initialCash)}
+        initialSaldoBanca={String(period.initialBank)}
       />
 
       <AuditSettings />

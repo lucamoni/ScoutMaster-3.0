@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateAccountingBalances } from './accounting'
+import { calculateAccountingBalances, getAccountingPeriod } from './accounting'
 import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout, toCanonicalMetodo } from './payment'
 
 describe('anno scout', () => {
@@ -47,5 +47,15 @@ describe('riconciliazione contabile', () => {
     ])
 
     expect(result.saldoFinaleTotale).toBe(0)
+  })
+})
+
+describe('impostazioni contabili condivise', () => {
+  it('dà precedenza al saldo annuale anche se zero, con compatibilità degli anni legacy', () => {
+    const period = getAccountingPeriod(new Map([
+      ['anno_scout_corrente', '2026/2027'], ['saldo_iniziale_contanti', '999'],
+      ['saldo_iniziale_cassa_2026-2027', '0'], ['saldo_iniziale_banca_2026/2027', '120'],
+    ]), '2025-2026')
+    expect(period).toEqual({ currentYear: '2026-2027', startDate: '2026-10-01', endDate: '2027-09-30', initialCash: 0, initialBank: 120 })
   })
 })

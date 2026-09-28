@@ -11,6 +11,6 @@ describe('normalizeDocumentData', () => {
   })
 
   it('rejects malformed dates, tax codes and phones', () => {
-    expect(normalizeDocumentData({ data_nascita: '03/02/2010', codice_fiscale: 'x', telefono_ragazzo: '12' })).toMatchObject({ data_nascita: null, codice_fiscale: null, telefono_ragazzo: null })
+    expect(normalizeDocumentData({ data_nascita: '31/02/2010', codice_fiscale: 'x', telefono_ragazzo: '12' })).toMatchObject({ data_nascita: null, codice_fiscale: null, telefono_ragazzo: null })
   })
 })

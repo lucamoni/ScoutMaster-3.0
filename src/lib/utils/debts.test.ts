@@ -74,3 +74,32 @@ describe('calcolo pendenze', () => {
     expect(result.totalDebt).toBe(60)
   })
 })
+
+describe('coerenza panoramica e salda ora', () => {
+  it('mantiene gli arretrati a settembre e distingue anni passati e futuri', () => {
+    expect(getScoutMonthsUpTo(new Date(2026, 8, 28), '2025/2026')).toHaveLength(8)
+    expect(getScoutMonthsUpTo(new Date(2026, 8, 28), '2026-2027')).toEqual([])
+    expect(getScoutMonthsUpTo(new Date(2026, 9, 1), '2025-2026')).toHaveLength(8)
+    expect(getScoutMonthsUpTo(new Date(2026, 9, 1), '2026-2027')).toEqual([])
+  })
+
+  it('unisce quote legacy, rispetta esenzioni e non addebita assenti o eventi eliminati', () => {
+    const result = calculateScoutDebt({
+      scout: { ...scout, importo_censimento: 0 },
+      quote: [
+        { ragazzo_id: scout.id, anno_scout: '2025/2026', novembre: true },
+        { ragazzo_id: scout.id, anno_scout: '2025-2026', dicembre: true },
+      ],
+      events: [{ id: 'e', nome_evento: 'Campo', quota_standard: 100 }],
+      participations: [
+        { ragazzo_id: scout.id, evento_id: 'e', riscosso: false, quota_dovuta: 0, stato_presenza: 'Presente' },
+        { ragazzo_id: scout.id, evento_id: 'e', riscosso: false, quota_dovuta: 100, stato_presenza: 'Assente' },
+        { ragazzo_id: scout.id, evento_id: 'deleted', riscosso: false, quota_dovuta: 100 },
+      ],
+      currentYear: '2025-2026', activeMonths: ['novembre', 'dicembre'], monthlyFee: 10, censusFee: 45,
+    })
+    expect(result.totalDebt).toBe(0)
+    expect(result.unpaidMonths).toEqual([])
+    expect(result.unpaidEventDetails).toHaveLength(1)
+  })
+})
