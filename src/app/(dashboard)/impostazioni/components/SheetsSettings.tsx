@@ -33,6 +33,12 @@ interface ColumnMapping {
 }
 
 const MODULE_INFO: Record<string, { title: string, description: string, icon: React.ElementType, badgeColor: string }> = {
+  campi: {
+    title: 'Campi invernali ed estivi',
+    description: 'CI: 100 €. CE: quota individuale dal foglio. Stato del saldo e metodo di pagamento.',
+    icon: Tent,
+    badgeColor: 'bg-emerald-100 text-emerald-800'
+  },
   ragazzi: {
     title: 'Anagrafica Ragazzi',
     description: 'Nomi, Cognomi, Squadriglie/Pattuglie, Sesso, Censimento e Contatti.',
@@ -90,6 +96,8 @@ export default function SheetsSettings({
   const [selectedTables, setSelectedTables] = useState<string[]>(['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese'])
   const [selectedSheets, setSelectedSheets] = useState<string[]>([])
   const [annoScout, setAnnoScout] = useState<string>(initialAnnoScout || getCurrentAnnoScout())
+  const [eventAccountingDate, setEventAccountingDate] = useState('')
+  const [importWarnings, setImportWarnings] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState<boolean>(false)
 
   const supabase = createBrowserClient<Database>(
@@ -126,7 +134,7 @@ export default function SheetsSettings({
 
     setIsAnalyzing(true)
     setAiMappings(null)
-    toast.loading('Analisi dei fogli con intelligenza artificiale...', { id: 'ai-map' })
+    toast.loading('Lettura e verifica delle colonne dei fogli...', { id: 'ai-map' })
     try {
       await handleSave()
       
@@ -147,6 +155,7 @@ export default function SheetsSettings({
       setSelectedTables(allTables)
 
       toast.success(`Analisi completata! Trovati ${allSheetNames.length} fogli per ${allTables.length} moduli.`, { id: 'ai-map' })
+      if (data.ignoredSheets?.length) toast.info(`Fogli non importati (riepiloghi o formato non riconosciuto): ${data.ignoredSheets.join(', ')}`, { duration: 12000 })
     } catch (error: unknown) {
       const err = error as Error
       toast.error(err.message, { id: 'ai-map' })
@@ -193,7 +202,8 @@ export default function SheetsSettings({
           spreadsheetId: extractSheetId(spreadsheetId),
           selectedTables,
           selectedSheets,
-          annoScout
+          annoScout,
+          eventAccountingDate
         })
       })
       const data = await res.json()
@@ -207,13 +217,15 @@ export default function SheetsSettings({
         totalInserted += r.inserted || 0
         totalUpdated += r.updated || 0
         totalSkipped += r.skipped || 0
-        if (r.warning) warnings.push(`${r.tableName}: ${r.warning}`)
+        if (r.warning) warnings.push(`${r.sheetName}: ${r.warning}`)
       })
+      setImportWarnings(warnings)
 
       if (totalInserted === 0 && totalUpdated === 0) {
         toast.warning(`Nessun record importato. Righe saltate: ${totalSkipped}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`, { id: 'ai-import', duration: 12000 })
       } else {
         toast.success(`Importazione completata! Inseriti ${totalInserted}, aggiornati ${totalUpdated}, saltati ${totalSkipped}.`, { id: 'ai-import', duration: 10000 })
+        if (warnings.length) toast.warning(warnings.join(' '), { duration: 15000 })
       }
     } catch (error: unknown) {
       const err = error as Error
@@ -253,7 +265,7 @@ export default function SheetsSettings({
             />
             <Button onClick={handleAiMap} disabled={isAnalyzing || !spreadsheetId.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0">
               {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-              {isAnalyzing ? 'Analisi...' : 'Analizza Fogli con AI'}
+              {isAnalyzing ? 'Analisi...' : 'Analizza fogli'}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">Lo trovi nell&apos;URL del tuo foglio Google tra /d/ e /edit. Assicurati che il foglio sia condiviso in lettura con il link.</p>
@@ -356,13 +368,20 @@ export default function SheetsSettings({
             </div>
 
             {/* PARAMETRI E OPZIONI DI IMPORTAZIONE ("COME E QUANTO") */}
+            {importWarnings.length > 0 && (
+              <div role="status" className="rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950">
+                <p className="font-semibold">Da verificare prima di completare l’importazione</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">{importWarnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+                <p className="mt-2">Queste righe non sono state importate. Completa i dati nel foglio e ripeti l’importazione.</p>
+              </div>
+            )}
             <div className="space-y-3 pt-2 border-t">
               <Label className="text-sm font-semibold flex items-center gap-2">
                 3. Imposta i Parametri di Importazione:
               </Label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-3 rounded-md">
                 <div className="space-y-1.5">
-                  <Label htmlFor="annoScout" className="text-xs font-medium">Anno Scout Target (Quote Mensili)</Label>
+                  <Label htmlFor="annoScout" className="text-xs font-medium">Anno scout delle quote e dei campi</Label>
                   <Input 
                     id="annoScout"
                     value={annoScout}
@@ -370,6 +389,9 @@ export default function SheetsSettings({
                     placeholder="es. 2024-2025"
                     className="h-8 text-xs font-mono"
                   />
+                  <Label htmlFor="eventAccountingDate" className="text-xs font-medium">Data contabile per eventi e campi senza data</Label>
+                  <Input id="eventAccountingDate" type="date" value={eventAccountingDate} onChange={e => setEventAccountingDate(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">Obbligatoria per importare eventi e campi: sarà usata per gli incassi quando manca la data dell’evento. Le date già presenti vengono conservate. Per periodi diversi, importa i fogli separatamente.</p>
                   <p className="text-[11px] text-muted-foreground">Le quote mensili sbloccate verranno salvate sotto questo anno scout.</p>
                 </div>
                 <div className="space-y-1.5">
