@@ -1,9 +1,12 @@
 import { normalizeAnnoScout, toCanonicalMetodo } from './payment'
+import { isIncludedInAccounting } from './censusAccounting'
 
 export type AccountingMovement = {
   importo: number | null
   metodo: string | null
   tipo_movimento: string | null
+  riferimento_censimento_anno?: string | null
+  voce_spesa?: string | null
 }
 
 export type AccountingBalances = {
@@ -20,7 +23,8 @@ export type AccountingBalances = {
 export function calculateAccountingBalances(
   movements: AccountingMovement[],
   saldoInizialeCassa = 0,
-  saldoInizialeBanca = 0
+  saldoInizialeBanca = 0,
+  includeCensus = false,
 ): AccountingBalances {
   let entrateContanti = 0
   let usciteContanti = 0
@@ -28,6 +32,7 @@ export function calculateAccountingBalances(
   let usciteBanca = 0
 
   for (const movement of movements) {
+    if (!isIncludedInAccounting(movement, includeCensus)) continue
     const importo = Number(movement.importo)
     if (!Number.isFinite(importo) || importo < 0) continue
 

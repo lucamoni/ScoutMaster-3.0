@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Database } from '@/types/database.types'
-import { createBrowserClient } from '@supabase/ssr'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -14,6 +13,8 @@ import { Card } from '@/components/ui/card'
 
 import { createClient } from '@/lib/supabase/client'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
+import { useRouter } from 'next/navigation'
 
 import { useEffect } from 'react'
 import { toast } from 'sonner'
@@ -24,17 +25,23 @@ export default function CensimentoClient({
   initialRagazzi,
   initialQuotaStandard = '45',
   initialQuotaFratelli = '35',
-  currentYear
+  currentYear,
+  initialIncludeCensus = false,
 }: {
   initialRagazzi: Ragazzo[]
   initialQuotaStandard?: string
   initialQuotaFratelli?: string
   currentYear: string
+  initialIncludeCensus?: boolean
 }) {
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [quotaStandard, setQuotaStandard] = useState(initialQuotaStandard)
   const [quotaFratelli, setQuotaFratelli] = useState(initialQuotaFratelli)
   const [isSaving, setIsSaving] = useState(false)
+  const [includeCensus, setIncludeCensus] = useState(initialIncludeCensus)
+  const [savingAccounting, setSavingAccounting] = useState(false)
+  const router = useRouter()
+  useEffect(() => { setIncludeCensus(initialIncludeCensus) }, [initialIncludeCensus])
   const [filterPattuglia, setFilterPattuglia] = useState<string>('TUTTE')
   const [calcNumFratelli, setCalcNumFratelli] = useState<number>(2)
 
@@ -58,6 +65,21 @@ export default function CensimentoClient({
 
   const numStandard = Number(quotaStandard) || 45
   const numFratelli = Number(quotaFratelli) || 35
+
+  const saveAccountingSetting = async (enabled: boolean) => {
+    if (savingAccounting) return
+    setSavingAccounting(true)
+    try {
+      const { error } = await supabase.from('impostazioni').upsert({ chiave: CENSUS_INCOME_SETTING, valore: String(enabled) })
+      if (error) throw error
+      setIncludeCensus(enabled)
+      window.dispatchEvent(new Event('accounting-settings-changed'))
+      router.refresh()
+      toast.success(enabled ? 'Censimento incluso nelle entrate' : 'Censimento escluso dalle entrate. Pagamenti saldati conservati.')
+    } catch {
+      toast.error('Impostazione non salvata. Il criterio precedente resta attivo.')
+    } finally { setSavingAccounting(false) }
+  }
 
   // Calcolatore Quota Censimento Fratelli
   const totaleCensimentoCalc = calcNumFratelli > 1 
@@ -140,7 +162,7 @@ export default function CensimentoClient({
       return
     }
 
-    toast.success(newVal ? 'Censimento registrato in prima nota' : 'Pagamento censimento annullato')
+    toast.success(newVal ? 'Censimento saldato' : 'Pagamento censimento annullato')
   }
 
   const toggleRicevuta = async (id: string, current: boolean | null) => {
@@ -202,6 +224,13 @@ export default function CensimentoClient({
       </div>
 
       {/* Widget Calcolatore Quota Censimento Fratelli (ESCLUSIVAMENTE IN CENSIMENTO) */}
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center gap-3">
+          <Checkbox id="census-income" checked={includeCensus} disabled={savingAccounting} onCheckedChange={value => saveAccountingSetting(value === true)} />
+          <Label htmlFor="census-income">Includi il censimento nelle entrate</Label>
+        </div>
+        <p className="text-sm text-muted-foreground">Disattivato per impostazione predefinita. Il censimento resta saldato, ma non modifica entrate, saldi di cassa e banca o report. Attivando l’opzione vengono conteggiati anche i pagamenti già registrati, in tutti gli anni. Disattivandola, i pagamenti restano conservati.</p>
+      </Card>
       <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 p-5 rounded-2xl shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">

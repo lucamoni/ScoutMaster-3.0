@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { CENSUS_INCOME_SETTING, isIncludedInAccounting } from '@/lib/utils/censusAccounting'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/database.types'
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       supabase.from('ragazzi').select('id, nome, cognome, sesso, pattuglia, attivo').limit(100),
       supabase.from('eventi').select('id, nome_evento, quota_standard, data_inizio, tipo_evento').limit(50),
       supabase.from('partecipazioni_eventi').select('id, evento_id, ragazzo_id, stato_presenza, riscosso, quota_dovuta, ragazzi(nome, cognome, pattuglia)').limit(200),
-      supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data, note').order('data', { ascending: false }).limit(50),
+      supabase.from('registro_spese').select('importo, tipo_movimento, voce_spesa, data, note, riferimento_censimento_anno').order('data', { ascending: false }).limit(50),
       supabase.from('quote_mensili').select('ragazzo_id, anno_scout, novembre, dicembre, gennaio, febbraio, marzo, aprile, maggio, giugno').limit(100),
       supabase.from('eventi_buonacaccia' as any).select('id, titolo, categoria, branca, data_inizio, luogo, costo_evento').limit(50),
       supabase.from('candidature_buonacaccia' as any).select('id, evento_id, ragazzo_id, stato_iscrizione, quota_pagata, ragazzi(nome, cognome, pattuglia)').limit(200)
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
     const ragazzi = allRagazzi.filter(r => r.attivo !== false)
     const eventi = eventiRes.data || []
     const partecipazioni = partecipazioniRes.data || []
-    const spese = speseRes.data || []
+    const { data: censusSetting } = await supabase.from('impostazioni').select('valore').eq('chiave', CENSUS_INCOME_SETTING).maybeSingle()
+    const spese = (speseRes.data || []).filter(movement => isIncludedInAccounting(movement, censusSetting?.valore === 'true'))
     const quote = quoteRes.data || []
     const bcEventi = bcEventiRes.data || []
     const bcCandidature = bcCandRes.data || []

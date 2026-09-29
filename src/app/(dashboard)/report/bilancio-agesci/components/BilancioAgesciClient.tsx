@@ -25,6 +25,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 import { calculateAccountingBalances, getAccountingPeriod } from '@/lib/utils/accounting'
+import { CENSUS_INCOME_SETTING, isIncludedInAccounting } from '@/lib/utils/censusAccounting'
 
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -115,6 +116,7 @@ export default function BilancioAgesciClient({
 
   // Filtra movimenti di cassa per l'anno scout selezionato
   const speseAnno = initialSpese.filter(s => {
+    if (!isIncludedInAccounting(s, settings[CENSUS_INCOME_SETTING] === 'true')) return false
     if (!s.data) return false
     if (s.tipo_movimento !== 'ENTRATA' && s.tipo_movimento !== 'USCITA') return false
     return s.data >= startDate && s.data <= endDate
@@ -161,7 +163,7 @@ export default function BilancioAgesciClient({
     saldoFinaleCassa,
     saldoFinaleBanca,
     saldoFinaleTotale,
-  } = calculateAccountingBalances(speseAnno, saldoInizialeCassa, saldoInizialeBanca)
+  } = calculateAccountingBalances(speseAnno, saldoInizialeCassa, saldoInizialeBanca, settings[CENSUS_INCOME_SETTING] === 'true')
   const saldoInizialeTotale = saldoInizialeCassa + saldoInizialeBanca
 
   // La quadratura reale confronta il saldo teorico con denaro contato ed

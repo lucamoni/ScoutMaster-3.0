@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import CensimentoClient from './components/CensimentoClient'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
+import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,7 @@ export default async function CensimentoPage() {
       initialQuotaStandard={quotaCensimentoStandard}
       initialQuotaFratelli={quotaCensimentoFratelli}
       currentYear={currentYear}
+      initialIncludeCensus={impostazioni?.find(item => item.chiave === CENSUS_INCOME_SETTING)?.valore === 'true'}
     />
   )
 }

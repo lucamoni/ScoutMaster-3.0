@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database.types'
 import { FileText, Download, FileSpreadsheet } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -30,6 +32,17 @@ export function ReportClient({
   currentYear: string
 }) {
   const [selectedRagazzo, setSelectedRagazzo] = useState<string>('')
+  const router = useRouter()
+  useEffect(() => {
+    const supabase = createClient()
+    const refresh = () => router.refresh()
+    const channel = supabase.channel('report_accounting_settings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'impostazioni' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registro_spese' }, refresh)
+      .subscribe()
+    window.addEventListener('focus', refresh)
+    return () => { window.removeEventListener('focus', refresh); supabase.removeChannel(channel) }
+  }, [router])
 
   const exportBilancio = () => {
     const doc = new jsPDF()
