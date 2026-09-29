@@ -1,3 +1,11 @@
+export function parseSheetMetodo(value: unknown): 'Contanti' | 'Bonifico' | 'Carta' | null {
+  const text = String(value ?? '').trim().toLowerCase()
+  if (/^(contant[ie]|cash|false|falso|no|0)$/.test(text)) return 'Contanti'
+  if (/^(carta|carta di credito|carta di debito|bancomat|pos|true|vero|si|sì|1|x)$/.test(text)) return 'Carta'
+  if (/^(bonifico|bonifico bancario|banca|bb|bank transfer)$/.test(text)) return 'Bonifico'
+  return null
+}
+
 export function parseSheetAmount(value: unknown) {
   const raw = String(value ?? '').trim().replace(/\s/g, '')
   if (!raw) return null

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { fetchPublicSheetValues } from '@/lib/googleSheetsPublic'
+import { fetchPublicWorkbook } from '@/lib/googleSheetsPublic'
+import { buildKnownSheetMapping, createSheetReader as createReader } from '@/lib/googleSheetsMapping'
 import { normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
-import { parseSheetAmount, parseSheetDate } from '@/lib/googleSheetsImport'
+import { parseSheetAmount, parseSheetDate, parseSheetMetodo } from '@/lib/googleSheetsImport'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 import type { Database } from '@/types/database.types'
 
@@ -14,6 +15,7 @@ type ImportRequest = {
   selectedTables?: string[]
   selectedSheets?: string[]
   annoScout?: string
+  eventAccountingDate?: string
 }
 type ImportCounts = { sheetName: string; tableName: string; inserted: number; updated: number; skipped: number; warning?: string }
 
@@ -27,7 +29,7 @@ class ImportRequestError extends Error {
   }
 }
 
-const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese', 'eventi']
+const DEFAULT_TABLES = ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'registro_spese', 'eventi', 'campi']
 const MONTHS = ['ottobre', 'novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
 
 function extractSpreadsheetId(raw: string) {
@@ -37,7 +39,7 @@ function extractSpreadsheetId(raw: string) {
   return /^[a-zA-Z0-9_-]{20,}$/.test(candidate) ? candidate : null
 }
 
-async function fetchSheetRows(spreadsheetId: string, sheetName: string) {
+async function fetchSheetRows(spreadsheetId: string, sheetName: string, publicRows: () => Promise<Record<string, string[][]>>) {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
   let key = process.env.GOOGLE_PRIVATE_KEY
   if (key?.includes('\\n')) key = key.replace(/\\n/g, '\n')
@@ -53,7 +55,7 @@ async function fetchSheetRows(spreadsheetId: string, sheetName: string) {
       const safeTitle = sheetName.replace(/'/g, "''")
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `'${safeTitle}'!A1:AZ2001`,
+        range: `'${safeTitle}'`,
       })
       if (response.data.values?.length) {
         return response.data.values.map(row => row.map(cell => String(cell ?? '')))
@@ -66,7 +68,9 @@ async function fetchSheetRows(spreadsheetId: string, sheetName: string) {
     }
   }
 
-  return fetchPublicSheetValues(spreadsheetId, sheetName)
+  const workbook = await publicRows()
+  if (!workbook[sheetName]) throw new ImportRequestError(`Foglio non trovato: ${sheetName}`)
+  return workbook[sheetName]
 }
 
 function normalizeKey(value: unknown) {
@@ -93,23 +97,12 @@ function splitFullName(value: unknown) {
   return { nome: parts[0], cognome: parts.slice(1).join(' ') }
 }
 
-function createReader(headers: string[], row: string[], columnsMap: Record<string, string>) {
-  const entries = Object.entries(columnsMap)
-  return (target: string) => {
-    const entry = entries.find(([, mapped]) => normalizeKey(mapped) === normalizeKey(target))
-    if (!entry) return ''
-    const explicitColumn = entry[0].match(/^__col_(\\d+)$/)
-    const position = explicitColumn ? Number(explicitColumn[1]) : headers.indexOf(entry[0])
-    return position >= 0 ? row[position] || '' : ''
-  }
-}
-
 function hasMappedTarget(columnsMap: Record<string, string>, target: string) {
   return Object.values(columnsMap).some(mapped => normalizeKey(mapped) === normalizeKey(target))
 }
 
 type Person = { id: string; nome: string; cognome: string }
-type ScoutEvent = { id: string; nome_evento: string; quota_standard: number | null; metodo_pagamento: string | null }
+type ScoutEvent = { id: string; nome_evento: string; quota_standard: number | null; metodo_pagamento: string | null; data_inizio?: string | null }
 
 async function getPeople(supabase: ReturnType<typeof createAdminClient>) {
   const { data, error } = await supabase.from('ragazzi').select('id, nome, cognome')
@@ -118,7 +111,7 @@ async function getPeople(supabase: ReturnType<typeof createAdminClient>) {
 }
 
 async function getEvents(supabase: ReturnType<typeof createAdminClient>) {
-  const { data, error } = await supabase.from('eventi').select('id, nome_evento, quota_standard, metodo_pagamento')
+  const { data, error } = await supabase.from('eventi').select('id, nome_evento, quota_standard, metodo_pagamento, data_inizio')
   if (error) throw error
   return ((data || []) as ScoutEvent[])
 }
@@ -126,7 +119,9 @@ async function getEvents(supabase: ReturnType<typeof createAdminClient>) {
 function findPerson(people: Person[], fullName: string) {
   const key = normalizeKey(fullName)
   if (!key) return null
-  return people.find(person => normalizeKey(`${person.nome} ${person.cognome}`) === key) || null
+  const matches = people.filter(person => normalizeKey(`${person.nome} ${person.cognome}`) === key)
+  if (matches.length > 1) throw new ImportRequestError(`Nome ambiguo in anagrafica: ${fullName}. Risolvi l'omonimia prima di importare.`)
+  return matches[0] || null
 }
 
 function findEvent(events: ScoutEvent[], name: string) {
@@ -167,10 +162,11 @@ async function upsertPerson(
   }
   if (hasMappedTarget(columnsMap, 'importo_censimento')) {
     const amount = parseSheetAmount(reader('importo_censimento'))
-    if (amount !== null) values.importo_censimento = amount
+    if (amount !== null) {
+      values.importo_censimento = amount
+      values.quota_censimento = true
+    }
   }
-  if (!hasMappedTarget(columnsMap, 'attivo')) values.attivo = true
-
   const existing = findPerson(people, `${nome} ${cognome}`)
   if (existing) {
     const { error } = await supabase.from('ragazzi').update(payload).eq('id', existing.id)
@@ -180,6 +176,7 @@ async function upsertPerson(
     return 'updated' as const
   }
 
+  if (!hasMappedTarget(columnsMap, 'attivo')) values.attivo = true
   const { data, error } = await supabase.from('ragazzi').insert(payload).select('id, nome, cognome').single()
   if (error) throw error
   if (data) people.push(data as Person)
@@ -334,6 +331,7 @@ async function importPartecipazioni(
   events: ScoutEvent[],
   mapping: ImportMapping,
   rows: string[][],
+  accountingDate: string,
 ): Promise<ImportCounts> {
   const headers = rows[0] || []
   const columnsMap = mapping.columnsMap || {}
@@ -341,6 +339,17 @@ async function importPartecipazioni(
   let inserted = 0
   let updated = 0
   let skipped = 0
+
+  for (const target of eventTargets) {
+    const name = target.slice('evento:'.length).trim()
+    const existing = findEvent(events, name)
+    if (!existing) await upsertEvent(supabase, events, name, null, 'Contanti', 'USCITA', accountingDate)
+    else if (!existing.data_inizio) {
+      const { error } = await supabase.from('eventi').update({ data_inizio: accountingDate }).eq('id', existing.id)
+      if (error) throw error
+      existing.data_inizio = accountingDate
+    }
+  }
 
   for (const row of rows.slice(1, 2001)) {
     const reader = createReader(headers, row, columnsMap)
@@ -360,19 +369,6 @@ async function importPartecipazioni(
       if (!event) throw new Error(`Impossibile creare l'evento importato: ${eventName}`)
 
       const amount = parseSheetAmount(reader(`quota_evento:${eventName}`) || reader('quota_dovuta')) ?? event.quota_standard
-
-      // L'evento deve avere la stessa quota mostrata nel foglio: così intestazioni,
-      // presenze, debiti e registro cassa usano un'unica fonte.
-      if (amount !== null && Number(event.quota_standard) !== Number(amount)) {
-        const { error: eventUpdateError } = await supabase
-          .from('eventi')
-          .update({ quota_standard: amount })
-          .eq('id', event.id)
-        if (eventUpdateError) throw eventUpdateError
-        const updatedEvent = { ...event, quota_standard: amount }
-        const eventIndex = events.findIndex(item => item.id === event.id)
-        if (eventIndex >= 0) events[eventIndex] = updatedEvent
-      }
 
       const paidValue = reader(`riscosso_evento:${eventName}`) || reader('riscosso')
       const payload: Database['public']['Tables']['partecipazioni_eventi']['Insert'] = {
@@ -408,6 +404,55 @@ async function importPartecipazioni(
   return { sheetName: mapping.sheetName || '', tableName: 'partecipazioni_eventi', inserted, updated, skipped }
 }
 
+async function importCampi(
+  supabase: ReturnType<typeof createAdminClient>,
+  people: Person[],
+  events: ScoutEvent[],
+  mapping: ImportMapping,
+  rows: string[][],
+  annoScout: string,
+  accountingDate: string,
+): Promise<ImportCounts> {
+  const type = /^(CI|CAMPO INVERNALE)$/i.test(mapping.sheetName ?? '') ? 'CI' : 'CE'
+  const name = `Campo ${type === 'CI' ? 'invernale' : 'estivo'} ${annoScout}`
+  const event = findEvent(events, name) ?? (await upsertEvent(supabase, events, name, type === 'CI' ? 100 : null, 'Contanti', type, accountingDate)).event
+  if (!event.data_inizio) {
+    const { error } = await supabase.from('eventi').update({ data_inizio: accountingDate }).eq('id', event.id)
+    if (error) throw error
+    event.data_inizio = accountingDate
+  }
+  let inserted = 0
+  let updated = 0
+  let skipped = 0
+  const seenNames = new Set<string>()
+  for (const row of rows.slice(1)) {
+    const read = createReader(rows[0], row, mapping.columnsMap ?? {})
+    const fullName = read('nome_cognome_ragazzo')
+    if (!fullName.trim()) continue
+    const key = normalizeKey(fullName)
+    if (seenNames.has(key)) { skipped++; continue }
+    seenNames.add(key)
+    const person = findPerson(people, fullName)
+    const quota = parseSheetAmount(read('quota_dovuta')) ?? (type === 'CI' ? 100 : null)
+    if (!person || quota === null) { skipped++; continue }
+    const payload: Database['public']['Tables']['partecipazioni_eventi']['Insert'] = {
+      ragazzo_id: person.id, evento_id: event.id, quota_dovuta: quota,
+      riscosso: readBoolean(read('riscosso')),
+      metodo_pagamento: toCanonicalMetodo(read('metodo_pagamento')),
+      stato_presenza: read('stato_presenza') ? readPresence(read('stato_presenza')) : 'Presente',
+    }
+    const { data: existing, error: lookupError } = await supabase.from('partecipazioni_eventi').select('id').eq('ragazzo_id', person.id).eq('evento_id', event.id).maybeSingle()
+    if (lookupError) throw lookupError
+    const { error } = existing
+      ? await supabase.from('partecipazioni_eventi').update(payload).eq('id', existing.id)
+      : await supabase.from('partecipazioni_eventi').insert(payload)
+    if (error) throw error
+    if (existing) updated++; else inserted++
+  }
+  return { sheetName: mapping.sheetName ?? '', tableName: 'campi', inserted, updated, skipped,
+    warning: skipped ? `${skipped} righe non importate: nome ripetuto/non trovato o quota individuale mancante. Nessun importo è stato stimato.` : undefined }
+}
+
 async function importRegistroSpese(
   supabase: ReturnType<typeof createAdminClient>,
   mapping: ImportMapping,
@@ -418,6 +463,8 @@ async function importRegistroSpese(
   let inserted = 0
   let updated = 0
   let skipped = 0
+  let invalidMethods = 0
+  const invalidRows: string[] = []
 
   for (let index = 0; index < Math.min(rows.length - 1, 2000); index += 1) {
     const row = rows[index + 1]
@@ -425,10 +472,14 @@ async function importRegistroSpese(
     const amount = parseSheetAmount(reader('importo'))
     const date = parseSheetDate(reader('data'))
     const voce = String(reader('voce_spesa') || reader('categoria')).trim()
+    if (!reader('importo') && !reader('data') && !voce) continue
     if (!amount || !date || !voce) {
       skipped += 1
+      invalidRows.push(reader('numero_operazione') ? `operazione ${reader('numero_operazione')} (riga ${index + 2})` : `riga ${index + 2}`)
       continue
     }
+    const method = parseSheetMetodo(reader('metodo') || reader('metodo_pagamento') || reader('carta'))
+    if (!method) { skipped++; invalidMethods++; continue }
 
     const marker = `[Google Sheets:${mapping.sheetName}:${index + 2}]`
     const momentoValue = normalizeKey(reader('momento_anno')).toUpperCase()
@@ -441,7 +492,7 @@ async function importRegistroSpese(
       data: date,
       voce_spesa: voce,
       momento_anno: momentoAnno,
-      metodo: toCanonicalMetodo(reader('metodo') || (readBoolean(reader('carta')) ? 'Carta' : 'Contanti')),
+      metodo: method,
       tipo_movimento: normalizeKey(reader('tipo_movimento')) === 'entrata' ? 'ENTRATA' : 'USCITA',
       ricevuta_presente: readBoolean(reader('ricevuta_presente')),
       note: [marker, sourceNote, 'Importazione da Google Sheets'].filter(Boolean).join(' '),
@@ -465,7 +516,11 @@ async function importRegistroSpese(
     }
   }
 
-  return { sheetName: mapping.sheetName || '', tableName: 'registro_spese', inserted, updated, skipped }
+  return { sheetName: mapping.sheetName || '', tableName: 'registro_spese', inserted, updated, skipped,
+    warning: [
+      invalidMethods ? `${invalidMethods} spese saltate: metodo di pagamento mancante o non riconosciuto.` : '',
+      invalidRows.length ? `Righe da verificare (${invalidRows.join(', ')}): data, importo o voce mancanti/non validi.` : '',
+    ].filter(Boolean).join(' ') || undefined }
 }
 
 async function importData(body: {
@@ -474,17 +529,24 @@ async function importData(body: {
   selectedTables: string[]
   selectedSheets: string[]
   annoScout: string
+  eventAccountingDate?: string
 }) {
   const spreadsheetId = extractSpreadsheetId(body.spreadsheetId)
   if (!spreadsheetId) throw new ImportRequestError('ID o link Google Sheets non valido')
   const supabase = createAdminClient()
   const results: ImportCounts[] = []
   const sheetCache = new Map<string, string[][]>()
+  let publicWorkbook: Promise<Record<string, string[][]>> | undefined
+  const publicRows = () => publicWorkbook ??= fetchPublicWorkbook(spreadsheetId)
   const people = await getPeople(supabase)
   const events = await getEvents(supabase)
 
   const getRows = async (sheetName: string) => {
-    if (!sheetCache.has(sheetName)) sheetCache.set(sheetName, await fetchSheetRows(spreadsheetId, sheetName))
+    if (!sheetCache.has(sheetName)) {
+      const rows = await fetchSheetRows(spreadsheetId, sheetName, publicRows)
+      if (rows.length > 2001) throw new ImportRequestError(`Il foglio ${sheetName} supera 2000 righe: suddividilo prima di importare.`)
+      sheetCache.set(sheetName, rows)
+    }
     return sheetCache.get(sheetName) || []
   }
 
@@ -493,11 +555,24 @@ async function importData(body: {
     eventi: 2,
     quote_mensili: 3,
     partecipazioni_eventi: 4,
+    campi: 4,
     registro_spese: 5,
   }
-  const orderedMappings = [...body.mappings].sort(
+  // Rebuild known mappings from the actual source, including saved legacy mappings.
+  const refreshedMappings: ImportMapping[] = []
+  for (const sheetName of body.selectedSheets) {
+    const rows = await getRows(sheetName)
+    const known = buildKnownSheetMapping(sheetName, rows[0] ?? [])
+    if (known) refreshedMappings.push(known)
+    else refreshedMappings.push(...body.mappings.filter(mapping => mapping.sheetName === sheetName))
+  }
+  const orderedMappings = refreshedMappings.sort(
     (left, right) => (importPriority[left.tableName || ''] ?? 99) - (importPriority[right.tableName || ''] ?? 99),
   )
+  const accountingDate = parseSheetDate(body.eventAccountingDate)
+  if (orderedMappings.some(mapping => ['campi', 'partecipazioni_eventi'].includes(mapping.tableName ?? '') && body.selectedTables.includes(mapping.tableName ?? '')) && !accountingDate) {
+    throw new ImportRequestError('Indica la data contabile per gli eventi senza data: serve a registrare gli incassi nel periodo corretto.')
+  }
 
   for (const mapping of orderedMappings) {
     if (!mapping.sheetName || !body.selectedSheets.includes(mapping.sheetName)) continue
@@ -511,7 +586,9 @@ async function importData(body: {
     } else if (mapping.tableName === 'eventi') {
       results.push(await importEventi(supabase, events, mapping, rows))
     } else if (mapping.tableName === 'partecipazioni_eventi') {
-      results.push(await importPartecipazioni(supabase, people, events, mapping, rows))
+      results.push(await importPartecipazioni(supabase, people, events, mapping, rows, accountingDate!))
+    } else if (mapping.tableName === 'campi') {
+      results.push(await importCampi(supabase, people, events, mapping, rows, body.annoScout, accountingDate!))
     } else if (mapping.tableName === 'registro_spese') {
       results.push(await importRegistroSpese(supabase, mapping, rows))
     } else {
@@ -577,6 +654,7 @@ export async function POST(request: Request) {
       selectedTables: body.selectedTables ?? DEFAULT_TABLES,
       selectedSheets: body.selectedSheets,
       annoScout: normalizeAnnoScout(body.annoScout),
+      eventAccountingDate: body.eventAccountingDate,
     })
     return NextResponse.json({ success: true, results })
   } catch (error: unknown) {
