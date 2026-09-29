@@ -9,6 +9,7 @@ import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
+import { isIncludedInAccounting } from '@/lib/utils/censusAccounting'
 import { ReceiptOcrResult, scanReceiptLocally } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,12 +36,14 @@ type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
 
 export default function CassaClient({
   initialSpese,
+  includeCensus = false,
   startDate,
   endDate,
   initialCategorie,
   initialBalances = { contanti: 0, banca: 0 },
 }: {
   startDate: string
+  includeCensus?: boolean
   endDate: string
   initialSpese: Spesa[]
   initialCategorie: Categoria[]
@@ -72,6 +75,7 @@ export default function CassaClient({
   const [filterImportoMax, setFilterImportoMax] = useState('')
   const [filterRicerca, setFilterRicerca] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  useEffect(() => { setSelectedIds(new Set()) }, [includeCensus])
 
   useEffect(() => { setSpese(initialSpese) }, [initialSpese])
 
@@ -155,9 +159,9 @@ export default function CassaClient({
   // Alias per compatibilità UI display
   const normalizeMetodoDisplay = toCanonicalMetodo
 
-  // La prima nota segue il principio di cassa e comprende anche le quote di censimento incassate.
+  // Census payments stay recorded but affect cash accounting only by explicit opt-in.
   const cassaSpese = spese.filter(
-    movimento => movimento.tipo_movimento === 'ENTRATA' || movimento.tipo_movimento === 'USCITA'
+    movimento => (movimento.tipo_movimento === 'ENTRATA' || movimento.tipo_movimento === 'USCITA') && isIncludedInAccounting(movimento, includeCensus)
   )
 
   const categorieDisponibili = Array.from(new Set([
@@ -228,7 +232,7 @@ export default function CassaClient({
   const { entrateContanti: saldoEntrateContanti, entrateBanca: saldoEntrateBanca,
     usciteContanti: saldoUsciteContanti, usciteBanca: saldoUsciteBanca,
     saldoFinaleCassa: saldoContanti, saldoFinaleBanca: saldoBanca,
-  } = calculateAccountingBalances(cassaSpese, initialBalances.contanti, initialBalances.banca)
+  } = calculateAccountingBalances(cassaSpese, initialBalances.contanti, initialBalances.banca, includeCensus)
 
 
   // Helper per la sincronizzazione inversa da Cassa verso Eventi / Uscite / Partecipazioni

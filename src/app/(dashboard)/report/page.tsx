@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 import { ReportClient } from './components/ReportClient'
+import { CENSUS_INCOME_SETTING, isIncludedInAccounting } from '@/lib/utils/censusAccounting'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +31,7 @@ export default async function ReportPage() {
       ragazzi={ragazziRes.data || []}
       eventi={eventiRes.data || []}
       partecipazioni={partecipazioniRes.data || []}
-      cassa={cassaRes.data || []}
+      cassa={(cassaRes.data || []).filter(movement => isIncludedInAccounting(movement, impostazioni?.find(item => item.chiave === CENSUS_INCOME_SETTING)?.valore === 'true'))}
       quote={quoteRes.data || []}
       currentYear={currentYear}
     />

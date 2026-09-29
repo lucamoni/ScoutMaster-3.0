@@ -36,6 +36,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { getAccountingPeriod, calculateAccountingBalances } from '@/lib/utils/accounting'
 import ScoutMasterLogo from '@/components/layout/Logo'
+import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -57,10 +58,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (settingsRes.error) return
       const settings = new Map<string, string | null>((settingsRes.data || []).map(item => [item.chiave, item.valore]))
       const period = getAccountingPeriod(settings, getCurrentAnnoScout())
-      const speseRes = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo')
+      const speseRes = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo, riferimento_censimento_anno, voce_spesa')
         .gte('data', period.startDate).lte('data', period.endDate)
       if (speseRes.error || !speseRes.data) return
-      const balances = calculateAccountingBalances(speseRes.data, period.initialCash, period.initialBank)
+      const balances = calculateAccountingBalances(speseRes.data, period.initialCash, period.initialBank, settings.get(CENSUS_INCOME_SETTING) === 'true')
       setAnnoScout(period.currentYear)
       const cassa = balances.saldoFinaleCassa
       const banca = balances.saldoFinaleBanca
@@ -78,8 +79,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .subscribe()
 
     window.addEventListener('focus', fetchSaldi)
+    window.addEventListener('accounting-settings-changed', fetchSaldi)
     return () => {
       window.removeEventListener('focus', fetchSaldi)
+      window.removeEventListener('accounting-settings-changed', fetchSaldi)
       supabase.removeChannel(channel)
     }
   }, [pathname])

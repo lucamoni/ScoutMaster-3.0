@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { calculateAccountingBalances, getAccountingPeriod } from './accounting'
 import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout, toCanonicalMetodo } from './payment'
+import { isIncludedInAccounting } from './censusAccounting'
 
 describe('anno scout', () => {
   it('cambia esercizio il primo ottobre', () => {
@@ -25,6 +26,33 @@ describe('metodi di pagamento', () => {
 })
 
 describe('riconciliazione contabile', () => {
+  it('esclude il censimento saldato per default e lo include solo con consenso, senza perdere movimenti', () => {
+    const movements = [
+      { importo: 50, metodo: 'Contanti', tipo_movimento: 'ENTRATA', riferimento_censimento_anno: '2025-2026' },
+      { importo: 35, metodo: 'Bonifico', tipo_movimento: 'ENTRATA', riferimento_censimento_anno: '2025-2026' },
+      { importo: 20, metodo: 'Carta', tipo_movimento: 'ENTRATA', voce_spesa: 'Uscita di reparto' },
+      { importo: 10, metodo: 'Contanti', tipo_movimento: 'USCITA', voce_spesa: 'Versamento censimento' },
+    ]
+    const before = structuredClone(movements)
+    const excluded = calculateAccountingBalances(movements, 100, 200)
+    expect(excluded.entrateContanti).toBe(0)
+    expect(excluded.entrateBanca).toBe(20)
+    expect(excluded.saldoFinaleTotale).toBe(310)
+    const included = calculateAccountingBalances(movements, 100, 200, true)
+    expect(included.entrateContanti).toBe(50)
+    expect(included.entrateBanca).toBe(55)
+    expect(included.saldoFinaleTotale).toBe(395)
+    expect(calculateAccountingBalances(movements, 100, 200, false)).toEqual(excluded)
+    expect(movements).toEqual(before)
+  })
+
+  it('filtra anche le vecchie quote censimento, senza escludere altre entrate o uscite', () => {
+    expect(isIncludedInAccounting({ tipo_movimento: 'ENTRATA', voce_spesa: 'Quota Censimento' })).toBe(false)
+    expect(isIncludedInAccounting({ tipo_movimento: 'ENTRATA', voce_spesa: 'Quota Censimento' }, true)).toBe(true)
+    expect(isIncludedInAccounting({ tipo_movimento: 'ENTRATA', voce_spesa: 'Donazione per censimento' })).toBe(true)
+    expect(isIncludedInAccounting({ tipo_movimento: 'USCITA', voce_spesa: 'Quota Censimento' })).toBe(true)
+  })
+
   it('separa cassa e banca e conserva i saldi iniziali', () => {
     const result = calculateAccountingBalances([
       { importo: 100, metodo: 'Contanti', tipo_movimento: 'ENTRATA' },

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { getAccountingPeriod } from '@/lib/utils/accounting'
 import CassaClient from './components/CassaClient'
+import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,7 @@ export default async function CassaPage() {
         </div>
       </div>
       <CassaClient
+        includeCensus={settings.get(CENSUS_INCOME_SETTING) === 'true'}
         startDate={startDate}
         endDate={endDate}
         initialSpese={spese || []}
