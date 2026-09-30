@@ -433,12 +433,18 @@ async function importCampi(
     if (seenNames.has(key)) { skipped++; continue }
     seenNames.add(key)
     const person = findPerson(people, fullName)
-    const quota = parseSheetAmount(read('quota_dovuta')) ?? (type === 'CI' ? 100 : null)
+    const rawQuota = read('quota_dovuta').trim()
+    const quota = /^0+(?:[.,]0+)?$/.test(rawQuota) ? 0
+      : rawQuota ? parseSheetAmount(rawQuota) : (type === 'CI' ? 100 : null)
     if (!person || quota === null) { skipped++; continue }
+    const method = parseSheetMetodo(read('metodo_pagamento'))
+    // Missing payment details cannot establish a cash payment or an exemption.
+    // Leave existing corrections intact until the source is explicit.
+    if (quota > 0 && !method) { skipped++; continue }
     const payload: Database['public']['Tables']['partecipazioni_eventi']['Insert'] = {
       ragazzo_id: person.id, evento_id: event.id, quota_dovuta: quota,
       riscosso: readBoolean(read('riscosso')),
-      metodo_pagamento: toCanonicalMetodo(read('metodo_pagamento')),
+      metodo_pagamento: method,
       stato_presenza: read('stato_presenza') ? readPresence(read('stato_presenza')) : 'Presente',
     }
     const { data: existing, error: lookupError } = await supabase.from('partecipazioni_eventi').select('id').eq('ragazzo_id', person.id).eq('evento_id', event.id).maybeSingle()
@@ -450,7 +456,7 @@ async function importCampi(
     if (existing) updated++; else inserted++
   }
   return { sheetName: mapping.sheetName ?? '', tableName: 'campi', inserted, updated, skipped,
-    warning: skipped ? `${skipped} righe non importate: nome ripetuto/non trovato o quota individuale mancante. Nessun importo è stato stimato.` : undefined }
+    warning: skipped ? `${skipped} righe non importate: nome ripetuto/non trovato, quota individuale o metodo di pagamento mancante/non valido. Per gli esenti indicare una quota esplicita di 0. I dati esistenti delle righe saltate restano invariati.` : undefined }
 }
 
 async function importRegistroSpese(
@@ -471,7 +477,7 @@ async function importRegistroSpese(
     const reader = createReader(headers, row, columnsMap)
     const amount = parseSheetAmount(reader('importo'))
     const date = parseSheetDate(reader('data'))
-    const voce = String(reader('voce_spesa') || reader('categoria')).trim()
+    const voce = String(reader('voce_spesa') || reader('categoria') || reader('note')).trim()
     if (!reader('importo') && !reader('data') && !voce) continue
     if (!amount || !date || !voce) {
       skipped += 1

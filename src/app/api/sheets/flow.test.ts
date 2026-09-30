@@ -53,6 +53,33 @@ async function runImport() {
 }
 
 describe('importazione fedele al foglio scout', () => {
+  it('preserva quote zero e non sovrascrive rettifiche con pagamenti senza metodo', async () => {
+    state.sheets.CI[0].push('QUOTA')
+    state.sheets.CI[1] = ['1', 'Mario Rossi', 'true', '', '0']
+    await runImport()
+    const ci = state.tables.eventi.find(row => row.tipo_evento === 'CI')!
+    const participation = state.tables.partecipazioni_eventi.find(row => row.evento_id === ci.id)!
+    expect(participation.quota_dovuta).toBe(0)
+    expect(participation.riscosso).toBe(true)
+    expect(participation.metodo_pagamento).toBeNull()
+    state.sheets.CI[1][4] = ''
+    const result = await runImport()
+    expect(participation.quota_dovuta).toBe(0)
+    expect(result.results.find((row: { sheetName: string }) => row.sheetName === 'CI').warning).toContain('metodo')
+  })
+  it('importa la causale dalle note senza duplicare e mantiene sospese le spese senza data', async () => {
+    state.sheets.SPESE = [
+      ['VOCE DI SPESA', 'DATA', 'IMPORTO', 'MOMENTO ANNO', 'CARTA', 'NOTE:'],
+      ['', '01/08/2026', '25', 'CE', 'CONTANTI', 'PEDAGGIO ELENA'],
+      ['', '24/07/2026', '110,57', 'CE', 'CONTANTI', 'BENZINA CAMION RITORNO 2'],
+      ['Altro', '', '900', 'CE', 'CARTA', 'CAMPO ESTIVO'],
+    ]
+    await runImport()
+    await runImport()
+    expect(state.tables.registro_spese).toHaveLength(2)
+    expect(state.tables.registro_spese.map(row => row.voce_spesa)).toEqual(['PEDAGGIO ELENA', 'BENZINA CAMION RITORNO 2'])
+    expect(state.tables.registro_spese.reduce((sum, row) => sum + Number(row.importo), 0)).toBe(135.57)
+  })
   it.skipIf(!process.env.SCOUT_IMPORT_FIXTURE)('verifica il foglio condiviso contro un database in memoria', async () => {
     const bytes = readFileSync(process.env.SCOUT_IMPORT_FIXTURE!)
     state.sheets = parsePublicWorkbook(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
