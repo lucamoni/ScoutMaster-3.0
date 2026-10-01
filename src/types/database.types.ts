@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      modelli_documenti: {
+        Row: {
+          id: string
+          nome_modello: string
+          file_url: string
+          tipo_file: string | null
+          data_caricamento: string | null
+        }
+        Insert: {
+          id?: string
+          nome_modello: string
+          file_url: string
+          tipo_file?: string | null
+          data_caricamento?: string | null
+        }
+        Update: {
+          id?: string
+          nome_modello?: string
+          file_url?: string
+          tipo_file?: string | null
+          data_caricamento?: string | null
+        }
+        Relationships: []
+      }
       categorie_spesa: {
         Row: {
           id: string

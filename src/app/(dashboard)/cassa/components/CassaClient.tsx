@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 import { isIncludedInAccounting } from '@/lib/utils/censusAccounting'
-import { ReceiptOcrResult, scanReceiptLocally } from '@/lib/ocr/receipt'
+import { ReceiptOcrResult, scanReceiptLocally, prepareReceiptOcr } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -84,6 +84,9 @@ export default function CassaClient({
 
   // Scanner Scontrino State
   const [isScannerOpen, setIsScannerOpen] = useState(false)
+  useEffect(() => {
+    if (isScannerOpen) void prepareReceiptOcr().catch(() => undefined)
+  }, [isScannerOpen])
   const [scannerFile, setScannerFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [ocrData, setOcrData] = useState<ReceiptOcrResult | null>(null)
