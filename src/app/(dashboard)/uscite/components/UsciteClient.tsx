@@ -1,4 +1,5 @@
 'use client'
+import { dateInWorkingYear } from '@/lib/utils/workingYear'
 
 import { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
@@ -25,11 +26,13 @@ type Partecipazione = Database['public']['Tables']['partecipazioni_eventi']['Row
 export default function UsciteClient({ 
   initialEventi, 
   ragazzi: initialRagazzi, 
-  initialPartecipazioni 
+  initialPartecipazioni,
+  currentYear,
 }: { 
   initialEventi: Evento[],
   ragazzi: Ragazzo[],
-  initialPartecipazioni: Partecipazione[]
+  initialPartecipazioni: Partecipazione[],
+  currentYear: string,
 }) {
   const router = useRouter()
   const [eventi, setEventi] = useState<Evento[]>(initialEventi)
@@ -76,10 +79,11 @@ export default function UsciteClient({
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newEv = payload.new as Evento
+            if (!dateInWorkingYear(newEv.data_inizio, currentYear)) return
             setEventi(prev => prev.some(e => e.id === newEv.id) ? prev : [...prev, newEv])
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as Evento
-            setEventi(prev => prev.map(e => e.id === updated.id ? updated : e))
+            setEventi(prev => [...prev.filter(e => e.id !== updated.id), ...(dateInWorkingYear(updated.data_inizio, currentYear) ? [updated] : [])])
           } else if (payload.eventType === 'DELETE') {
             const deleted = payload.old as Evento
             setEventi(prev => prev.filter(e => e.id !== deleted.id))
@@ -91,7 +95,7 @@ export default function UsciteClient({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase])
+  }, [supabase, currentYear])
 
   // Helper per l'upsert sicuro su Supabase con fallback automatico per i vincoli di stato_presenza
   const upsertPartecipazioneDB = async (payload: {
@@ -445,7 +449,7 @@ export default function UsciteClient({
         // Sincronizza subito la Cassa ed i record collegati in tempo reale per tutte le entrate di questo evento
         await updateRegistroSpeseMetodoPerEvento(editingEvento.id, formData.nome_evento, formData.metodo_pagamento)
 
-        setEventi(eventi.map(ev => ev.id === editingEvento.id ? data : ev))
+        setEventi(eventi.map(ev => ev.id === editingEvento.id ? data : ev).filter(ev => dateInWorkingYear(ev.data_inizio, currentYear)))
         setEditingEvento(null)
         setFormData({ nome_evento: '', quota_standard: '', tipo_evento: 'CI', data_inizio: '', metodo_pagamento: 'Contanti' })
         router.refresh()
@@ -463,7 +467,7 @@ export default function UsciteClient({
         toast.error("Errore inserimento evento: " + error.message)
       }
       if (!error && data) {
-        setEventi([...eventi, data])
+        setEventi([...eventi, data].filter(ev => dateInWorkingYear(ev.data_inizio, currentYear)))
         
         await supabase.from('categorie_spesa').insert({ 
           nome: `Evento: ${data.nome_evento}`, 

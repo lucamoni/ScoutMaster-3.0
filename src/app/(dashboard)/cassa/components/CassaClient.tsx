@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ReceiptDialog } from '@/components/receipts/ReceiptDialog'
 import { ReceiptFilePicker } from '@/components/receipts/ReceiptFilePicker'
-import { receiptFileName, withReceiptUpload } from '@/lib/receipts'
+import { receiptFileName, withReceiptUpload, deleteExpenseRecord } from '@/lib/receipts'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
@@ -65,6 +65,9 @@ export default function CassaClient({
   const [editingCatNome, setEditingCatNome] = useState('')
   const [editingCatTipo, setEditingCatTipo] = useState('USCITA')
   const [editingSpesa, setEditingSpesa] = useState<Spesa | null>(null)
+  const [deleteTargets, setDeleteTargets] = useState<Spesa[]>([])
+  const [deleteFiles, setDeleteFiles] = useState(false)
+  const [deletingMovements, setDeletingMovements] = useState(false)
   const [activeTab, setActiveTab] = useState('TUTTI')
   const [filterCategoria, setFilterCategoria] = useState('TUTTE')
   const [filterMomento, setFilterMomento] = useState('TUTTI')
@@ -100,6 +103,7 @@ export default function CassaClient({
     note: string;
     tipo_movimento: string;
     data?: string;
+    ricevuta_presente?: boolean;
   }>({
     voce_spesa: initialCategorie[0]?.nome || '',
     importo: '',
@@ -308,24 +312,6 @@ export default function CassaClient({
     }
   }
 
-  const unlinkAndCleanupRelatedRecords = async (spesa: Spesa) => {
-    if (spesa.partecipazione_evento_id) {
-      await supabase.from('partecipazioni_eventi')
-        .update({ riscosso: false })
-        .eq('id', spesa.partecipazione_evento_id)
-    }
-    if (spesa.quota_mensile_id && spesa.riferimento_quota) {
-      await supabase.from('quote_mensili')
-        .update({ [spesa.riferimento_quota]: false } as Database['public']['Tables']['quote_mensili']['Update'])
-        .eq('id', spesa.quota_mensile_id)
-    }
-    if (spesa.ragazzo_id && spesa.voce_spesa?.toLowerCase().includes('censimento')) {
-      await supabase.from('ragazzi')
-        .update({ quota_censimento: false } as unknown as Database['public']['Tables']['ragazzi']['Update'])
-        .eq('id', spesa.ragazzo_id)
-    }
-  }
-
   const saveMovement = async (expense: Spesa | null, file: File | null) => {
     const amount = Number(formData.importo)
     const movementDate = formData.data || expense?.data || new Date().toISOString().split('T')[0]
@@ -338,6 +324,7 @@ export default function CassaClient({
         voce_spesa: formData.voce_spesa, importo: amount,
         metodo: toCanonicalMetodo(formData.metodo), momento_anno: formData.momento_anno,
         note: formData.note, tipo_movimento: formData.tipo_movimento, data: movementDate,
+        ricevuta_presente: formData.ricevuta_presente ?? expense?.ricevuta_presente ?? false,
         ...(path ? { foto_scontrino_url: path, ricevuta_presente: true } : {}),
       }
       const write = (metodo: string) => {
@@ -360,24 +347,36 @@ export default function CassaClient({
     savingRef.current = true
     setSaving(true)
     try {
+      if (editingSpesa && toCanonicalMetodo(editingSpesa.metodo) !== toCanonicalMetodo(formData.metodo)) await syncSpesaMetodoWithDB(editingSpesa, toCanonicalMetodo(formData.metodo))
       const saved = await saveMovement(editingSpesa, receiptFile)
       setSpese(prev => [saved, ...prev.filter(s => s.id !== saved.id)])
       setReceiptFile(null)
       setIsOpen(false)
       toast.success(receiptFile ? 'Movimento e allegato salvati' : 'Movimento salvato')
-      if (editingSpesa) await syncSpesaMetodoWithDB(editingSpesa, toCanonicalMetodo(formData.metodo))
+      router.refresh()
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Salvataggio non riuscito') }
     finally { savingRef.current = false; setSaving(false) }
   }
 
   const deleteSpesa = async (id: string) => {
-    if(!confirm("Vuoi davvero eliminare questa spesa?")) return;
-    const spesaToDelete = spese.find(s => s.id === id)
-    const { error } = await supabase.from('registro_spese').delete().eq('id', id)
-    if (!error) {
-      if (spesaToDelete) await unlinkAndCleanupRelatedRecords(spesaToDelete)
-      setSpese(spese.filter(s => s.id !== id))
-    }
+    setDeleteFiles(false)
+    setDeleteTargets(spese.filter(s => s.id === id))
+  }
+
+  const confirmDeleteMovements = async () => {
+    if (deletingMovements) return
+    setDeletingMovements(true)
+    try {
+      for (const expense of deleteTargets) {
+        const warnings = await deleteExpenseRecord(supabase, expense, deleteFiles)
+        setSpese(prev => prev.filter(row => row.id !== expense.id))
+        setDeleteTargets(prev => prev.filter(row => row.id !== expense.id))
+        setSelectedIds(prev => new Set([...prev].filter(id => id !== expense.id)))
+        warnings.forEach(message => toast.warning(message))
+      }
+      toast.success('Movimenti eliminati')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Eliminazione non riuscita') }
+    finally { setDeletingMovements(false); router.refresh() }
   }
 
   const handleAddCategoria = async (e: React.FormEvent) => {
@@ -487,7 +486,13 @@ export default function CassaClient({
 
   return (
     <div className="space-y-6">
-      {receiptExpense && <ReceiptDialog key={receiptExpense.id} expense={receiptExpense} onClose={() => setReceiptExpense(null)} onSaved={saved => setSpese(prev => prev.map(s => s.id === saved.id ? saved : s))} />}
+      {receiptExpense && <ReceiptDialog key={receiptExpense.id} expense={receiptExpense} onClose={() => setReceiptExpense(null)} onSaved={saved => setSpese(prev => prev.map(s => s.id === saved.id ? saved : s))} onDeleted={id => { setSpese(prev => prev.filter(s => s.id !== id)); router.refresh() }} />}
+      <Dialog open={deleteTargets.length > 0} onOpenChange={open => { if (!open && !deletingMovements) setDeleteTargets([]) }}>
+        <DialogContent><DialogHeader><DialogTitle>Elimina {deleteTargets.length === 1 ? 'movimento' : `${deleteTargets.length} movimenti`}</DialogTitle><DialogDescription>I movimenti verranno rimossi dal bilancio. Eventuali quote collegate torneranno da saldare.</DialogDescription></DialogHeader>
+          {deleteTargets.some(row => row.foto_scontrino_url) && <div className="space-y-2"><label className="flex items-center gap-2"><input type="checkbox" checked={deleteFiles} disabled={deletingMovements} onChange={event => setDeleteFiles(event.target.checked)} /> Elimina anche gli scontrini e i file allegati</label><p className="text-sm text-muted-foreground">Se non selezioni questa opzione, i file restano nell’archivio tra quelli senza movimento. L’eliminazione dei file è definitiva.</p></div>}
+          <DialogFooter><Button variant="outline" disabled={deletingMovements} onClick={() => setDeleteTargets([])}>Annulla</Button><Button variant="destructive" disabled={deletingMovements} onClick={confirmDeleteMovements}>{deletingMovements ? 'Eliminazione…' : 'Conferma eliminazione'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex justify-end"><Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> Archivio scontrini e file</Link></div>
       {/* Dashboard Saldi */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -553,6 +558,7 @@ export default function CassaClient({
               <DialogTitle>{editingSpesa ? 'Modifica Movimento' : 'Registra Movimento'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit}><fieldset disabled={saving} className="space-y-4">
+              <div className="space-y-2"><Label htmlFor="movement-date">Data del movimento</Label><Input id="movement-date" type="date" required value={formData.data ?? editingSpesa?.data ?? new Date().toLocaleDateString('sv-SE')} onChange={event => setFormData({ ...formData, data: event.target.value })} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo Movimento</Label>
@@ -609,6 +615,7 @@ export default function CassaClient({
                 <Input value={formData.note || ''} onChange={e => setFormData({...formData, note: e.target.value})} placeholder="Es. Chiodi dal ferramenta..." />
               </div>
               {editingSpesa?.foto_scontrino_url && <p className="text-xs text-muted-foreground break-all">Allegato attuale: {receiptFileName(editingSpesa.foto_scontrino_url)}. Carica un file per sostituirlo.</p>}
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={formData.ricevuta_presente ?? editingSpesa?.ricevuta_presente ?? false} onChange={event => setFormData({ ...formData, ricevuta_presente: event.target.checked })} /> Ricevuta presente (anche cartacea)</label>
               <ReceiptFilePicker file={receiptFile} onChange={setReceiptFile} disabled={saving} />
               <Button type="submit" className="w-full" disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salva movimento{receiptFile ? ' e allegato' : ''}</Button>
             </fieldset></form>
@@ -791,18 +798,9 @@ export default function CassaClient({
           </TabsList>
           
           {selectedIds.size > 0 && (
-            <Button variant="destructive" size="sm" onClick={async () => {
-              if (confirm(`Sei sicuro di voler eliminare in modo definitivo ${selectedIds.size} movimenti? Questa azione è irreversibile.`)) {
-                toast.loading('Eliminazione in corso...', { id: 'bulk-delete' })
-                const { error } = await supabase.from('registro_spese').delete().in('id', Array.from(selectedIds))
-                if (error) {
-                  toast.error('Errore durante l\'eliminazione: ' + error.message, { id: 'bulk-delete' })
-                } else {
-                  setSpese(spese.filter(s => !selectedIds.has(s.id)))
-                  setSelectedIds(new Set())
-                  toast.success(`${selectedIds.size} movimenti eliminati.`, { id: 'bulk-delete' })
-                }
-              }
+            <Button variant="destructive" size="sm" onClick={() => {
+              setDeleteFiles(false)
+              setDeleteTargets(spese.filter(row => selectedIds.has(row.id)))
             }}>
               <Trash2 className="w-4 h-4 mr-2" /> Elimina selezionati ({selectedIds.size})
             </Button>
@@ -984,7 +982,9 @@ export default function CassaClient({
                         metodo: toCanonicalMetodo(spesa.metodo),
                         momento_anno: spesa.momento_anno || 'ANNO',
                         note: spesa.note || '',
-                        tipo_movimento: spesa.tipo_movimento || 'USCITA'
+                        tipo_movimento: spesa.tipo_movimento || 'USCITA',
+                        data: spesa.data || '',
+                        ricevuta_presente: spesa.ricevuta_presente ?? false
                       })
                       setIsOpen(true)
                     }}>
@@ -1046,7 +1046,9 @@ export default function CassaClient({
                       metodo: toCanonicalMetodo(spesa.metodo),
                       momento_anno: spesa.momento_anno || 'ANNO',
                       note: spesa.note || '',
-                      tipo_movimento: spesa.tipo_movimento || 'USCITA'
+                      tipo_movimento: spesa.tipo_movimento || 'USCITA',
+                        data: spesa.data || '',
+                        ricevuta_presente: spesa.ricevuta_presente ?? false
                     })
                     setIsOpen(true)
                   }}>

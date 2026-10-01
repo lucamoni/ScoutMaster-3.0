@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import ReceiptArchive from './ReceiptArchive'
+import { listUnlinkedReceipts } from '@/lib/receipts'
+import { UnlinkedReceipts } from '@/components/receipts/UnlinkedReceipts'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Archivio scontrini e file | ScoutMaster 3.0' }
@@ -23,5 +25,10 @@ export default async function ReceiptArchivePage({ searchParams }: {
   const { data, count, error } = await query.order('data', { ascending: false, nullsFirst: false }).order('id')
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
   if (error) throw new Error('Impossibile caricare l’archivio allegati. Riprova tra poco.')
-  return <ReceiptArchive initialExpenses={data || []} total={count || 0} page={page} pageSize={PAGE_SIZE} filters={{ q, from, to }} />
+  let unlinked: Awaited<ReturnType<typeof listUnlinkedReceipts>> = []
+  let archiveError = false
+  try { unlinked = await listUnlinkedReceipts(supabase) } catch { archiveError = true }
+  return <div className="space-y-8"><ReceiptArchive initialExpenses={data || []} total={count || 0} page={page} pageSize={PAGE_SIZE} filters={{ q, from, to }} />
+    {archiveError ? <p role="alert">Impossibile caricare i file senza movimento. Ricarica per riprovare.</p> : <UnlinkedReceipts files={unlinked} />}
+  </div>
 }

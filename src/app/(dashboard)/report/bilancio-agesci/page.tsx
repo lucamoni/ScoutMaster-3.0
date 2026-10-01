@@ -1,3 +1,5 @@
+import { getWorkingYear } from '@/lib/workingYear'
+import { workingYearSettings } from '@/lib/utils/workingYear'
 import { createClient } from '@/lib/supabase/server'
 import BilancioAgesciClient from './components/BilancioAgesciClient'
 
@@ -33,7 +35,7 @@ export default async function BilancioAgesciPage() {
       <BilancioAgesciClient 
         initialSpese={registroSpese || []}
         initialRagazzi={ragazzi || []}
-        initialSettings={settingsMap}
+        initialSettings={Object.fromEntries(workingYearSettings(new Map(Object.entries(settingsMap)), await getWorkingYear(settingsMap.anno_scout_corrente))) as Record<string, string>}
       />
     </div>
   )

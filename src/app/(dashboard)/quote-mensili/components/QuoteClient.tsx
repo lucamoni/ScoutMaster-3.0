@@ -57,6 +57,7 @@ export default function QuoteClient({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quote_mensili' }, (payload) => {
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const updated = payload.new as Quote
+          if (normalizeAnnoScout(updated.anno_scout) !== normalizeAnnoScout(currentYear)) return
           setQuote(prev => {
             const filtered = prev.filter(q => !(q.ragazzo_id === updated.ragazzo_id && normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(updated.anno_scout)))
             return [...filtered, updated]
@@ -68,7 +69,7 @@ export default function QuoteClient({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase])
+  }, [supabase, currentYear])
 
   const ragazziFiltrati = ragazzi.filter(r => {
     const full = `${r.nome || ''} ${r.cognome || ''}`.toLowerCase()
