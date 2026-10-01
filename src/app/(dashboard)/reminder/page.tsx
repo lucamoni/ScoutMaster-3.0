@@ -1,52 +1,23 @@
 import { createClient } from '@/lib/supabase/server'
+import { getWorkingYear } from '@/lib/workingYear'
+import { annoScoutVariants } from '@/lib/utils/payment'
+import { buildReminderPeople } from '@/lib/reminder'
 import ReminderClient from './components/ReminderClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ReminderPage() {
-  const supabase = await createClient()
-
-  // Fetch solo ragazzi attivi
-  const { data: ragazzi } = await supabase.from('ragazzi').select('*').eq('attivo', true)
-  const { data: eventi } = await supabase.from('eventi').select('*')
-  const { data: partecipazioni } = await supabase.from('partecipazioni_eventi').select('*')
-  const { data: quote } = await supabase.from('quote_mensili').select('*')
-
-  if (!ragazzi) return <div>Errore caricamento dati</div>
-
-  // Analisi debitori (solo ragazzi attivi)
-  const analysis = ragazzi.map(ragazzo => {
-    const quoteRagazzo = quote?.find(q => q.ragazzo_id === ragazzo.id)
-    const partecipazioniRagazzo = partecipazioni?.filter(p => p.ragazzo_id === ragazzo.id) || []
-    
-    // Trova le quote mensili non pagate
-    const mesi = ['novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
-    const quoteArretrate = quoteRagazzo 
-      ? mesi.filter(m => !(quoteRagazzo as Record<string, unknown>)[m]) 
-      : mesi
-
-    // Trova le uscite non pagate (ma era presente o pendolare)
-    const usciteNonPagate = partecipazioniRagazzo
-      .filter(p => !p.riscosso && p.stato_presenza !== 'Assente')
-      .map(p => eventi?.find(e => e.id === p.evento_id)?.nome_evento)
-      .filter(Boolean) as string[]
-
-    const privacyMancante = !ragazzo.foglio_privacy_firmato
-
-    return {
-      ragazzo,
-      quoteArretrate,
-      usciteNonPagate,
-      privacyMancante
-    }
-  }).filter(r => r.quoteArretrate.length > 0 || r.usciteNonPagate.length > 0 || r.privacyMancante)
-
-  return (
-    <div className="p-4 md:p-6 w-full max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Generatore Reminder AI</h1>
-      </div>
-      <ReminderClient data={analysis} />
-    </div>
-  )
+  const client = await createClient()
+  const { data: settings, error: settingsError } = await client.from('impostazioni').select('chiave,valore')
+  if (settingsError) return <p role="alert">Impossibile caricare le impostazioni dei reminder.</p>
+  const year = await getWorkingYear(settings?.find(row => row.chiave === 'anno_scout_corrente')?.valore)
+  const [people, events, participations, quotes] = await Promise.all([
+    client.from('ragazzi').select('*').eq('attivo', true).order('cognome'),
+    client.from('eventi').select('*'),
+    client.from('partecipazioni_eventi').select('*'),
+    client.from('quote_mensili').select('*').in('anno_scout', annoScoutVariants(year)),
+  ])
+  if (people.error || events.error || participations.error || quotes.error) return <p role="alert">Impossibile caricare quote, uscite o moduli. Riprova.</p>
+  const data = buildReminderPeople(people.data || [], quotes.data || [], events.data || [], participations.data || [], year)
+  return <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6"><div><h1 className="text-2xl font-bold">Reminder</h1><p className="text-sm text-muted-foreground">Anno scout {year.replace('-', '/')} · scegli le voci, modifica il testo e apri WhatsApp.</p></div><ReminderClient data={data} initialGroupLink={settings?.find(row => row.chiave === 'reminder_link_gruppo')?.valore || ''} /></div>
 }

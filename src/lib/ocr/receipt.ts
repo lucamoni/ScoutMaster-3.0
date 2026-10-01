@@ -21,9 +21,37 @@ const getEngine = () => {
         textRecognitionModelName: 'PP-OCRv6_tiny_rec',
         ortOptions: { backend: 'auto' },
       })
+    }).catch(error => {
+      enginePromise = null
+      throw error
     })
   }
   return enginePromise
+}
+
+// Start downloading/initializing models while the user is taking a photo.
+export function prepareReceiptOcr() {
+  return getEngine().then(() => undefined)
+}
+
+async function imageForRecognition(file: File): Promise<Blob> {
+  if (typeof createImageBitmap !== 'function') return file
+  let bitmap: ImageBitmap
+  try { bitmap = await createImageBitmap(file) } catch { return file }
+  try {
+    const longestSide = Math.max(bitmap.width, bitmap.height)
+    if (longestSide <= 2400 && file.size <= 2 * 1024 * 1024) return file
+    const scale = Math.min(1, 2400 / longestSide)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    const context = canvas.getContext('2d')
+    if (!context) return file
+    context.fillStyle = '#fff'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    return await new Promise<Blob>(resolve => canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.88))
+  } finally { bitmap.close() }
 }
 
 const parseItalianAmount = (raw: string) => {
@@ -100,8 +128,8 @@ const chooseCategory = (lines: string[], categories: string[]) => {
 }
 
 export async function scanReceiptLocally(file: File, categories: string[]): Promise<ReceiptOcrResult> {
-  const engine = await getEngine()
-  const [result] = await engine.predict(file, { textRecScoreThresh: 0.35 })
+  const [engine, image] = await Promise.all([getEngine(), imageForRecognition(file)])
+  const [result] = await engine.predict(image, { textRecScoreThresh: 0.35 })
   const items = result?.items ?? []
   const lines = items.map(item => item.text.trim()).filter(Boolean)
   if (lines.length === 0) throw new Error('Nessun testo riconosciuto')
