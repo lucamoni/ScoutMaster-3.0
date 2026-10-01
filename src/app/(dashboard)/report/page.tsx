@@ -1,5 +1,7 @@
+import { dateInWorkingYear } from '@/lib/utils/workingYear'
+import { getWorkingYear } from '@/lib/workingYear'
 import { createClient } from '@/lib/supabase/server'
-import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
+import { annoScoutVariants, getCurrentAnnoScout } from '@/lib/utils/payment'
 import { ReportClient } from './components/ReportClient'
 import { CENSUS_INCOME_SETTING, isIncludedInAccounting } from '@/lib/utils/censusAccounting'
 
@@ -8,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function ReportPage() {
   const supabase = await createClient()
   const { data: impostazioni } = await supabase.from('impostazioni').select('*')
-  const currentYear = normalizeAnnoScout(
+  const currentYear = await getWorkingYear(
     impostazioni?.find(item => item.chiave === 'anno_scout_corrente')?.valore || getCurrentAnnoScout()
   )
   const [startYear, endYear] = currentYear.split('-').map(Number)
@@ -29,7 +31,7 @@ export default async function ReportPage() {
   return (
     <ReportClient
       ragazzi={ragazziRes.data || []}
-      eventi={eventiRes.data || []}
+      eventi={(eventiRes.data || []).filter(event => dateInWorkingYear(event.data_inizio, currentYear))}
       partecipazioni={partecipazioniRes.data || []}
       cassa={(cassaRes.data || []).filter(movement => isIncludedInAccounting(movement, impostazioni?.find(item => item.chiave === CENSUS_INCOME_SETTING)?.valore === 'true'))}
       quote={quoteRes.data || []}

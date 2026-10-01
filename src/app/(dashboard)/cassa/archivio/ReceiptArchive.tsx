@@ -46,7 +46,7 @@ export default function ReceiptArchive({ initialExpenses, total, page, pageSize,
         <p className="text-xs text-muted-foreground">{expense.data || 'Data non indicata'} · {expense.momento_anno || 'ANNO'} · {expense.tipo_movimento}</p>
         {expense.note && <p className="text-sm">{expense.note}</p>}
         <p className="break-all text-sm text-muted-foreground">{receiptFileName(expense.foto_scontrino_url!)}</p>
-        <Button variant="outline" onClick={() => setSelected(expense)}><Paperclip className="mr-2 h-4 w-4" /> Apri / scarica allegato</Button>
+        <Button variant="outline" onClick={() => setSelected(expense)}><Paperclip className="mr-2 h-4 w-4" /> Apri / scarica / elimina</Button>
       </div>)}
     </div>
     {!expenses.length && <p className="rounded-lg border border-dashed p-8 text-center">Nessun allegato trovato. Puoi aggiungerlo a una voce dalla pagina Cassa.</p>}
@@ -55,6 +55,6 @@ export default function ReceiptArchive({ initialExpenses, total, page, pageSize,
       <span>Pagina {page} di {Math.max(1, Math.ceil(total / pageSize))}</span>
       {page * pageSize < total ? <Link href={pageUrl(page + 1)} className="underline">Successiva</Link> : <span />}
     </nav>
-    {selected && <ReceiptDialog key={selected.id} expense={selected} onClose={() => setSelected(null)} onSaved={saved => { setExpenses(prev => prev.map(item => item.id === saved.id ? saved : item)); router.refresh() }} />}
+    {selected && <ReceiptDialog key={selected.id} expense={selected} onClose={() => setSelected(null)} onSaved={saved => { setExpenses(prev => prev.map(item => item.id === saved.id ? saved : item).filter(item => item.foto_scontrino_url)); router.refresh() }} onDeleted={id => { setExpenses(prev => prev.filter(item => item.id !== id)); router.refresh() }} />}
   </div>
 }

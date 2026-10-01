@@ -37,12 +37,13 @@ import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { getAccountingPeriod, calculateAccountingBalances } from '@/lib/utils/accounting'
 import ScoutMasterLogo from '@/components/layout/Logo'
 import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
+import { WORKING_YEAR_COOKIE, workingYearSettings } from '@/lib/utils/workingYear'
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, selectedYear, availableYears }: { children: React.ReactNode; selectedYear: string; availableYears: string[] }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [annoScout, setAnnoScout] = useState(getCurrentAnnoScout())
+  const annoScout = selectedYear
   const [saldi, setSaldi] = useState({ cassa: 0, banca: 0 })
 
   useEffect(() => {
@@ -57,12 +58,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const settingsRes = await supabase.from('impostazioni').select('chiave, valore')
       if (settingsRes.error) return
       const settings = new Map<string, string | null>((settingsRes.data || []).map(item => [item.chiave, item.valore]))
-      const period = getAccountingPeriod(settings, getCurrentAnnoScout())
+      const period = getAccountingPeriod(workingYearSettings(settings, selectedYear), getCurrentAnnoScout())
       const speseRes = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo, riferimento_censimento_anno, voce_spesa')
         .gte('data', period.startDate).lte('data', period.endDate)
       if (speseRes.error || !speseRes.data) return
       const balances = calculateAccountingBalances(speseRes.data, period.initialCash, period.initialBank, settings.get(CENSUS_INCOME_SETTING) === 'true')
-      setAnnoScout(period.currentYear)
       const cassa = balances.saldoFinaleCassa
       const banca = balances.saldoFinaleBanca
       setSaldi({ cassa, banca })
@@ -85,7 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       window.removeEventListener('accounting-settings-changed', fetchSaldi)
       supabase.removeChannel(channel)
     }
-  }, [pathname])
+  }, [pathname, selectedYear])
 
   const navGroups = [
     {
@@ -240,9 +240,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* Center/Right Anno Scout Selector */}
           <div className="flex items-center gap-3 ml-auto md:ml-0">
             <div className="relative inline-flex items-center">
-              <Link href="/impostazioni" title="Modifica anno scout nelle Impostazioni" className="text-agesci-blue font-semibold text-xs md:text-sm bg-slate-100 px-3 py-1.5 rounded-lg">
-                Anno Scout {annoScout.replace('-', '/')}
-              </Link>
+              <select aria-label="Anno scout di lavoro" title="Cambia anno scout" value={annoScout} className="text-agesci-blue font-semibold text-xs md:text-sm bg-slate-100 px-3 py-1.5 rounded-lg" onChange={event => {
+                document.cookie = `${WORKING_YEAR_COOKIE}=${encodeURIComponent(event.target.value)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`
+                window.location.reload()
+              }}>
+                {availableYears.map(year => <option key={year} value={year}>Anno Scout {year.replace('-', '/')}</option>)}
+              </select>
             </div>
           </div>
 
@@ -263,6 +266,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto pb-20 md:pb-6 p-4 md:p-6 bg-surface-bg">
+          {pathname === '/censimento' && selectedYear !== getCurrentAnnoScout() && <p className="mb-4 rounded border bg-white p-3 text-sm">Il censimento mostra lo stato attuale delle persone, non uno storico annuale. Gli incassi degli anni precedenti sono consultabili nella Cassa dell’anno selezionato.</p>}
           {children}
         </main>
       </div>

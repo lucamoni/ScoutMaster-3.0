@@ -15,6 +15,94 @@ export const RECEIPT_ACCEPT = Object.keys(MIME_BY_EXTENSION).map(ext => `.${ext}
 export type ReceiptExpense = Database['public']['Tables']['registro_spese']['Row']
 type Client = SupabaseClient<Database>
 
+export async function receiptLinks(client: Client) {
+  const rows: Pick<ReceiptExpense, 'id' | 'foto_scontrino_url'>[] = []
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await client.from('registro_spese').select('id,foto_scontrino_url')
+      .not('foto_scontrino_url', 'is', null).order('id').range(offset, offset + 499)
+    if (error) throw new Error('Impossibile verificare i collegamenti degli allegati')
+    rows.push(...(data || []))
+    if (!data || data.length < 500) return rows
+  }
+}
+
+export async function removeUnlinkedReceipt(client: Client, value: string) {
+  const host = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const path = receiptPath(value, host)
+  const links = await receiptLinks(client)
+  if (links.some(row => row.foto_scontrino_url && receiptPath(row.foto_scontrino_url, host) === path)) {
+    throw new Error('File ancora collegato a un movimento: apri il movimento prima di eliminarlo.')
+  }
+  const { error } = await client.storage.from(RECEIPT_BUCKET).remove([path])
+  if (error) throw new Error('Il file è conservato in archivio: eliminazione non riuscita. Riprova dall’archivio.')
+}
+
+export async function removeExpenseReceipt(client: Client, expense: ReceiptExpense, markReceiptAbsent: boolean) {
+  if (!expense.foto_scontrino_url) throw new Error('Nessun allegato da eliminare')
+  const { data, error } = await client.from('registro_spese').update({
+    foto_scontrino_url: null,
+    ...(markReceiptAbsent ? { ricevuta_presente: false } : {}),
+  }).eq('id', expense.id).eq('foto_scontrino_url', expense.foto_scontrino_url).select('*').single()
+  if (error || !data) throw new Error('Il movimento è cambiato: ricarica e riprova. Il file non è stato eliminato.')
+  // Detach first: a storage failure must leave a recoverable, unlinked file,
+  // never a movement pointing to a deleted file.
+  let warning: string | undefined
+  try { await removeUnlinkedReceipt(client, expense.foto_scontrino_url) }
+  catch (error) { warning = error instanceof Error ? error.message : 'File conservato in archivio' }
+  return { expense: data, warning }
+}
+
+export async function deleteExpenseRecord(client: Client, expense: ReceiptExpense, deleteFile: boolean) {
+  let query = client.from('registro_spese').delete().eq('id', expense.id)
+  query = expense.foto_scontrino_url === null ? query.is('foto_scontrino_url', null) : query.eq('foto_scontrino_url', expense.foto_scontrino_url)
+  const { data, error } = await query.select('id').single()
+  if (error || !data) throw new Error('Movimento non eliminato: potrebbe essere cambiato. Ricarica e riprova.')
+  const warnings: string[] = []
+  try {
+    if (expense.partecipazione_evento_id) {
+      const result = await client.from('partecipazioni_eventi').update({ riscosso: false }).eq('id', expense.partecipazione_evento_id)
+      if (result.error) throw result.error
+    }
+    const months = ['novembre', 'dicembre', 'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno']
+    if (expense.quota_mensile_id && expense.riferimento_quota && months.includes(expense.riferimento_quota)) {
+      const result = await client.from('quote_mensili').update({ [expense.riferimento_quota]: false } as Database['public']['Tables']['quote_mensili']['Update']).eq('id', expense.quota_mensile_id)
+      if (result.error) throw result.error
+    }
+    if (expense.ragazzo_id && (expense.riferimento_censimento_anno || /^(quota\s+)?censimento$/i.test(expense.voce_spesa || ''))) {
+      const result = await client.from('ragazzi').update({ quota_censimento: false }).eq('id', expense.ragazzo_id)
+      if (result.error) throw result.error
+    }
+  } catch {
+    warnings.push('Movimento eliminato, ma lo stato del pagamento collegato non è stato aggiornato. Controlla la quota prima di riconciliare.')
+  }
+  if (deleteFile && expense.foto_scontrino_url) {
+    try { await removeUnlinkedReceipt(client, expense.foto_scontrino_url) }
+    catch (error) { warnings.push(error instanceof Error ? error.message : 'File conservato in archivio') }
+  }
+  return warnings
+}
+
+export async function listUnlinkedReceipts(client: Client) {
+  const links = await receiptLinks(client)
+  const linked = new Set(links.filter(row => row.foto_scontrino_url).map(row => receiptPath(row.foto_scontrino_url!, process.env.NEXT_PUBLIC_SUPABASE_URL!)))
+  const files: { path: string; createdAt: string | null }[] = []
+  const folders = ['']
+  while (folders.length) {
+    const folder = folders.shift()!
+    for (let offset = 0; ; offset += 100) {
+      const { data, error } = await client.storage.from(RECEIPT_BUCKET).list(folder, { limit: 100, offset, sortBy: { column: 'name', order: 'asc' } })
+      if (error) throw new Error('Impossibile caricare i file conservati in archivio')
+      for (const item of data || []) {
+        const path = folder ? `${folder}/${item.name}` : item.name
+        if (!item.id) folders.push(path)
+        else if (!linked.has(path)) files.push({ path, createdAt: item.created_at || null })
+      }
+      if (!data || data.length < 100) break
+    }
+  }
+  return files
+}
+
 export function validateReceiptFile(file: Pick<File, 'name' | 'type' | 'size'>) {
   const extension = file.name.split('.').pop()?.toLowerCase() || ''
   const types = MIME_BY_EXTENSION[extension]

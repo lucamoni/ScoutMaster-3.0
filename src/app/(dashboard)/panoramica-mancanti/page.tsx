@@ -1,4 +1,6 @@
-import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
+import { dateInWorkingYear } from '@/lib/utils/workingYear'
+import { getWorkingYear } from '@/lib/workingYear'
+import { annoScoutVariants, getCurrentAnnoScout } from '@/lib/utils/payment'
 import { createClient } from '@/lib/supabase/server'
 import { PanoramicaClient } from '../panoramica/components/PanoramicaClient'
 
@@ -26,7 +28,7 @@ export default async function PanoramicaMancantiPage() {
   const quotaMensileStandard = impostazioni?.find(i => i.chiave === 'quota_mensile_standard')?.valore || '10'
   const quotaCensimentoStandard = impostazioni?.find(i => i.chiave === 'quota_censimento_standard')?.valore || '45'
   const quotaCensimentoFratelli = impostazioni?.find(i => i.chiave === 'quota_censimento_fratelli')?.valore || '35'
-  const currentYear = normalizeAnnoScout(impostazioni?.find(i => i.chiave === 'anno_scout_corrente')?.valore || defaultCurrentYear)
+  const currentYear = await getWorkingYear(impostazioni?.find(i => i.chiave === 'anno_scout_corrente')?.valore || defaultCurrentYear)
 
   const { data: quote } = await supabase
     .from('quote_mensili')
@@ -41,7 +43,7 @@ export default async function PanoramicaMancantiPage() {
       
       <PanoramicaClient 
         initialRagazzi={ragazzi || []}
-        eventi={eventi || []}
+        eventi={(eventi || []).filter(event => dateInWorkingYear(event.data_inizio, currentYear))}
         partecipazioni={partecipazioni || []}
         quote={quote || []}
         pattuglie={pattuglie || []}

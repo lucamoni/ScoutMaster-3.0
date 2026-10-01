@@ -1,3 +1,4 @@
+import { getWorkingYear } from '@/lib/workingYear'
 import { createClient } from '@/lib/supabase/server'
 import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 import QuoteClient from './components/QuoteClient'
@@ -17,7 +18,7 @@ export default async function QuotePage() {
   }
 
   const settings = new Map((impostazioni || []).map(item => [item.chiave, item.valore]))
-  const currentYear = normalizeAnnoScout(settings.get('anno_scout_corrente') || getCurrentAnnoScout())
+  const currentYear = await getWorkingYear(settings.get('anno_scout_corrente') || getCurrentAnnoScout())
   const initialQuotaStandard = Number(settings.get('quota_mensile_standard') || 10)
 
   const { data: initialQuote, error: quoteError } = await supabase
@@ -40,7 +41,7 @@ export default async function QuotePage() {
       anno_scout: currentYear,
     }))
 
-  if (missingQuote.length > 0) {
+  if (missingQuote.length > 0 && currentYear === normalizeAnnoScout(settings.get('anno_scout_corrente') || getCurrentAnnoScout())) {
     const { error: insertError } = await supabase.from('quote_mensili').insert(missingQuote)
 
     if (!insertError) {

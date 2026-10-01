@@ -1,3 +1,5 @@
+import { getWorkingYear } from '@/lib/workingYear'
+import { workingYearSettings } from '@/lib/utils/workingYear'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { getAccountingPeriod } from '@/lib/utils/accounting'
@@ -15,7 +17,7 @@ export default async function CassaPage() {
   ])
 
   const settings = new Map((impostazioni || []).map(item => [item.chiave, item.valore]))
-  const { currentYear, startDate, endDate, initialCash, initialBank } = getAccountingPeriod(settings, getCurrentAnnoScout())
+  const { currentYear, startDate, endDate, initialCash, initialBank } = getAccountingPeriod(workingYearSettings(settings, await getWorkingYear(settings.get('anno_scout_corrente'))), getCurrentAnnoScout())
 
   const { data: spese, error } = await supabase
     .from('registro_spese')
