@@ -58,6 +58,11 @@ export async function POST(request: Request) {
     if (unauthorized) return unauthorized
     const message = error instanceof Error ? error.message : 'Errore sconosciuto'
     console.error('Receipt OCR failed', message.replace(/AIza[\w-]+/g, '[redacted]').slice(0, 2000))
-    return NextResponse.json({ error: 'Lettura automatica non riuscita. Controlla la foto o compila la spesa manualmente.' }, { status: 502 })
+    let publicError = 'Lettura automatica non riuscita. Controlla la foto o compila la spesa manualmente.'
+    if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) publicError = 'Il servizio OCR ha raggiunto il limite di utilizzo. Riprova più tardi o compila i dati manualmente.'
+    else if (/API.?key|401|403|PERMISSION_DENIED|UNAUTHENTICATED/i.test(message)) publicError = 'La configurazione del servizio OCR non è valida. Compila i dati manualmente mentre viene ripristinata.'
+    else if (/404|NOT_FOUND|not found/i.test(message)) publicError = 'Il modello per la lettura degli scontrini non è disponibile. Compila i dati manualmente.'
+    else if (/timeout|abort|deadline/i.test(message)) publicError = 'Il servizio OCR non ha risposto in tempo. Riprova o compila i dati manualmente.'
+    return NextResponse.json({ error: publicError }, { status: 502 })
   }
 }
