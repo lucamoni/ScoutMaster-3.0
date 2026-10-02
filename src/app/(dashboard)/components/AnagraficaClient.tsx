@@ -373,14 +373,14 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
 
       {/* Dialog Scheda Esploratore "Taccuino Tecnico" */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto bg-white rounded-2xl p-6 border border-slate-200 shadow-2xl">
+        <DialogContent className="max-w-2xl max-h-[calc(100dvh-1rem)] overflow-y-auto bg-white rounded-2xl p-4 sm:p-6 border border-slate-200 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-agesci-blue text-scout-gold flex items-center justify-center font-bold shadow-xs">
+            <DialogTitle className="flex min-w-0 items-center gap-3 pr-9">
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-agesci-blue text-scout-gold flex items-center justify-center font-bold shadow-xs">
                 <Compass className="h-5 w-5" />
               </div>
-              <div>
-                <span className="font-heading text-lg font-bold text-slate-900">
+              <div className="min-w-0">
+                <span className="font-heading text-base sm:text-lg font-bold text-slate-900">
                   {editingId ? 'Taccuino Tecnico Esploratore' : 'Nuovo Esploratore Reparto'}
                 </span>
                 <p className="text-xs text-slate-500 font-normal">
@@ -430,36 +430,36 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
           {/* Tabbed Form Interface */}
           <form onSubmit={handleAdd} className="space-y-4">
             <Tabs defaultValue="anagrafica" className="w-full">
-              <TabsList className="grid grid-cols-3 bg-slate-100 p-1 rounded-xl">
-                <TabsTrigger value="anagrafica" className="text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 py-2">
-                  <User className="h-3.5 w-3.5" /> Dati & Sanitari
+              <TabsList className="grid w-full grid-cols-3 bg-slate-100 p-1 rounded-xl h-auto">
+                <TabsTrigger value="anagrafica" className="min-w-0 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 py-2">
+                  <User className="h-3.5 w-3.5" /><span className="sm:hidden">Dati</span><span className="hidden sm:inline">Dati & Sanitari</span>
                 </TabsTrigger>
-                <TabsTrigger value="progressione" className="text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 py-2">
-                  <Compass className="h-3.5 w-3.5" /> Progressione & Specialità
+                <TabsTrigger value="progressione" className="min-w-0 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 py-2">
+                  <Compass className="h-3.5 w-3.5" /><span className="sm:hidden">Sentiero</span><span className="hidden sm:inline">Progressione & Specialità</span>
                 </TabsTrigger>
-                <TabsTrigger value="buonacaccia" className="text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 py-2">
-                  <Calendar className="h-3.5 w-3.5" /> Storico & BuonaCaccia
+                <TabsTrigger value="buonacaccia" className="min-w-0 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 py-2">
+                  <Calendar className="h-3.5 w-3.5" /><span className="sm:hidden">Storico</span><span className="hidden sm:inline">Storico & BuonaCaccia</span>
                 </TabsTrigger>
               </TabsList>
 
               {/* Tab 1: Dati & Sanitari */}
               <TabsContent value="anagrafica" className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Nome *</Label>
-                    <Input required className="h-9 text-xs rounded-xl" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
+                    <Input required className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Cognome *</Label>
-                    <Input required className="h-9 text-xs rounded-xl" value={formData.cognome} onChange={e => setFormData({...formData, cognome: e.target.value})} />
+                    <Input required className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" value={formData.cognome} onChange={e => setFormData({...formData, cognome: e.target.value})} />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Sesso</Label>
                     <Select value={formData.sesso} onValueChange={v => setFormData({...formData, sesso: v || ''})}>
-                      <SelectTrigger className="h-9 text-xs rounded-xl"><SelectValue placeholder="-" /></SelectTrigger>
+                      <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-xs rounded-xl"><SelectValue placeholder="-" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="M">M</SelectItem>
                         <SelectItem value="F">F</SelectItem>
@@ -470,7 +470,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Squadriglia</Label>
                     <Select value={formData.pattuglia} onValueChange={v => setFormData({...formData, pattuglia: v || ''})}>
-                      <SelectTrigger className="h-9 text-xs rounded-xl"><SelectValue placeholder="Seleziona..." /></SelectTrigger>
+                      <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-xs rounded-xl"><SelectValue placeholder="Seleziona..." /></SelectTrigger>
                       <SelectContent>
                         {squadriglie.map(p => p.nome ? <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem> : null)}
                       </SelectContent>
@@ -479,29 +479,29 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
 
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Codice Censimento</Label>
-                    <Input className="h-9 text-xs rounded-xl" placeholder="es. 123456" value={formData.codice_censimento} onChange={e => setFormData({...formData, codice_censimento: e.target.value})} />
+                    <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" placeholder="es. 123456" value={formData.codice_censimento} onChange={e => setFormData({...formData, codice_censimento: e.target.value})} />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 border-t pt-3">
+                <div className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Genitore 1 (Nome)</Label>
-                    <Input className="h-9 text-xs rounded-xl" value={formData.genitore_1_nome} onChange={e => setFormData({...formData, genitore_1_nome: e.target.value})} />
+                    <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" value={formData.genitore_1_nome} onChange={e => setFormData({...formData, genitore_1_nome: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Genitore 1 (Telefono WA)</Label>
-                    <Input className="h-9 text-xs rounded-xl" placeholder="+39..." value={formData.genitore_1_telefono} onChange={e => setFormData({...formData, genitore_1_telefono: e.target.value})} />
+                    <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" type="tel" inputMode="tel" placeholder="+39..." value={formData.genitore_1_telefono} onChange={e => setFormData({...formData, genitore_1_telefono: e.target.value})} />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Genitore 2 (Nome)</Label>
-                    <Input className="h-9 text-xs rounded-xl" value={formData.genitore_2_nome} onChange={e => setFormData({...formData, genitore_2_nome: e.target.value})} />
+                    <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" value={formData.genitore_2_nome} onChange={e => setFormData({...formData, genitore_2_nome: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Genitore 2 (Telefono WA)</Label>
-                    <Input className="h-9 text-xs rounded-xl" placeholder="+39..." value={formData.genitore_2_telefono} onChange={e => setFormData({...formData, genitore_2_telefono: e.target.value})} />
+                    <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" type="tel" inputMode="tel" placeholder="+39..." value={formData.genitore_2_telefono} onChange={e => setFormData({...formData, genitore_2_telefono: e.target.value})} />
                   </div>
                 </div>
 
@@ -510,7 +510,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                     <HeartPulse className="h-3.5 w-3.5 text-rose-500" /> Note Sanitarie & Allergie
                   </Label>
                   <textarea 
-                    className="w-full text-xs border rounded-xl p-2.5 bg-slate-50 min-h-[60px] outline-none focus:ring-2 focus:ring-agesci-blue"
+                    className="w-full text-base sm:text-xs border rounded-xl p-2.5 bg-slate-50 min-h-[60px] outline-none focus:ring-2 focus:ring-agesci-blue"
                     placeholder="Allergie, intolleranze alimentari, farmaci o note mediche importanti..."
                     value={formData.note_sanitarie}
                     onChange={e => setFormData({...formData, note_sanitarie: e.target.value})}
@@ -524,7 +524,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Compass className="h-4 w-4 text-agesci-blue" /> Sentiero E/G - Tappa Personale
                   </h4>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div className="border bg-white rounded-xl p-3 text-center cursor-pointer hover:border-agesci-blue transition-colors">
                       <span className="text-xs font-bold text-slate-800 block">Scoperta</span>
                       <span className="text-[10px] text-slate-500">1° Anno</span>

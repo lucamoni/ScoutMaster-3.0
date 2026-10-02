@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 import { isIncludedInAccounting } from '@/lib/utils/censusAccounting'
-import { ReceiptOcrResult, scanReceiptLocally, prepareReceiptOcr } from '@/lib/ocr/receipt'
+import { ReceiptOcrResult, scanReceiptLocally, scanReceiptOnServer, imageForRecognition, prepareReceiptOcr } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,8 @@ import {
 
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
+
+const isMobileReceiptOcr = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || window.matchMedia('(max-width: 767px)').matches
 
 export default function CassaClient({
   initialSpese,
@@ -85,17 +87,20 @@ export default function CassaClient({
   // Scanner Scontrino State
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   useEffect(() => {
-    if (isScannerOpen) void prepareReceiptOcr().catch(() => undefined)
+    if (isScannerOpen && !isMobileReceiptOcr()) void prepareReceiptOcr().catch(() => undefined)
+    if (!isScannerOpen) { setScannerFile(null); setScannerPreviewBlob(null); setOcrData(null); setScannerError(null) }
   }, [isScannerOpen])
   const [scannerFile, setScannerFile] = useState<File | null>(null)
+  const [scannerPreviewBlob, setScannerPreviewBlob] = useState<Blob | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [scannerError, setScannerError] = useState<string | null>(null)
   const [ocrData, setOcrData] = useState<ReceiptOcrResult | null>(null)
   useEffect(() => {
-    if (!scannerFile) { setScannerPreview(null); return }
-    const url = URL.createObjectURL(scannerFile)
+    if (!scannerPreviewBlob) { setScannerPreview(null); return }
+    const url = URL.createObjectURL(scannerPreviewBlob)
     setScannerPreview(url)
     return () => URL.revokeObjectURL(url)
-  }, [scannerFile])
+  }, [scannerPreviewBlob])
 
   
   const [formData, setFormData] = useState<{
@@ -436,9 +441,19 @@ export default function CassaClient({
   const analyzeScontrino = async (fileToAnalyze: File) => {
     setIsProcessing(true)
     setOcrData(null)
+    setScannerError(null)
     toast.info('Analisi scontrino in corso...', { id: 'ocr-scontrino' })
     try {
-      const data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
+      const mobile = isMobileReceiptOcr()
+      let data: ReceiptOcrResult
+      if (mobile) {
+        const image = await imageForRecognition(fileToAnalyze, 1600)
+        setScannerPreviewBlob(image)
+        data = await scanReceiptOnServer(image, categorie.map(c => c.nome))
+      } else {
+        setScannerPreviewBlob(fileToAnalyze)
+        data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
+      }
       
       setOcrData(data)
       
@@ -453,13 +468,15 @@ export default function CassaClient({
         tipo_movimento: 'USCITA' // Assumiamo uscita per gli scontrini
       }))
 
-      toast.success('Scontrino letto sul dispositivo. Controlla i dati.', { id: 'ocr-scontrino' })
+      toast.success('Scontrino letto. Controlla i dati prima di salvare.', { id: 'ocr-scontrino' })
     } catch (err: unknown) {
       console.error(err)
       const errMsg = err instanceof Error ? err.message : 'Errore sconosciuto'
+      setScannerError(errMsg)
       toast.error(`Impossibile analizzare lo scontrino: ${errMsg}`, { id: 'ocr-scontrino' })
+      setFormData(prev => ({ ...prev, importo: '', data: new Date().toISOString().slice(0, 10), note: '', voce_spesa: categorie.find(c => c.tipo_movimento === 'USCITA')?.nome || '', tipo_movimento: 'USCITA' }))
       setOcrData({
-        provider: 'paddleocr-browser',
+        provider: isMobileReceiptOcr() ? 'gemini-server' : 'paddleocr-browser',
         importo: null,
         data: null,
         fornitore: null,
@@ -709,6 +726,7 @@ export default function CassaClient({
               <DialogTitle>Acquisisci Scontrino</DialogTitle>
               <DialogDescription>
                 Scatta o carica uno scontrino per compilare la spesa. Puoi conservare la foto come allegato.
+                <span className="block mt-1">Sul telefono una copia ridotta viene inviata al servizio OCR Google Gemini; la foto originale viene conservata solo se scegli di allegarla.</span>
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
@@ -736,9 +754,10 @@ export default function CassaClient({
                     <div className="space-y-4 animate-in fade-in">
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-md mb-2">
                         <Receipt className="w-5 h-5 text-primary" />
-                        <span className="text-sm font-medium">Lettura completata. Controlla i dati:</span>
+                        <span className="text-sm font-medium">{scannerError ? 'Compila i dati manualmente:' : 'Lettura completata. Controlla i dati:'}</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      {scannerError && <p role="alert" className="text-sm text-amber-800">{scannerError}</p>}
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Importo Estratto (€)</Label>
                           <Input type="number" step="0.01" value={formData.importo || ''} onChange={e => setFormData({...formData, importo: e.target.value})} />
@@ -747,7 +766,7 @@ export default function CassaClient({
                           <Label>Data</Label>
                           <Input type="date" value={formData.data || ''} onChange={e => setFormData({...formData, data: e.target.value})} />
                         </div>
-                        <div className="space-y-2 col-span-2">
+                        <div className="space-y-2 sm:col-span-2">
                           <Label>Voce Spesa (Fornitore / Negozio)</Label>
                           <Input value={formData.note || ''} onChange={e => setFormData({...formData, note: e.target.value})} />
                         </div>
@@ -778,6 +797,7 @@ export default function CassaClient({
                   )}
                 </div>
               )}
+              {scannerFile && !isProcessing && <Button className="mt-4" variant="outline" onClick={() => { setScannerFile(null); setScannerPreviewBlob(null); setOcrData(null); setScannerError(null) }}>Scegli un’altra foto</Button>}
             </div>
             <DialogFooter>
               <Button variant="outline" disabled={isProcessing} onClick={() => setIsScannerOpen(false)}>Annulla</Button>
