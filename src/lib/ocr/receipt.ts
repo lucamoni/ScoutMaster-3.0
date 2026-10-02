@@ -1,5 +1,5 @@
 export type ReceiptOcrResult = {
-  provider: 'paddleocr-browser'
+  provider: 'paddleocr-browser' | 'gemini-server'
   importo: number | null
   data: string | null
   fornitore: string | null
@@ -34,24 +34,65 @@ export function prepareReceiptOcr() {
   return getEngine().then(() => undefined)
 }
 
-async function imageForRecognition(file: File): Promise<Blob> {
-  if (typeof createImageBitmap !== 'function') return file
-  let bitmap: ImageBitmap
-  try { bitmap = await createImageBitmap(file) } catch { return file }
+export async function imageForRecognition(file: Blob, maxDimension = 2400): Promise<Blob> {
+  let bitmap: ImageBitmap | HTMLImageElement
+  let objectUrl: string | null = null
+  let canvas: HTMLCanvasElement | null = null
   try {
-    const longestSide = Math.max(bitmap.width, bitmap.height)
-    if (longestSide <= 2400 && file.size <= 2 * 1024 * 1024) return file
-    const scale = Math.min(1, 2400 / longestSide)
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale))
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+    if (typeof createImageBitmap === 'function') bitmap = await createImageBitmap(file)
+    else throw new Error('ImageBitmap non disponibile')
+  } catch {
+    objectUrl = URL.createObjectURL(file)
+    try {
+      bitmap = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => resolve(image)
+        image.onerror = () => reject(new Error('Immagine non leggibile'))
+        image.src = objectUrl!
+      })
+    } catch {
+      URL.revokeObjectURL(objectUrl)
+      throw new Error('Impossibile aprire la foto. Prova a scattarla di nuovo.')
+    }
+  }
+  try {
+    const width = 'naturalWidth' in bitmap ? bitmap.naturalWidth : bitmap.width
+    const height = 'naturalHeight' in bitmap ? bitmap.naturalHeight : bitmap.height
+    const longestSide = Math.max(width, height)
+    if (longestSide <= maxDimension && file.size <= 2 * 1024 * 1024) return file
+    const scale = Math.min(1, maxDimension / longestSide)
+    canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(width * scale))
+    canvas.height = Math.max(1, Math.round(height * scale))
     const context = canvas.getContext('2d')
-    if (!context) return file
+    if (!context) throw new Error('Impossibile preparare la foto')
     context.fillStyle = '#fff'
     context.fillRect(0, 0, canvas.width, canvas.height)
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    return await new Promise<Blob>(resolve => canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.88))
-  } finally { bitmap.close() }
+    return await new Promise<Blob>((resolve, reject) => canvas!.toBlob(blob => blob ? resolve(blob) : reject(new Error('Impossibile preparare la foto')), 'image/jpeg', 0.82))
+  } finally {
+    if ('close' in bitmap) bitmap.close()
+    else bitmap.src = ''
+    if (canvas) { canvas.width = 0; canvas.height = 0 }
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
+  }
+}
+
+export async function scanReceiptOnServer(image: Blob, categories: string[]): Promise<ReceiptOcrResult> {
+  const form = new FormData()
+  form.append('file', image, 'scontrino.jpg')
+  form.append('categories', JSON.stringify(categories))
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 35_000)
+  try {
+    const response = await fetch('/api/ocr/scontrino', { method: 'POST', body: form, signal: controller.signal })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'Lettura non disponibile')
+    return payload as ReceiptOcrResult
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('La lettura sta impiegando troppo tempo. Riprova o compila i dati manualmente.')
+    throw error
+  } finally { clearTimeout(timeout) }
 }
 
 const parseItalianAmount = (raw: string) => {
