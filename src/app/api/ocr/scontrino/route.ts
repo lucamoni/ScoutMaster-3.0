@@ -54,6 +54,10 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(result)
   } catch (error) {
-    return authorizationErrorResponse(error) ?? NextResponse.json({ error: 'Lettura automatica non riuscita. Controlla la foto o compila la spesa manualmente.' }, { status: 502 })
+    const unauthorized = authorizationErrorResponse(error)
+    if (unauthorized) return unauthorized
+    const message = error instanceof Error ? error.message : 'Errore sconosciuto'
+    console.error('Receipt OCR failed', message.replace(/AIza[\w-]+/g, '[redacted]').slice(0, 2000))
+    return NextResponse.json({ error: 'Lettura automatica non riuscita. Controlla la foto o compila la spesa manualmente.' }, { status: 502 })
   }
 }
