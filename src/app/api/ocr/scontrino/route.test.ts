@@ -44,3 +44,14 @@ it('rifiuta file che non sono fotografie', async () => {
   expect(response.status).toBe(415)
   expect(generateContent).not.toHaveBeenCalled()
 })
+
+it('spiega un limite del servizio senza esporre il messaggio privato del provider', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  generateContent.mockRejectedValue(new Error('429 RESOURCE_EXHAUSTED private provider details'))
+  const response = await POST(photoRequest())
+  expect(response.status).toBe(502)
+  const payload = await response.json()
+  expect(payload.error).toContain('limite di utilizzo')
+  expect(payload.error).not.toContain('private provider details')
+  log.mockRestore()
+})
