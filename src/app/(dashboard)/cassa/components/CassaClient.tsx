@@ -726,7 +726,7 @@ export default function CassaClient({
               <DialogTitle>Acquisisci Scontrino</DialogTitle>
               <DialogDescription>
                 Scatta o carica uno scontrino per compilare la spesa. Puoi conservare la foto come allegato.
-                <span className="block mt-1">Sul telefono una copia ridotta viene inviata al servizio OCR Google Gemini; la foto originale viene conservata solo se scegli di allegarla.</span>
+                <span className="block mt-1">Sul telefono una copia ridotta viene letta dai servizi OCR Groq o Google Gemini; la foto originale viene conservata solo se scegli di allegarla.</span>
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
