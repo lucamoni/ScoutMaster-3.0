@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const base64 = Buffer.from(await file.arrayBuffer()).toString('base64')
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.5-flash-lite',
       contents: [
         { text: `Leggi questo scontrino italiano. Restituisci solo JSON con importo (numero totale effettivamente pagato, non subtotale/IVA/resto), data (YYYY-MM-DD o null), fornitore (stringa o null), voce_spesa (una delle categorie indicate o null), raw_text (testo breve leggibile sullo scontrino). Non inventare valori non visibili. Categorie: ${JSON.stringify(categories)}.` },
         { inlineData: { mimeType: file.type, data: base64 } },
