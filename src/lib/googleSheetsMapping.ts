@@ -64,7 +64,7 @@ export function buildKnownSheetMapping(sheetName: string, headers: string[]): Sh
     return result('registro_spese')
   }
   if (name === 'ANAGRAFICA') {
-    for (const field of ['nome', 'cognome', 'pattuglia', 'sesso', 'data_nascita', 'codice_censimento', 'codice_fiscale', 'residenza']) set(h.findIndex(x => x.replace(/ /g, '_') === field), field)
+    for (const field of ['nome', 'cognome', 'pattuglia', 'sesso', 'data_nascita', 'codice_censimento', 'codice_fiscale', 'residenza', 'telefono_ragazzo', 'genitore_1_nome', 'genitore_1_telefono', 'genitore_1_email', 'genitore_1_codice_fiscale', 'genitore_2_nome', 'genitore_2_telefono', 'genitore_2_email', 'genitore_2_codice_fiscale', 'note_sanitarie']) set(h.findIndex(x => x.replace(/ /g, '_') === field), field)
     return result('ragazzi')
   }
   return null

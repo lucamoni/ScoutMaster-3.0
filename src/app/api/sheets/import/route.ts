@@ -146,7 +146,7 @@ async function upsertPerson(
   const stringFields = [
     'codice_censimento', 'codice_fiscale', 'pattuglia', 'residenza',
     'sesso', 'telefono_ragazzo', 'genitore_1_nome', 'genitore_1_telefono',
-    'genitore_2_nome', 'genitore_2_telefono', 'note_sanitarie',
+    'genitore_2_nome', 'genitore_2_telefono', 'genitore_1_email', 'genitore_2_email', 'genitore_1_codice_fiscale', 'genitore_2_codice_fiscale', 'note_sanitarie',
   ]
   for (const field of stringFields) {
     const value = reader(field)

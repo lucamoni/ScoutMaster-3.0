@@ -106,6 +106,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         { name: 'Archivio Scontrini e File', href: '/cassa/archivio', icon: FolderArchive },
         { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: ScanLine },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
+        { name: 'Ricevute pagamenti', href: '/ricevute', icon: FileCheck },
         { name: 'Censimento', href: '/censimento', icon: ShieldCheck },
         { name: 'Panoramica Mancanti', href: '/panoramica-mancanti', icon: AlertTriangle },
       ]

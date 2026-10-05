@@ -90,8 +90,12 @@ const ALLOWED_RAGAZZI_COLUMNS = new Set([
   'telefono_ragazzo',
   'genitore_1_nome',
   'genitore_1_telefono',
+  'genitore_1_email',
+  'genitore_1_codice_fiscale',
   'genitore_2_nome',
   'genitore_2_telefono',
+  'genitore_2_email',
+  'genitore_2_codice_fiscale',
   'note_sanitarie'
 ])
 
@@ -122,8 +126,8 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
   
   const defaultForm = {
     nome: '', cognome: '', sesso: '', pattuglia: '', 
-    codice_censimento: '', importo_censimento: '', data_nascita: '', residenza: '', telefono_ragazzo: '',
-    genitore_1_nome: '', genitore_1_telefono: '', genitore_2_nome: '', genitore_2_telefono: '', note_sanitarie: ''
+    codice_fiscale: '', codice_censimento: '', importo_censimento: '', data_nascita: '', residenza: '', telefono_ragazzo: '',
+    genitore_1_nome: '', genitore_1_telefono: '', genitore_1_email: '', genitore_1_codice_fiscale: '', genitore_2_nome: '', genitore_2_telefono: '', genitore_2_email: '', genitore_2_codice_fiscale: '', note_sanitarie: ''
   }
   const [formData, setFormData] = useState(defaultForm)
   
@@ -483,6 +487,12 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-xs font-semibold">Codice fiscale ragazzo<Input type="text" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.codice_fiscale} onChange={e => setFormData({...formData, codice_fiscale: e.target.value})} /></label>
+                  <label className="space-y-1 text-xs font-semibold">Telefono ragazzo<Input type="tel" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.telefono_ragazzo} onChange={e => setFormData({...formData, telefono_ragazzo: e.target.value})} /></label>
+                  <label className="space-y-1 text-xs font-semibold">Data di nascita<Input type="date" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.data_nascita} onChange={e => setFormData({...formData, data_nascita: e.target.value})} /></label>
+                  <label className="space-y-1 text-xs font-semibold">Residenza<Input type="text" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.residenza} onChange={e => setFormData({...formData, residenza: e.target.value})} /></label>
+                </div>
                 <div className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Genitore 1 (Nome)</Label>
@@ -492,6 +502,8 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                     <Label className="text-xs font-semibold text-slate-700">Genitore 1 (Telefono WA)</Label>
                     <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" type="tel" inputMode="tel" placeholder="+39..." value={formData.genitore_1_telefono} onChange={e => setFormData({...formData, genitore_1_telefono: e.target.value})} />
                   </div>
+                  <label className="space-y-1 text-xs font-semibold">Genitore 1 (Email)<Input type="email" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.genitore_1_email} onChange={e => setFormData({...formData, genitore_1_email: e.target.value})} /></label>
+                  <label className="space-y-1 text-xs font-semibold">Genitore 1 (Codice fiscale pagatore)<Input className="h-11 text-base sm:h-9 sm:text-xs" value={formData.genitore_1_codice_fiscale} onChange={e => setFormData({...formData, genitore_1_codice_fiscale: e.target.value.toUpperCase()})} /></label>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -503,6 +515,8 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                     <Label className="text-xs font-semibold text-slate-700">Genitore 2 (Telefono WA)</Label>
                     <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" type="tel" inputMode="tel" placeholder="+39..." value={formData.genitore_2_telefono} onChange={e => setFormData({...formData, genitore_2_telefono: e.target.value})} />
                   </div>
+                  <label className="space-y-1 text-xs font-semibold">Genitore 2 (Email)<Input type="email" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.genitore_2_email} onChange={e => setFormData({...formData, genitore_2_email: e.target.value})} /></label>
+                  <label className="space-y-1 text-xs font-semibold">Genitore 2 (Codice fiscale pagatore)<Input className="h-11 text-base sm:h-9 sm:text-xs" value={formData.genitore_2_codice_fiscale} onChange={e => setFormData({...formData, genitore_2_codice_fiscale: e.target.value.toUpperCase()})} /></label>
                 </div>
 
                 <div className="space-y-1 border-t pt-3">
@@ -717,10 +731,10 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                           setEditingId(ragazzo.id)
                           setFormData({ 
                             nome: ragazzo.nome, cognome: ragazzo.cognome, sesso: ragazzo.sesso || '', pattuglia: ragazzo.pattuglia || '',
-                            codice_censimento: ragazzo.codice_censimento || '', importo_censimento: ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined ? String(ragazzo.importo_censimento) : '', data_nascita: ragazzo.data_nascita || '',
+                            codice_fiscale: ragazzo.codice_fiscale || '', codice_censimento: ragazzo.codice_censimento || '', importo_censimento: ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined ? String(ragazzo.importo_censimento) : '', data_nascita: ragazzo.data_nascita || '',
                             residenza: ragazzo.residenza || '', telefono_ragazzo: ragazzo.telefono_ragazzo || '',
-                            genitore_1_nome: ragazzo.genitore_1_nome || '', genitore_1_telefono: ragazzo.genitore_1_telefono || '',
-                            genitore_2_nome: ragazzo.genitore_2_nome || '', genitore_2_telefono: ragazzo.genitore_2_telefono || '',
+                            genitore_1_nome: ragazzo.genitore_1_nome || '', genitore_1_telefono: ragazzo.genitore_1_telefono || '', genitore_1_email: ragazzo.genitore_1_email || '', genitore_1_codice_fiscale: ragazzo.genitore_1_codice_fiscale || '',
+                            genitore_2_nome: ragazzo.genitore_2_nome || '', genitore_2_telefono: ragazzo.genitore_2_telefono || '', genitore_2_email: ragazzo.genitore_2_email || '', genitore_2_codice_fiscale: ragazzo.genitore_2_codice_fiscale || '',
                             note_sanitarie: ragazzo.note_sanitarie || ''
                           })
                           setIsOpen(true)
@@ -780,10 +794,10 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                       setEditingId(ragazzo.id)
                       setFormData({ 
                         nome: ragazzo.nome, cognome: ragazzo.cognome, sesso: ragazzo.sesso || '', pattuglia: ragazzo.pattuglia || '',
-                        codice_censimento: ragazzo.codice_censimento || '', importo_censimento: ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined ? String(ragazzo.importo_censimento) : '', data_nascita: ragazzo.data_nascita || '',
+                        codice_fiscale: ragazzo.codice_fiscale || '', codice_censimento: ragazzo.codice_censimento || '', importo_censimento: ragazzo.importo_censimento !== null && ragazzo.importo_censimento !== undefined ? String(ragazzo.importo_censimento) : '', data_nascita: ragazzo.data_nascita || '',
                         residenza: ragazzo.residenza || '', telefono_ragazzo: ragazzo.telefono_ragazzo || '',
-                        genitore_1_nome: ragazzo.genitore_1_nome || '', genitore_1_telefono: ragazzo.genitore_1_telefono || '',
-                        genitore_2_nome: ragazzo.genitore_2_nome || '', genitore_2_telefono: ragazzo.genitore_2_telefono || '',
+                        genitore_1_nome: ragazzo.genitore_1_nome || '', genitore_1_telefono: ragazzo.genitore_1_telefono || '', genitore_1_email: ragazzo.genitore_1_email || '', genitore_1_codice_fiscale: ragazzo.genitore_1_codice_fiscale || '',
+                        genitore_2_nome: ragazzo.genitore_2_nome || '', genitore_2_telefono: ragazzo.genitore_2_telefono || '', genitore_2_email: ragazzo.genitore_2_email || '', genitore_2_codice_fiscale: ragazzo.genitore_2_codice_fiscale || '',
                         note_sanitarie: ragazzo.note_sanitarie || ''
                       })
                       setIsOpen(true)
