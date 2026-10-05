@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Database } from '@/types/database.types'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { getIndividualMonthlyQuotaAmount, getMonthlyQuotaAccountingDate } from '@/lib/utils/monthlyQuota'
 import {
   Table,
   TableBody,
@@ -50,6 +51,9 @@ export default function QuoteClient({
   const [isBulkLoading, setIsBulkLoading] = useState(false)
   
   const supabase = createClient()
+
+  useEffect(() => { setQuote(initialQuote) }, [initialQuote])
+  useEffect(() => { setQuotaStandard(initialQuotaStandard.toString()) }, [initialQuotaStandard, currentYear])
 
   useEffect(() => {
     const channel = supabase
@@ -129,11 +133,11 @@ export default function QuoteClient({
       movementError = lookupError
       if (!movementError && !existing) {
         const result = await supabase.from('registro_spese').insert({
-          importo: Number(quotaStandard),
+          importo: getIndividualMonthlyQuotaAmount([quoteData], Number(quotaStandard)),
           metodo: 'Contanti',
           voce_spesa: 'Quota Mensile',
           tipo_movimento: 'ENTRATA',
-          data: new Date().toISOString().split('T')[0],
+          data: getMonthlyQuotaAccountingDate(normYear, quoteData.data_contabile),
           ragazzo_id: ragazzoId,
           quota_mensile_id: quoteData.id,
           riferimento_quota: month as string,
@@ -207,14 +211,14 @@ export default function QuoteClient({
 
   const saveQuotaStandard = async () => {
     const amount = Number(quotaStandard)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('La quota deve essere un importo maggiore di zero')
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error('La quota deve essere un importo maggiore o uguale a zero')
       return
     }
     setIsSavingQuota(true)
-    const { error } = await supabase.from('impostazioni').upsert({ chiave: 'quota_mensile_standard', valore: quotaStandard } as Database['public']['Tables']['impostazioni']['Insert'])
+    const { error } = await supabase.from('impostazioni').upsert({ chiave: `quota_mensile_standard_${normalizeAnnoScout(currentYear)}`, valore: quotaStandard } as Database['public']['Tables']['impostazioni']['Insert'])
     if (error) toast.error("Errore salvataggio: " + error.message)
-    else toast.success('Quota mensile aggiornata')
+    else toast.success(`Quota mensile aggiornata per ${currentYear}`)
     setIsSavingQuota(false)
   }
 

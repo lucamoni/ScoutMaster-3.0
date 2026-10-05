@@ -164,6 +164,8 @@ export type Database = {
       quote_mensili: {
         Row: {
           anno_scout: string
+          importo_mensile: number | null
+          data_contabile: string | null
           aprile: boolean | null
           dicembre: boolean | null
           febbraio: boolean | null
@@ -177,6 +179,8 @@ export type Database = {
         }
         Insert: {
           anno_scout: string
+          importo_mensile?: number | null
+          data_contabile?: string | null
           aprile?: boolean | null
           dicembre?: boolean | null
           febbraio?: boolean | null
@@ -190,6 +194,8 @@ export type Database = {
         }
         Update: {
           anno_scout?: string
+          importo_mensile?: number | null
+          data_contabile?: string | null
           aprile?: boolean | null
           dicembre?: boolean | null
           febbraio?: boolean | null
@@ -210,6 +216,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      documenti_annuali: {
+        Row: { anno_scout: string; kind: string; id: string; dati: Json; file_url: string | null; created_at: string; updated_at: string }
+        Insert: { anno_scout: string; kind: string; id: string; dati: Json; file_url?: string | null; created_at?: string; updated_at?: string }
+        Update: { anno_scout?: string; kind?: string; id?: string; dati?: Json; file_url?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      roster_anni: {
+        Row: { anno_scout: string; copied_from: string | null; created_at: string }
+        Insert: { anno_scout: string; copied_from?: string | null; created_at?: string }
+        Update: { anno_scout?: string; copied_from?: string | null; created_at?: string }
+        Relationships: []
+      }
+      ragazzi_anni: {
+        Row: { ragazzo_id: string; anno_scout: string; snapshot: Json; attivo: boolean; copied_from: string | null; created_at: string; updated_at: string }
+        Insert: { ragazzo_id: string; anno_scout: string; snapshot: Json; attivo?: boolean; copied_from?: string | null; created_at?: string; updated_at?: string }
+        Update: { ragazzo_id?: string; anno_scout?: string; snapshot?: Json; attivo?: boolean; copied_from?: string | null; created_at?: string; updated_at?: string }
+        Relationships: [{ foreignKeyName: "ragazzi_anni_ragazzo_id_fkey"; columns: ["ragazzo_id"]; isOneToOne: false; referencedRelation: "ragazzi"; referencedColumns: ["id"] }]
       }
       ragazzi: {
         Row: {
@@ -516,6 +540,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      reset_year_data: { Args: { p_year: string; p_target: string }; Returns: Json }
+      ensure_roster_year: { Args: { p_year: string }; Returns: number }
+      write_annual_boy: { Args: { p_year: string; p_id: string | null; p_changes: Json; p_census_method?: string; p_census_date?: string }; Returns: Json }
+      import_roster_year: { Args: { p_year: string; p_rows: Json; p_mode: string }; Returns: number }
       issue_payment_receipt: { Args: { p_snapshot: Json; p_ids: string[]; p_actor: string }; Returns: Json }
       attach_payment_proof: { Args: { p_ids: string[]; p_proof: Json }; Returns: number }
       import_roster: { Args: { p_rows: Json; p_mode: string }; Returns: number }

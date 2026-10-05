@@ -1,3 +1,4 @@
+import { getAnnualBoys } from '@/lib/annualRoster/server'
 import { dateInWorkingYear } from '@/lib/utils/workingYear'
 import { getWorkingYear } from '@/lib/workingYear'
 import { createClient } from '@/lib/supabase/server'
@@ -16,7 +17,7 @@ export default async function ReportPage() {
   const [startYear, endYear] = currentYear.split('-').map(Number)
 
   const [ragazziRes, eventiRes, partecipazioniRes, cassaRes, quoteRes] = await Promise.all([
-    supabase.from('ragazzi').select('*').eq('attivo', true).order('cognome'),
+    getAnnualBoys(currentYear, false).then(data => ({ data })),
     supabase.from('eventi').select('*').order('data_inizio'),
     supabase.from('partecipazioni_eventi').select('*'),
     supabase
@@ -30,6 +31,7 @@ export default async function ReportPage() {
 
   return (
     <ReportClient
+      key={currentYear}
       ragazzi={ragazziRes.data || []}
       eventi={(eventiRes.data || []).filter(event => dateInWorkingYear(event.data_inizio, currentYear))}
       partecipazioni={partecipazioniRes.data || []}

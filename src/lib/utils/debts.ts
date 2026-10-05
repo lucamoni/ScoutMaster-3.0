@@ -1,4 +1,5 @@
 import { getCurrentAnnoScout, normalizeAnnoScout } from './payment'
+import { getIndividualMonthlyQuotaAmount } from './monthlyQuota'
 
 export const SCOUT_FEE_MONTHS = [
   'novembre',
@@ -22,6 +23,7 @@ type DebtScout = {
 type DebtQuota = {
   ragazzo_id: string | null
   anno_scout: string
+  importo_mensile?: number | null
 } & Partial<Record<ScoutFeeMonth, boolean | null>>
 
 type DebtEvent = {
@@ -80,7 +82,8 @@ export function calculateScoutDebt({
     item.ragazzo_id === scout.id && normalizeAnnoScout(item.anno_scout) === normalizedYear
   )
   const unpaidMonths = activeMonths.filter(month => !scoutQuote.some(item => item[month] === true))
-  const quoteDebt = unpaidMonths.length * validAmount(monthlyFee)
+  const monthlyQuotaAmount = getIndividualMonthlyQuotaAmount(scoutQuote, validAmount(monthlyFee))
+  const quoteDebt = unpaidMonths.length * monthlyQuotaAmount
 
   const unpaidEventDetails = participations
     .filter(item => item.ragazzo_id === scout.id && item.riscosso !== true && item.stato_presenza !== 'Assente' && events.some(event => event.id === item.evento_id))
@@ -104,6 +107,7 @@ export function calculateScoutDebt({
 
   return {
     unpaidMonths,
+    monthlyQuotaAmount,
     quoteDebt,
     unpaidEventDetails,
     eventiDebt,

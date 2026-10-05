@@ -1,25 +1,25 @@
+import { getAnnualBoys } from '@/lib/annualRoster/server'
 import { getWorkingYear } from '@/lib/workingYear'
 import { createClient } from '@/lib/supabase/server'
 import { annoScoutVariants, getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
 import QuoteClient from './components/QuoteClient'
+import { getMonthlyQuotaAmount } from '@/lib/utils/monthlyQuota'
 
 export const dynamic = 'force-dynamic'
 
 export default async function QuotePage() {
   const supabase = await createClient()
 
-  const [{ data: ragazzi, error: ragazziError }, { data: impostazioni, error: settingsError }] = await Promise.all([
-    supabase.from('ragazzi').select('*').eq('attivo', true).order('pattuglia', { ascending: true }),
-    supabase.from('impostazioni').select('*'),
-  ])
+  const { data: impostazioni, error: settingsError } = await supabase.from('impostazioni').select('*')
 
-  if (ragazziError || settingsError) {
+  if (settingsError) {
     return <div>Errore nel caricamento delle quote mensili.</div>
   }
 
   const settings = new Map((impostazioni || []).map(item => [item.chiave, item.valore]))
   const currentYear = await getWorkingYear(settings.get('anno_scout_corrente') || getCurrentAnnoScout())
-  const initialQuotaStandard = Number(settings.get('quota_mensile_standard') || 10)
+  const initialQuotaStandard = getMonthlyQuotaAmount(settings, currentYear)
+  const ragazzi = await getAnnualBoys(currentYear, false)
 
   const { data: initialQuote, error: quoteError } = await supabase
     .from('quote_mensili')
@@ -59,6 +59,7 @@ export default async function QuotePage() {
         <h1 className="text-2xl font-bold tracking-tight">Quote Mensili ({currentYear})</h1>
       </div>
       <QuoteClient
+        key={currentYear}
         ragazzi={activeRagazzi}
         initialQuote={quote || []}
         currentYear={currentYear}

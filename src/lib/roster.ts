@@ -1,6 +1,7 @@
+import { validWorkingYear } from '@/lib/utils/workingYear'
 import type { Database } from '@/types/database.types'
 export type Boy = Database['public']['Tables']['ragazzi']['Row']
-export const ROSTER_FIELDS = ['id','nome','cognome','codice_fiscale','codice_censimento','data_nascita','residenza','sesso','pattuglia','telefono_ragazzo','genitore_1_nome','genitore_1_telefono','genitore_1_email','genitore_1_codice_fiscale','genitore_2_nome','genitore_2_telefono','genitore_2_email','genitore_2_codice_fiscale','note_sanitarie','attivo','foglio_privacy_firmato','partecipazione_ci','scheda_medica_ci','partecipazione_ce','scheda_medica_ce','quota_censimento','ricevuta_censimento','importo_censimento','stati_documenti'] as const
+export const ROSTER_FIELDS = ['id','nome','cognome','codice_fiscale','codice_censimento','data_nascita','residenza','sesso','pattuglia','telefono_ragazzo','genitore_1_nome','genitore_1_telefono','genitore_1_email','genitore_1_codice_fiscale','genitore_2_nome','genitore_2_telefono','genitore_2_email','genitore_2_codice_fiscale','note_sanitarie','attivo','foglio_privacy_firmato','partecipazione_ci','scheda_medica_ci','partecipazione_ce','scheda_medica_ce','quota_censimento','ricevuta_censimento','importo_censimento','stati_documenti','anno_scout'] as const
 const flags = new Set(['attivo','foglio_privacy_firmato','partecipazione_ci','scheda_medica_ci','partecipazione_ce','scheda_medica_ce','quota_censimento','ricevuta_censimento'])
 export const validCF = (s: string) => /^[A-Z0-9]{16}$/.test(s) || /^\d{11}$/.test(s)
 export type RosterPreview = { row: number; action: 'create' | 'update' | 'skip'; data: Record<string, unknown>; errors: string[] }
@@ -20,6 +21,7 @@ export function previewRoster(rows: Record<string, unknown>[], existing: Boy[], 
    else if (field.endsWith('_email')) { value=norm(value); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) errors.push(`${field}: email non valida`) }
    else if (field === 'importo_censimento') { value=Number(String(value).replace(',','.')); if (!Number.isFinite(value) || Number(value)<0) errors.push('Importo censimento non valido') }
    else if (field === 'stati_documenti') { try { value=typeof value==='string'?JSON.parse(value):value; if (!value || typeof value!=='object' || Array.isArray(value)) throw Error() } catch { errors.push('Stati documenti: JSON non valido') } }
+   else if(field==='anno_scout'){value=validWorkingYear(String(value));if(!value)errors.push('Anno scout: usa AAAA-AAAA')}
    else if (field==='data_nascita') { const v=String(value); const m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); value=m?`${m[3]}-${m[2]}-${m[1]}`:v; if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value)) || !Number.isFinite(Date.parse(String(value))) || new Date(String(value)).toISOString().slice(0,10)!==value) errors.push('Data nascita: usa AAAA-MM-GG') }
    else value=String(value)
    if (typeof value==='string' && value.length>5000) errors.push(`${field}: troppo lungo`)

@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { readFileSync } from 'node:fs'
 
 const state = vi.hoisted(() => ({ tables: {} as Record<string, Record<string, unknown>[]>, sheets: {} as Record<string, string[][]> }))
+vi.mock('@/lib/annualRoster/server',()=>({getAnnualBoys:async()=>state.tables.ragazzi || []}))
 vi.mock('@/lib/security/auth', () => ({ requireRole: vi.fn(), authorizationErrorResponse: () => null }))
 vi.mock('@/lib/googleSheetsPublic', async original => ({ ...await original<object>(), fetchPublicWorkbook: async () => state.sheets }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: (table: string) => {
@@ -14,7 +15,8 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: (tabl
   const run = () => {
     const rows = state.tables[table] ??= []
     const matches = rows.filter(row => filters.every(filter => filter(row)))
-    if (action === 'insert') { const row = { id: `${table}-${rows.length + 1}`, ...payload }; rows.push(row); return [row] }
+    if (action === 'upsert') { const row = rows.find(r => r.chiave === payload.chiave); if(row){Object.assign(row,payload);return [row]} }
+    if (action === 'insert' || action === 'upsert') { const row = { id: `${table}-${rows.length + 1}`, ...payload }; rows.push(row); return [row] }
     if (action === 'update') matches.forEach(row => Object.assign(row, payload))
     return matches
   }
@@ -24,6 +26,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: (tabl
     like: (key: string, value: string) => { filters.push(row => String(row[key] ?? '').startsWith(value.slice(0, -1))); return query },
     limit: () => query,
     insert: (value: Record<string, unknown>) => { action = 'insert'; payload = value; return query },
+    upsert: (value: Record<string, unknown>) => { action = 'upsert'; payload = value; return query },
     update: (value: Record<string, unknown>) => { action = 'update'; payload = value; return query },
     single: async () => ({ data: run()[0] ?? null, error: null }),
     maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),
@@ -53,6 +56,34 @@ async function runImport() {
 }
 
 describe('importazione fedele al foglio scout', () => {
+  it('rifiuta anno e data incompatibili prima di modificare qualsiasi tabella', async () => {
+    const response = await POST(new Request('http://localhost/api/sheets/import', {method:'POST',body:JSON.stringify({spreadsheetId:'test-spreadsheet-1234567890',selectedSheets:['CI','SPESE'],selectedTables:['campi','registro_spese'],mappings:[],annoScout:'2026-2027',eventAccountingDate:'2026-09-30'})}))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toContain('anno scout')
+    expect(state.tables.eventi).toHaveLength(0)
+    expect(state.tables.registro_spese).toBeUndefined()
+  })
+  it('conserva tariffa storica e data contabile delle mensili senza usare 10€ o oggi', async () => {
+    state.sheets['QUOTE MENSILI']=[['NOME','NOVEMBRE','DICEMBRE'],['Mario Rossi','true','true']]
+    const input={spreadsheetId:'test-spreadsheet-1234567890',selectedSheets:['QUOTE MENSILI'],selectedTables:['quote_mensili'],mappings:[],annoScout:'2025-2026',eventAccountingDate:'2026-09-30'}
+    const missing=await POST(new Request('http://localhost/api/sheets/import',{method:'POST',body:JSON.stringify(input)}))
+    expect(missing.status).toBe(400)
+    expect(state.tables.quote_mensili).toBeUndefined()
+    const response=await POST(new Request('http://localhost/api/sheets/import',{method:'POST',body:JSON.stringify({...input,monthlyAmount:'8,00'})}))
+    expect(response.status).toBe(200)
+    expect(state.tables.quote_mensili[0]).toMatchObject({anno_scout:'2025-2026',importo_mensile:8,data_contabile:'2026-09-30',novembre:true,dicembre:true})
+    expect(state.tables.impostazioni[0]).toMatchObject({chiave:'quota_mensile_standard_2025-2026',valore:'8'})
+  })
+  it('separa le uscite omonime di due anni senza sovrascrivere le vecchie partecipazioni', async () => {
+    await runImport()
+    const oldEvent=state.tables.eventi.find(row=>row.nome_evento==='MAGGIO')!
+    const oldRows=state.tables.partecipazioni_eventi.filter(row=>row.evento_id===oldEvent.id)
+    const response=await POST(new Request('http://localhost/api/sheets/import',{method:'POST',body:JSON.stringify({spreadsheetId:'test-spreadsheet-1234567890',selectedSheets:['USCITE'],selectedTables:['partecipazioni_eventi'],mappings:[],annoScout:'2026-2027',eventAccountingDate:'2027-05-20'})}))
+    expect(response.status).toBe(200)
+    expect(state.tables.eventi.filter(row=>row.nome_evento==='MAGGIO')).toHaveLength(2)
+    expect(oldEvent.data_inizio).toBe('2026-07-20')
+    expect(state.tables.partecipazioni_eventi.filter(row=>row.evento_id===oldEvent.id)).toEqual(oldRows)
+  })
   it('preserva quote zero e non sovrascrive rettifiche con pagamenti senza metodo', async () => {
     state.sheets.CI[0].push('QUOTA')
     state.sheets.CI[1] = ['1', 'Mario Rossi', 'true', '', '0']

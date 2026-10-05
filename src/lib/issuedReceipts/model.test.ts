@@ -2,7 +2,7 @@ import { describe,it,expect } from 'vitest'
 import { receiptRecipient,makeSnapshot,amountWords, paymentMethod,type Movement,type ReceiptConfig } from './model'
 import { previewRoster,type Boy } from '@/lib/roster'
 import { suggestParent,normalizeProof } from './proof'
-import { canManageSystem,getStaffRole,roleAllowed } from '@/lib/security/roles'
+import { canManageReceiptIssuer,canManageSystem,getStaffRole,roleAllowed } from '@/lib/security/roles'
 const boy={id:'boy',nome:'Mario',cognome:'Rossi',codice_fiscale:'RSSMRA10A01H501U',genitore_1_nome:'Luigi Rossi',genitore_1_codice_fiscale:'RSSLGU80A01H501U',genitore_1_email:'test@example.invalid',genitore_2_nome:'Anna Verdi',genitore_2_codice_fiscale:'VRDNNA80A01H501U'} as Boy
 const config={treasurer:'Tesoriere',signature:'data:image/png;base64,AA=='} satisfies ReceiptConfig
 const line={id:'a',ragazzo_id:'boy',data:'2026-01-01',importo:10,metodo:'Bonifico',tipo_movimento:'ENTRATA',voce_spesa:'Quote',note:'Gennaio',momento_anno:'ANNO'} as Movement
@@ -26,5 +26,5 @@ describe('Importazione anagrafiche',()=>{
 describe('Prove e ruolo tesoriere',()=>{
  it('riconosce un genitore anche con ordine nome invertito, ma non nomi parziali o ambigui',()=>{expect(suggestParent('ROSSI Luigi',['Luigi Rossi','Anna Verdi'])).toBe(1);expect(suggestParent('Rossi',['Luigi Rossi','Anna Verdi'])).toBeNull();expect(suggestParent('Luigi Rossi',['Luigi Rossi','Luigi Rossi'])).toBeNull()})
  it('non inventa importi/date e non salva IBAN letti',()=>{expect(normalizeProof({payer:'Luigi Rossi',amount:'100',date:'2026-02-31',iban:'secret'},[boy.genitore_1_nome,null])).toMatchObject({amount:null,date:null,suggestedParent:1});expect(normalizeProof({iban:'secret'},[])).not.toHaveProperty('iban')})
- it('tesoriere può operare e firmare, ma non gestire le impostazioni',()=>{expect(getStaffRole({app_metadata:{role:'tesoriere_unita'}})).toBe('tesoriere_unita');expect(canManageSystem('tesoriere_unita')).toBe(false);expect(roleAllowed('tesoriere_unita',['admin'])).toBe(false);expect(roleAllowed('tesoriere_unita',['admin','tesoriere_unita'])).toBe(true)})
+ it('aiuto con qualifica tesoriere può firmare, ma non gestire le impostazioni',()=>{const user={app_metadata:{role:'aiuto_capo_unita',treasurer:true}};expect(getStaffRole(user)).toBe('aiuto_capo_unita');expect(canManageSystem(getStaffRole(user))).toBe(false);expect(roleAllowed(getStaffRole(user),['admin'])).toBe(false);expect(canManageReceiptIssuer(user)).toBe(true)})
 })

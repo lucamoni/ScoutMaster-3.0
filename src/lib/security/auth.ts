@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getStaffRole, roleAllowed } from './roles'
+import { canManageReceiptIssuer, getStaffRole, roleAllowed } from './roles'
 
 export class AuthorizationError extends Error {
   constructor(
@@ -37,6 +37,14 @@ export async function requireRole(allowedRoles: string[]) {
   }
 
   return { user, role }
+}
+
+export async function requireReceiptIssuer() {
+  const user = await requireAuthenticatedUser()
+  if (!canManageReceiptIssuer(user, process.env.ADMIN_EMAILS || '')) {
+    throw new AuthorizationError('Occorre la qualifica di tesoriere per modificare nome e firma delle ricevute', 403)
+  }
+  return { user, role: getUserRole(user) }
 }
 
 export function authorizationErrorResponse(error: unknown) {

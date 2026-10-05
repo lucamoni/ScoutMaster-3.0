@@ -3,11 +3,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getReceipt,failure,reply,sameOrigin } from '@/lib/issuedReceipts/server'
 import { gmailClient,mailMime } from '@/lib/issuedReceipts/gmail'
 import { receiptRecipient } from '@/lib/issuedReceipts/model'
+import { getAnnualBoy } from '@/lib/annualRoster/server'
 import { receiptPdf } from '@/lib/issuedReceipts/pdf'
 export const maxDuration=60
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){try{
  await requireAuthenticatedUser();sameOrigin(request);const {confirm,expectedEmail}=await request.json();if(confirm!==true)throw Error('Conferma destinatario e ricevuta prima dell’invio')
- const r=await getReceipt((await params).id);const {data:boy,error:boyError}=await createAdminClient().from('ragazzi').select('*').eq('id',r.snapshot.boy.id).maybeSingle();if(boyError)throw Error('Contatti non disponibili');const recipient=receiptRecipient(r.snapshot,boy||undefined).email;if(expectedEmail!==recipient)throw Error('Il contatto è cambiato: aggiorna e conferma nuovamente il destinatario');if(!recipient)throw Error('Email del genitore assente nella ricevuta: usa WhatsApp o scarica il PDF')
+ const r=await getReceipt((await params).id);const boy=await getAnnualBoy(r.anno,r.snapshot.boy.id);const recipient=receiptRecipient(r.snapshot,boy||undefined).email;if(expectedEmail!==recipient)throw Error('Il contatto è cambiato: aggiorna e conferma nuovamente il destinatario');if(!recipient)throw Error('Email del genitore assente nella ricevuta: usa WhatsApp o scarica il PDF')
  const gmail=await gmailClient(new URL(request.url).origin);const db=createAdminClient()
  // A durable claim prevents double sends. Timeouts are uncertain, never retried
  // automatically: the parent may already have received the message.

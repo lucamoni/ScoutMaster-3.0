@@ -1,3 +1,4 @@
+import { getAnnualBoys } from '@/lib/annualRoster/server'
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -7,6 +8,7 @@ import { normalizeAnnoScout, toCanonicalMetodo } from '@/lib/utils/payment'
 import { parseSheetAmount, parseSheetDate, parseSheetMetodo } from '@/lib/googleSheetsImport'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 import type { Database } from '@/types/database.types'
+import { dateInWorkingYear, validWorkingYear } from '@/lib/utils/workingYear'
 
 type ImportMapping = { sheetName?: string; tableName?: string; columnsMap?: Record<string, string> }
 type ImportRequest = {
@@ -16,6 +18,7 @@ type ImportRequest = {
   selectedSheets?: string[]
   annoScout?: string
   eventAccountingDate?: string
+  monthlyAmount?: string | number
 }
 type ImportCounts = { sheetName: string; tableName: string; inserted: number; updated: number; skipped: number; warning?: string }
 
@@ -104,10 +107,11 @@ function hasMappedTarget(columnsMap: Record<string, string>, target: string) {
 type Person = { id: string; nome: string; cognome: string }
 type ScoutEvent = { id: string; nome_evento: string; quota_standard: number | null; metodo_pagamento: string | null; data_inizio?: string | null }
 
-async function getPeople(supabase: ReturnType<typeof createAdminClient>) {
+async function getPeople(supabase: ReturnType<typeof createAdminClient>, year:string) {
   const { data, error } = await supabase.from('ragazzi').select('id, nome, cognome')
   if (error) throw error
-  return ((data || []) as Person[])
+  const annual=await getAnnualBoys(year,true)
+  return [...annual.map(({id,nome,cognome})=>({id,nome,cognome})),...((data || []) as Person[]).filter(p=>!annual.some(a=>a.id===p.id))]
 }
 
 async function getEvents(supabase: ReturnType<typeof createAdminClient>) {
@@ -124,9 +128,10 @@ function findPerson(people: Person[], fullName: string) {
   return matches[0] || null
 }
 
-function findEvent(events: ScoutEvent[], name: string) {
+function findEvent(events: ScoutEvent[], name: string, accountingDate?: string | null) {
   const key = normalizeKey(name)
-  return events.find(event => normalizeKey(event.nome_evento) === key) || null
+  const year = accountingDate ? Number(accountingDate.slice(0, 4)) - (accountingDate.slice(5, 7) < '10' ? 1 : 0) : null
+  return events.find(event => normalizeKey(event.nome_evento) === key && (year === null || !event.data_inizio || dateInWorkingYear(event.data_inizio, `${year}-${year + 1}`))) || null
 }
 
 async function upsertPerson(
@@ -134,6 +139,7 @@ async function upsertPerson(
   people: Person[],
   reader: (target: string) => string,
   columnsMap: Record<string, string>,
+  annoScout: string,
 ) {
   const mappedFullName = reader('nome_cognome_ragazzo') || reader('nome_cognome')
   const split = splitFullName(mappedFullName)
@@ -168,19 +174,10 @@ async function upsertPerson(
     }
   }
   const existing = findPerson(people, `${nome} ${cognome}`)
-  if (existing) {
-    const { error } = await supabase.from('ragazzi').update(payload).eq('id', existing.id)
-    if (error) throw error
-    existing.nome = nome
-    existing.cognome = cognome
-    return 'updated' as const
-  }
-
-  if (!hasMappedTarget(columnsMap, 'attivo')) values.attivo = true
-  const { data, error } = await supabase.from('ragazzi').insert(payload).select('id, nome, cognome').single()
-  if (error) throw error
-  if (data) people.push(data as Person)
-  return 'inserted' as const
+  const { data, error } = await supabase.rpc('write_annual_boy', {p_year:annoScout,p_id:existing?.id || null,p_changes:payload as unknown as import('@/types/database.types').Json})
+  if(error || !data) throw error || new Error('Anagrafica annuale non disponibile')
+  if(!existing) people.push(data as unknown as Person)
+  return existing?'updated' as const:'inserted' as const
 }
 
 async function importRagazzi(
@@ -188,6 +185,7 @@ async function importRagazzi(
   people: Person[],
   mapping: ImportMapping,
   rows: string[][],
+  annoScout: string,
 ): Promise<ImportCounts> {
   const headers = rows[0] || []
   const columnsMap = mapping.columnsMap || {}
@@ -196,7 +194,7 @@ async function importRagazzi(
   let skipped = 0
 
   for (const row of rows.slice(1, 2001)) {
-    const result = await upsertPerson(supabase, people, createReader(headers, row, columnsMap), columnsMap)
+    const result = await upsertPerson(supabase, people, createReader(headers, row, columnsMap), columnsMap, annoScout)
     if (result === 'inserted') inserted += 1
     else if (result === 'updated') updated += 1
     else skipped += 1
@@ -210,6 +208,8 @@ async function importQuoteMensili(
   mapping: ImportMapping,
   rows: string[][],
   annoScout: string,
+  monthlyAmount: number,
+  accountingDate: string,
 ): Promise<ImportCounts> {
   const headers = rows[0] || []
   const columnsMap = mapping.columnsMap || {}
@@ -229,6 +229,8 @@ async function importQuoteMensili(
     const payload: Database['public']['Tables']['quote_mensili']['Insert'] = {
       ragazzo_id: person.id,
       anno_scout: annoScout,
+      importo_mensile: monthlyAmount,
+      data_contabile: accountingDate,
     }
     const values = payload as Record<string, unknown>
     for (const month of MONTHS) {
@@ -255,6 +257,8 @@ async function importQuoteMensili(
     }
   }
 
+  const { error: rateError } = await supabase.from('impostazioni').upsert({ chiave: `quota_mensile_standard_${annoScout}`, valore: String(monthlyAmount) }, { onConflict: 'chiave' })
+  if (rateError) throw rateError
   return { sheetName: mapping.sheetName || '', tableName: 'quote_mensili', inserted, updated, skipped }
 }
 
@@ -267,7 +271,7 @@ async function upsertEvent(
   type: string,
   date: string | null,
 ) {
-  const existing = findEvent(events, name)
+  const existing = findEvent(events, name, date)
   const payload: Database['public']['Tables']['eventi']['Insert'] = {
     nome_evento: name,
     quota_standard: quota,
@@ -283,7 +287,7 @@ async function upsertEvent(
     return { event: existing, action: 'updated' as const }
   }
 
-  const { data, error } = await supabase.from('eventi').insert(payload).select('id, nome_evento, quota_standard, metodo_pagamento').single()
+  const { data, error } = await supabase.from('eventi').insert(payload).select('id, nome_evento, quota_standard, metodo_pagamento, data_inizio').single()
   if (error) throw error
   const event = data as ScoutEvent
   events.push(event)
@@ -342,7 +346,7 @@ async function importPartecipazioni(
 
   for (const target of eventTargets) {
     const name = target.slice('evento:'.length).trim()
-    const existing = findEvent(events, name)
+    const existing = findEvent(events, name, accountingDate)
     if (!existing) await upsertEvent(supabase, events, name, null, 'Contanti', 'USCITA', accountingDate)
     else if (!existing.data_inizio) {
       const { error } = await supabase.from('eventi').update({ data_inizio: accountingDate }).eq('id', existing.id)
@@ -364,8 +368,8 @@ async function importPartecipazioni(
       const rawPresence = reader(target)
       if (!rawPresence) continue
       const eventName = target.slice('evento:'.length).trim()
-      const existingEvent = findEvent(events, eventName)
-      const event = existingEvent || (await upsertEvent(supabase, events, eventName, null, 'Contanti', '', null)).event
+      const existingEvent = findEvent(events, eventName, accountingDate)
+      const event = existingEvent || (await upsertEvent(supabase, events, eventName, null, 'Contanti', 'USCITA', accountingDate)).event
       if (!event) throw new Error(`Impossibile creare l'evento importato: ${eventName}`)
 
       const amount = parseSheetAmount(reader(`quota_evento:${eventName}`) || reader('quota_dovuta')) ?? event.quota_standard
@@ -536,6 +540,7 @@ async function importData(body: {
   selectedSheets: string[]
   annoScout: string
   eventAccountingDate?: string
+  monthlyAmount?: string | number
 }) {
   const spreadsheetId = extractSpreadsheetId(body.spreadsheetId)
   if (!spreadsheetId) throw new ImportRequestError('ID o link Google Sheets non valido')
@@ -544,8 +549,6 @@ async function importData(body: {
   const sheetCache = new Map<string, string[][]>()
   let publicWorkbook: Promise<Record<string, string[][]>> | undefined
   const publicRows = () => publicWorkbook ??= fetchPublicWorkbook(spreadsheetId)
-  const people = await getPeople(supabase)
-  const events = await getEvents(supabase)
 
   const getRows = async (sheetName: string) => {
     if (!sheetCache.has(sheetName)) {
@@ -576,9 +579,17 @@ async function importData(body: {
     (left, right) => (importPriority[left.tableName || ''] ?? 99) - (importPriority[right.tableName || ''] ?? 99),
   )
   const accountingDate = parseSheetDate(body.eventAccountingDate)
-  if (orderedMappings.some(mapping => ['campi', 'partecipazioni_eventi'].includes(mapping.tableName ?? '') && body.selectedTables.includes(mapping.tableName ?? '')) && !accountingDate) {
-    throw new ImportRequestError('Indica la data contabile per gli eventi senza data: serve a registrare gli incassi nel periodo corretto.')
+  const financialImport = orderedMappings.some(mapping => ['quote_mensili', 'campi', 'partecipazioni_eventi'].includes(mapping.tableName ?? '') && body.selectedTables.includes(mapping.tableName ?? ''))
+  if (financialImport && !validWorkingYear(body.annoScout)) throw new ImportRequestError('Indica un anno scout valido, ad esempio 2025-2026.')
+  if (financialImport && !accountingDate) {
+    throw new ImportRequestError('Indica la data contabile per quote, eventi e campi senza data: serve a registrare gli incassi nel periodo corretto.')
   }
+  if (financialImport && !dateInWorkingYear(accountingDate, body.annoScout)) throw new ImportRequestError('La data contabile non appartiene all’anno scout scelto. Correggi anno o data prima di importare.')
+  const monthlyAmount = parseSheetAmount(body.monthlyAmount)
+  if (orderedMappings.some(mapping => mapping.tableName === 'quote_mensili' && body.selectedTables.includes('quote_mensili')) && monthlyAmount === null) throw new ImportRequestError('Indica l’importo di una quota mensile del foglio: non viene usata la tariffa dell’anno corrente.')
+
+  const people = await getPeople(supabase, body.annoScout)
+  const events = await getEvents(supabase)
 
   for (const mapping of orderedMappings) {
     if (!mapping.sheetName || !body.selectedSheets.includes(mapping.sheetName)) continue
@@ -586,9 +597,9 @@ async function importData(body: {
 
     const rows = await getRows(mapping.sheetName)
     if (mapping.tableName === 'ragazzi') {
-      results.push(await importRagazzi(supabase, people, mapping, rows))
+      results.push(await importRagazzi(supabase, people, mapping, rows, body.annoScout))
     } else if (mapping.tableName === 'quote_mensili') {
-      results.push(await importQuoteMensili(supabase, people, mapping, rows, body.annoScout))
+      results.push(await importQuoteMensili(supabase, people, mapping, rows, body.annoScout, monthlyAmount!, accountingDate!))
     } else if (mapping.tableName === 'eventi') {
       results.push(await importEventi(supabase, events, mapping, rows))
     } else if (mapping.tableName === 'partecipazioni_eventi') {
@@ -661,6 +672,7 @@ export async function POST(request: Request) {
       selectedSheets: body.selectedSheets,
       annoScout: normalizeAnnoScout(body.annoScout),
       eventAccountingDate: body.eventAccountingDate,
+      monthlyAmount: body.monthlyAmount,
     })
     return NextResponse.json({ success: true, results })
   } catch (error: unknown) {

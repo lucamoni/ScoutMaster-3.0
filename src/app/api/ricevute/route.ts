@@ -10,7 +10,7 @@ import type { Json } from '@/types/database.types'
 export const maxDuration=60
 export async function GET(request:Request){try{
  await requireAuthenticatedUser();const year=validWorkingYear(new URL(request.url).searchParams.get('year')) || await getWorkingYear();const db=createAdminClient();const [start,end]=year.split('-')
- const boys=await allBoys();const movements:Movement[]=[];for(let from=0;;from+=500){const {data,error}=await db.from('registro_spese').select('*').gte('data',`${start}-10-01`).lte('data',`${end}-09-30`).order('id').range(from,from+499);if(error)throw Error('Movimenti non disponibili');movements.push(...data);if(data.length<500)break}
+ const boys=await allBoys(year);const movements:Movement[]=[];for(let from=0;;from+=500){const {data,error}=await db.from('registro_spese').select('*').gte('data',`${start}-10-01`).lte('data',`${end}-09-30`).order('id').range(from,from+499);if(error)throw Error('Movimenti non disponibili');movements.push(...data);if(data.length<500)break}
  const receipts=[];for(let from=0;;from+=500){const {data,error}=await db.from('ricevute_emesse').select('id,numero,anno,snapshot,created_at,pdf_path').eq('anno',year).order('numero',{ascending:false}).range(from,from+499);if(error)throw Error('Archivio non disponibile');receipts.push(...data);if(data.length<500)break}
  // Include receipt-linked movements even if their original ledger date was edited.
  const linked=[];for(let from=0;;from+=500){const {data,error}=await db.from('ricevute_movimenti').select('movimento_id').order('movimento_id').range(from,from+499);if(error)throw Error('Collegamenti non disponibili');linked.push(...data.map(x=>x.movimento_id));if(data.length<500)break}

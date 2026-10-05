@@ -43,7 +43,7 @@ export default function CensimentoSettings({
       const { error } = await supabase.from('impostazioni').upsert([
         { chiave: 'quota_censimento_standard', valore: censimentoStandard },
         { chiave: 'quota_censimento_fratelli', valore: censimentoFratelli },
-        { chiave: 'quota_mensile_standard', valore: mensileStandard },
+        { chiave: `quota_mensile_standard_${currentYear}`, valore: mensileStandard },
         { chiave: `saldo_iniziale_cassa_${currentYear}`, valore: saldoContanti || '0' },
         { chiave: `saldo_iniziale_banca_${currentYear}`, valore: saldoBanca || '0' }
       ])
@@ -106,7 +106,7 @@ export default function CensimentoSettings({
               onChange={e => setMensileStandard(e.target.value)} 
               placeholder="10"
             />
-            <p className="text-[11px] text-muted-foreground">Quota mensile ordinaria di reparto</p>
+            <p className="text-[11px] text-muted-foreground">Quota mensile per l’anno scout {currentYear}. Le tariffe degli altri anni restano conservate.</p>
           </div>
         </div>
 
