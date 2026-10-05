@@ -38,7 +38,7 @@ export async function POST(request: Request) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
           signal: AbortSignal.timeout(12_000),
-          body: JSON.stringify({ model: 'qwen/qwen3.8-27b', response_format: { type: 'json_object' }, temperature: 0, max_completion_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${file.type};base64,${base64}` } }] }] }),
+          body: JSON.stringify({ model: 'qwen/qwen3.8-27b', reasoning_effort: 'none', response_format: { type: 'json_object' }, temperature: 0, max_completion_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${file.type};base64,${base64}` } }] }] }),
         })
         if (!response.ok) throw new Error(`Groq OCR HTTP ${response.status}`)
         const data = await response.json()
