@@ -213,6 +213,7 @@ export type Database = {
       }
       ragazzi: {
         Row: {
+          stati_documenti: Json | null
           attivo: boolean | null
           codice_censimento: string | null
           codice_fiscale: string | null
@@ -228,8 +229,12 @@ export type Database = {
           id: string
           genitore_1_nome: string | null
           genitore_1_telefono: string | null
+          genitore_1_email: string | null
+          genitore_1_codice_fiscale: string | null
           genitore_2_nome: string | null
           genitore_2_telefono: string | null
+          genitore_2_email: string | null
+          genitore_2_codice_fiscale: string | null
           nome: string
           note_sanitarie: string | null
           pattuglia: string | null
@@ -239,6 +244,7 @@ export type Database = {
           importo_censimento: number | null
         }
         Insert: {
+          stati_documenti?: Json | null
           attivo?: boolean | null
           codice_censimento?: string | null
           codice_fiscale?: string | null
@@ -254,8 +260,12 @@ export type Database = {
           id?: string
           genitore_1_nome?: string | null
           genitore_1_telefono?: string | null
+          genitore_1_email?: string | null
+          genitore_1_codice_fiscale?: string | null
           genitore_2_nome?: string | null
           genitore_2_telefono?: string | null
+          genitore_2_email?: string | null
+          genitore_2_codice_fiscale?: string | null
           nome: string
           note_sanitarie?: string | null
           pattuglia?: string | null
@@ -265,6 +275,7 @@ export type Database = {
           importo_censimento?: number | null
         }
         Update: {
+          stati_documenti?: Json | null
           attivo?: boolean | null
           codice_censimento?: string | null
           codice_fiscale?: string | null
@@ -280,8 +291,12 @@ export type Database = {
           id?: string
           genitore_1_nome?: string | null
           genitore_1_telefono?: string | null
+          genitore_1_email?: string | null
+          genitore_1_codice_fiscale?: string | null
           genitore_2_nome?: string | null
           genitore_2_telefono?: string | null
+          genitore_2_email?: string | null
+          genitore_2_codice_fiscale?: string | null
           nome?: string
           note_sanitarie?: string | null
           pattuglia?: string | null
@@ -289,6 +304,153 @@ export type Database = {
           sesso?: string | null
           telefono_ragazzo?: string | null
           importo_censimento?: number | null
+        }
+        Relationships: []
+      }
+      prove_bonifico: {
+        Row: {
+          movimento_id: string
+          ragazzo_id: string
+          movement_amount: number
+          movement_date: string
+          path: string
+          filename: string
+          parent: number
+          payer: string
+          amount: number
+          date: string | null
+          confirmed: boolean
+          created_at: string
+        }
+        Insert: {
+          movimento_id?: string
+          ragazzo_id?: string
+          movement_amount?: number
+          movement_date?: string
+          path?: string
+          filename?: string
+          parent?: number
+          payer?: string
+          amount?: number
+          date?: string | null
+          confirmed?: boolean
+          created_at?: string
+        }
+        Update: {
+          movimento_id?: string
+          ragazzo_id?: string
+          movement_amount?: number
+          movement_date?: string
+          path?: string
+          filename?: string
+          parent?: number
+          payer?: string
+          amount?: number
+          date?: string | null
+          confirmed?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      ricevute_emesse: {
+        Row: {
+          id: string
+          numero: number
+          anno: string
+          snapshot: Json
+          created_at: string
+          created_by: string
+          pdf_path: string | null
+        }
+        Insert: {
+          id?: string
+          numero?: number
+          anno?: string
+          snapshot?: Json
+          created_at?: string
+          created_by?: string
+          pdf_path?: string | null
+        }
+        Update: {
+          id?: string
+          numero?: number
+          anno?: string
+          snapshot?: Json
+          created_at?: string
+          created_by?: string
+          pdf_path?: string | null
+        }
+        Relationships: []
+      }
+      ricevute_movimenti: {
+        Row: {
+          movimento_id: string
+          ricevuta_id: string
+        }
+        Insert: {
+          movimento_id?: string
+          ricevuta_id?: string
+        }
+        Update: {
+          movimento_id?: string
+          ricevuta_id?: string
+        }
+        Relationships: []
+      }
+      ricevute_config: {
+        Row: {
+          id: string
+          valore: Json
+        }
+        Insert: {
+          id?: string
+          valore?: Json
+        }
+        Update: {
+          id?: string
+          valore?: Json
+        }
+        Relationships: []
+      }
+      ricevute_invio: {
+        Row: {
+          ricevuta_id: string
+          stato: string
+          email: string
+          message_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          ricevuta_id?: string
+          stato?: string
+          email?: string
+          message_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ricevuta_id?: string
+          stato?: string
+          email?: string
+          message_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gmail_connection: {
+        Row: {
+          id: string
+          token: string
+          email: string
+        }
+        Insert: {
+          id?: string
+          token?: string
+          email?: string
+        }
+        Update: {
+          id?: string
+          token?: string
+          email?: string
         }
         Relationships: []
       }
@@ -354,7 +516,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      issue_payment_receipt: { Args: { p_snapshot: Json; p_ids: string[]; p_actor: string }; Returns: Json }
+      attach_payment_proof: { Args: { p_ids: string[]; p_proof: Json }; Returns: number }
+      import_roster: { Args: { p_rows: Json; p_mode: string }; Returns: number }
+
     }
     Enums: {
       [_ in never]: never

@@ -40,6 +40,7 @@ const isMobileReceiptOcr = () => /iPhone|iPad|Android/i.test(navigator.userAgent
 
 export default function CassaClient({
   initialSpese,
+  boys = [],
   includeCensus = false,
   canManageSettings = false,
   startDate,
@@ -51,6 +52,7 @@ export default function CassaClient({
   canManageSettings?: boolean
   includeCensus?: boolean
   endDate: string
+  boys?: {id:string;nome:string;cognome:string}[]
   initialSpese: Spesa[]
   initialCategorie: Categoria[]
   initialBalances?: { contanti: number; banca: number }
@@ -110,6 +112,7 @@ export default function CassaClient({
 
   
   const [formData, setFormData] = useState<{
+    ragazzo_id?: string;
     voce_spesa: string;
     importo: string;
     metodo: string;
@@ -337,7 +340,7 @@ export default function CassaClient({
       const payload = {
         voce_spesa: formData.voce_spesa, importo: amount,
         metodo: toCanonicalMetodo(formData.metodo), momento_anno: formData.momento_anno,
-        note: formData.note, tipo_movimento: formData.tipo_movimento, data: movementDate,
+        ragazzo_id: formData.ragazzo_id || null, note: formData.note, tipo_movimento: formData.tipo_movimento, data: movementDate,
         ricevuta_presente: formData.ricevuta_presente ?? expense?.ricevuta_presente ?? false,
         ...(path ? { foto_scontrino_url: path, ricevuta_presente: true } : {}),
       }
@@ -625,6 +628,7 @@ export default function CassaClient({
                   </Select>
                 </div>
               </div>
+              {formData.tipo_movimento === 'ENTRATA' && <label className="block space-y-2 text-sm">Ragazzo collegato (per ricevute pagamenti)<select className="block w-full rounded-md border p-2 text-base" disabled={!!editingSpesa?.partecipazione_evento_id || !!editingSpesa?.quota_mensile_id} value={formData.ragazzo_id || ''} onChange={e=>setFormData({...formData,ragazzo_id:e.target.value})}><option value="">Nessuno / entrata generale</option>{boys.map(b=><option key={b.id} value={b.id}>{b.nome} {b.cognome}</option>)}</select></label>}
               <div className="space-y-2">
                 <Label>Note</Label>
                 <Input value={formData.note || ''} onChange={e => setFormData({...formData, note: e.target.value})} placeholder="Es. Chiodi dal ferramenta..." />
@@ -1001,7 +1005,7 @@ export default function CassaClient({
                         importo: spesa.importo.toString(),
                         metodo: toCanonicalMetodo(spesa.metodo),
                         momento_anno: spesa.momento_anno || 'ANNO',
-                        note: spesa.note || '',
+                        note: spesa.note || '', ragazzo_id: spesa.ragazzo_id || '',
                         tipo_movimento: spesa.tipo_movimento || 'USCITA',
                         data: spesa.data || '',
                         ricevuta_presente: spesa.ricevuta_presente ?? false
@@ -1065,7 +1069,7 @@ export default function CassaClient({
                       importo: spesa.importo.toString(),
                       metodo: toCanonicalMetodo(spesa.metodo),
                       momento_anno: spesa.momento_anno || 'ANNO',
-                      note: spesa.note || '',
+                      note: spesa.note || '', ragazzo_id: spesa.ragazzo_id || '',
                       tipo_movimento: spesa.tipo_movimento || 'USCITA',
                         data: spesa.data || '',
                         ricevuta_presente: spesa.ricevuta_presente ?? false

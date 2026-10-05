@@ -1,5 +1,6 @@
 import { requireRole, AuthorizationError } from '@/lib/security/auth'
 import { redirect } from 'next/navigation'
+import RosterSettings from './components/RosterSettings'
 import UserSettings from './components/UserSettings'
 import { getAccountingPeriod } from '@/lib/utils/accounting'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
@@ -37,6 +38,7 @@ export default async function ImpostazioniPage() {
       </div>
 
       <UserSettings />
+      <RosterSettings />
 
       <CensimentoSettings
         currentYear={period.currentYear}

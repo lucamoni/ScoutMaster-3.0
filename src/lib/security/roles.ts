@@ -1,6 +1,6 @@
-export const STAFF_ROLES = ['admin', 'capo_unita', 'aiuto_capo_unita'] as const
+export const STAFF_ROLES = ['admin', 'capo_unita', 'aiuto_capo_unita', 'tesoriere_unita'] as const
 export type StaffRole = typeof STAFF_ROLES[number]
-export const ROLE_LABELS: Record<StaffRole, string> = { admin: 'ADMIN', capo_unita: 'CAPO UNITÀ', aiuto_capo_unita: 'AIUTO CAPO UNITÀ' }
+export const ROLE_LABELS: Record<StaffRole, string> = { admin: 'ADMIN', capo_unita: 'CAPO UNITÀ', aiuto_capo_unita: 'AIUTO CAPO UNITÀ', tesoriere_unita: 'TESORIERE DI UNITÀ' }
 
 type RoleUser = { email?: string; app_metadata?: Record<string, unknown>; banned_until?: string }
 export function getStaffRole(user: RoleUser, adminEmails = ''): StaffRole | null {
