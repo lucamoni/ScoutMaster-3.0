@@ -74,10 +74,10 @@ export function CassaBot() {
       {!isOpen && (
         <Button 
           onClick={() => setIsOpen(true)} 
-          className="rounded-full h-14 w-14 shadow-lg bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 border border-amber-400/30 transition-transform hover:scale-105"
+          className="rounded-full h-10 w-10 md:h-14 md:w-14 shadow-md bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 border border-amber-400/30 transition-transform hover:scale-105"
           title="Apri ScoutBot"
         >
-          <Compass className="h-7 w-7 animate-pulse" />
+          <Compass className="h-5 w-5 md:h-7 md:w-7" />
         </Button>
       )}
 

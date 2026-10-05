@@ -34,6 +34,8 @@ import {
 type Spesa = Database['public']['Tables']['registro_spese']['Row']
 type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
 
+const money = (amount: number) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(amount)
+
 const isMobileReceiptOcr = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || window.matchMedia('(max-width: 767px)').matches
 
 export default function CassaClient({
@@ -505,7 +507,7 @@ export default function CassaClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 md:space-y-6">
       {receiptExpense && <ReceiptDialog key={receiptExpense.id} expense={receiptExpense} onClose={() => setReceiptExpense(null)} onSaved={saved => setSpese(prev => prev.map(s => s.id === saved.id ? saved : s))} onDeleted={id => { setSpese(prev => prev.filter(s => s.id !== id)); router.refresh() }} />}
       <Dialog open={deleteTargets.length > 0} onOpenChange={open => { if (!open && !deletingMovements) setDeleteTargets([]) }}>
         <DialogContent><DialogHeader><DialogTitle>Elimina {deleteTargets.length === 1 ? 'movimento' : `${deleteTargets.length} movimenti`}</DialogTitle><DialogDescription>I movimenti verranno rimossi dal bilancio. Eventuali quote collegate torneranno da saldare.</DialogDescription></DialogHeader>
@@ -513,43 +515,32 @@ export default function CassaClient({
           <DialogFooter><Button variant="outline" disabled={deletingMovements} onClick={() => setDeleteTargets([])}>Annulla</Button><Button variant="destructive" disabled={deletingMovements} onClick={confirmDeleteMovements}>{deletingMovements ? 'Eliminazione…' : 'Conferma eliminazione'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="flex justify-end"><Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> Archivio scontrini e file</Link></div>
-      {/* Dashboard Saldi */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-purple-50 dark:bg-purple-950/20 border-purple-200 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-purple-800 dark:text-purple-300">Totale Generale</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-700 dark:text-purple-400">€{(saldoContanti + saldoBanca).toFixed(2)}</div>
-            <p className="text-sm text-purple-600 mt-1">
-              Contanti: €{saldoContanti.toFixed(2)} | Banca: €{saldoBanca.toFixed(2)}
-            </p>
+      <div className="flex justify-end"><Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> <span className="sm:hidden">Archivio scontrini</span><span className="hidden sm:inline">Archivio scontrini e file</span></Link></div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-4" aria-label="Riepilogo saldi">
+        <Card className="col-span-2 gap-1 py-3 md:col-span-1 md:gap-4 md:py-4 bg-purple-50 border-purple-200 shadow-sm">
+          <CardHeader className="px-3 md:px-4"><CardTitle className="text-xs md:text-lg text-purple-800">Saldo totale</CardTitle></CardHeader>
+          <CardContent className="flex items-baseline justify-between gap-2 px-3 md:block md:px-4">
+            <div className="text-xl md:text-3xl font-bold tabular-nums text-purple-700">{money(saldoContanti + saldoBanca)}</div>
+            <p className="text-xs md:text-sm text-purple-600 md:mt-1">Contanti + banca</p>
           </CardContent>
         </Card>
-
-        <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-green-800 dark:text-green-300">Cassa Fisica (Contanti)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-700 dark:text-green-400">€{saldoContanti.toFixed(2)}</div>
-            <p className="text-sm text-green-600 mt-1">Entrate: €{saldoEntrateContanti} | Uscite: €{saldoUsciteContanti}</p>
+        <Card className="gap-1 py-3 md:gap-4 md:py-4 bg-green-50 border-green-200 shadow-sm">
+          <CardHeader className="px-3 md:px-4"><CardTitle className="text-xs md:text-lg text-green-800">Contanti</CardTitle></CardHeader>
+          <CardContent className="px-3 md:px-4">
+            <div className="text-lg md:text-3xl font-bold tabular-nums text-green-700">{money(saldoContanti)}</div>
+            <p className="text-[11px] md:text-sm text-green-700 mt-1">Entrate {money(saldoEntrateContanti)}<br className="md:hidden" /><span className="hidden md:inline"> · </span>Uscite {money(saldoUsciteContanti)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-blue-800 dark:text-blue-300">Conto Corrente (Bonifici)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-700 dark:text-blue-400">€{saldoBanca.toFixed(2)}</div>
-            <p className="text-sm text-blue-600 mt-1">Entrate: €{saldoEntrateBanca} | Uscite: €{saldoUsciteBanca}</p>
+        <Card className="gap-1 py-3 md:gap-4 md:py-4 bg-blue-50 border-blue-200 shadow-sm">
+          <CardHeader className="px-3 md:px-4"><CardTitle className="text-xs md:text-lg text-blue-800">Banca / bonifici</CardTitle></CardHeader>
+          <CardContent className="px-3 md:px-4">
+            <div className="text-lg md:text-3xl font-bold tabular-nums text-blue-700">{money(saldoBanca)}</div>
+            <p className="text-[11px] md:text-sm text-blue-700 mt-1">Entrate {money(saldoEntrateBanca)}<br className="md:hidden" /><span className="hidden md:inline"> · </span>Uscite {money(saldoUsciteBanca)}</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-2 md:gap-4 [&>button]:basis-[calc(50%-0.25rem)] md:[&>button]:basis-auto">
         <Dialog open={isOpen} onOpenChange={(open) => { if (saving) return; setIsOpen(open); if(!open) { setEditingSpesa(null); setReceiptFile(null); } }}>
           <DialogTrigger className="flex-1 md:flex-none inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2" onClick={() => {
             setReceiptFile(null)
@@ -563,7 +554,7 @@ export default function CassaClient({
               tipo_movimento: 'USCITA'
             })
           }}>
-            <Plus className="mr-2 h-4 w-4" /> Nuovo Movimento
+            <Plus className="mr-2 h-4 w-4" /><span className="md:hidden">Movimento</span><span className="hidden md:inline">Nuovo Movimento</span>
           </DialogTrigger>
 
           <Button 
@@ -571,7 +562,7 @@ export default function CassaClient({
             className="flex-1 md:flex-none border-purple-200 text-purple-700 hover:bg-purple-50"
             onClick={() => { window.location.href = '/impostazioni' }}
           >
-            <Settings2 className="mr-2 h-4 w-4" /> Configura importazione Sheets
+            <Settings2 className="mr-2 h-4 w-4" /> Importa Sheets
           </Button>
           <DialogContent className="max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
@@ -649,11 +640,11 @@ export default function CassaClient({
           setOcrData(null)
           setIsScannerOpen(true)
         }}>
-          <Camera className="mr-2 h-4 w-4" /> Scansiona Scontrino
+          <Camera className="mr-2 h-4 w-4" /><span className="md:hidden">Scansiona</span><span className="hidden md:inline">Scansiona Scontrino</span>
         </Button>
         
         <Dialog open={isCatOpen} onOpenChange={setIsCatOpen}>
-          <DialogTrigger render={<Button variant="outline" size="sm"><Settings2 className="mr-2 h-4 w-4" /> Gestione Categorie</Button>} />
+          <DialogTrigger render={<Button variant="outline" size="sm"><Settings2 className="mr-2 h-4 w-4" /><span className="md:hidden">Categorie</span><span className="hidden md:inline">Gestione Categorie</span></Button>} />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Gestisci Categorie Spesa</DialogTitle>

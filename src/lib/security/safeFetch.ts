@@ -1,4 +1,4 @@
-const ALLOWED_HOSTS = new Set(['buonacaccia.net', 'www.buonacaccia.net'])
+const ALLOWED_HOSTS = new Set(['buonacaccia.net', 'www.buonacaccia.net', 'buonacaccia.agesci.it'])
 const MAX_HTML_BYTES = 1_000_000
 const REQUEST_TIMEOUT_MS = 8_000
 
@@ -18,9 +18,11 @@ export async function fetchBuonaCacciaHtml(input: string) {
     url.username ||
     url.password
   ) {
-    throw new Error('Sono consentiti solo URL HTTPS di buonacaccia.net')
+    throw new Error('Sono consentiti solo URL HTTPS del portale BuonaCaccia')
   }
 
+  // Canonicalize legacy links before downloading, without following external redirects.
+  url.hostname = 'buonacaccia.agesci.it'
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 

@@ -31,11 +31,11 @@ export default async function CassaPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 w-full max-w-7xl mx-auto space-y-6">
+    <div className="p-3 md:p-6 w-full max-w-7xl mx-auto space-y-3 md:space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Cassa & Saldi</h1>
-          <p className="text-sm text-muted-foreground">Prima nota {currentYear} · 1 ottobre – 30 settembre</p>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cassa & Saldi</h1>
+          <p className="text-xs md:text-sm text-muted-foreground">Prima nota {currentYear} · 1 ottobre – 30 settembre</p>
         </div>
       </div>
       <CassaClient

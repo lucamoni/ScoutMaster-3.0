@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description: "App di gestione Reparto Scout - AGESCI",
   ...(isVercelPreview ? {} : { manifest: "/manifest.json" }),
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: [{ url: "/icon-192-v2.png", type: "image/png" }, { url: "/favicon.ico", sizes: "any" }],
+    apple: "/apple-touch-icon-v2.png",
   },
   appleWebApp: {
     title: "ScoutMaster",

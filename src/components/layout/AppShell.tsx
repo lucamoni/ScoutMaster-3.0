@@ -233,7 +233,7 @@ export function AppShell({ children, selectedYear, availableYears }: { children:
               <Menu className="h-6 w-6 text-agesci-blue" />
             </button>
             <Link href="/" className="flex items-center gap-2">
-              <ScoutMasterLogo className="h-8 w-auto" theme="light" />
+              <ScoutMasterLogo className="h-8 w-8" variant="icon" theme="light" />
             </Link>
           </div>
 
