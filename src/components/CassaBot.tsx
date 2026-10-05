@@ -44,6 +44,7 @@ export function CassaBot() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [viewportStyle, setViewportStyle] = useState<CSSProperties>({})
   const messageList = useRef<HTMLDivElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
@@ -79,18 +80,28 @@ export function CassaBot() {
     setMessages(prev => [...prev, { role: 'user', text: userMsg }])
     setInput('')
     setLoading(true)
+    setError('')
 
     try {
       const response = await fetch('/api/chatbot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg })
+        signal: AbortSignal.timeout(40_000),
+        body: JSON.stringify({ message: userMsg, history: messages.slice(-6).map(m => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.text })) })
       })
-      const data = await response.json()
+      const data = response.headers.get('content-type')?.includes('application/json')
+        ? await response.json()
+        : { error: response.redirected && new URL(response.url).pathname.startsWith('/login') ? 'Sessione scaduta. Accedi nuovamente a ScoutMaster.' : 'Risposta del server non valida. Riprova.' }
       
-      setMessages(prev => [...prev, { role: 'bot', text: data.reply || "Scusa, si è verificato un errore." }])
+      if (!response.ok || !data.reply) {
+        setError(data.error || 'ScoutBot non ha risposto. Riprova.')
+        setInput(userMsg)
+        setMessages(prev => prev.slice(0, -1))
+      } else setMessages(prev => [...prev, { role: 'bot', text: data.reply }])
     } catch {
-      setMessages(prev => [...prev, { role: 'bot', text: "Errore di connessione." }])
+      setError('Connessione interrotta o risposta troppo lenta. Riprova.')
+      setInput(userMsg)
+      setMessages(prev => prev.slice(0, -1))
     } finally {
       setLoading(false)
     }
@@ -141,12 +152,15 @@ export function CassaBot() {
             )}
           </div>
           <footer className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-slate-200">
+            {error && <p role="alert" className="mb-2 text-sm text-red-700">{error}</p>}
             <form 
               onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
               className="flex w-full gap-2"
             >
               <Input 
                 value={input} 
+                disabled={loading}
+                maxLength={2000}
                 onChange={(e) => setInput(e.target.value)} 
                 placeholder="Chiedi a ScoutBot..." 
                 aria-label="Messaggio a ScoutBot"
