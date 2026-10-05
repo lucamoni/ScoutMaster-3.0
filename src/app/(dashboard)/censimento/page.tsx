@@ -1,3 +1,5 @@
+import { requireAuthenticatedUser, getUserRole } from '@/lib/security/auth'
+import { canManageSystem } from '@/lib/security/roles'
 import { createClient } from '@/lib/supabase/server'
 import CensimentoClient from './components/CensimentoClient'
 import { getCurrentAnnoScout, normalizeAnnoScout } from '@/lib/utils/payment'
@@ -6,6 +8,7 @@ import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 export const dynamic = 'force-dynamic'
 
 export default async function CensimentoPage() {
+  const user = await requireAuthenticatedUser()
   const supabase = await createClient()
 
   const [
@@ -22,6 +25,7 @@ export default async function CensimentoPage() {
 
   return (
     <CensimentoClient 
+      canManageSettings={canManageSystem(getUserRole(user))}
       initialRagazzi={ragazzi || []}
       initialQuotaStandard={quotaCensimentoStandard}
       initialQuotaFratelli={quotaCensimentoFratelli}

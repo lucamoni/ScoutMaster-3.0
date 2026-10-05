@@ -27,11 +27,13 @@ export default function CensimentoClient({
   initialQuotaFratelli = '35',
   currentYear,
   initialIncludeCensus = false,
+  canManageSettings = false,
 }: {
   initialRagazzi: Ragazzo[]
   initialQuotaStandard?: string
   initialQuotaFratelli?: string
   currentYear: string
+  canManageSettings?: boolean
   initialIncludeCensus?: boolean
 }) {
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
@@ -226,7 +228,7 @@ export default function CensimentoClient({
       {/* Widget Calcolatore Quota Censimento Fratelli (ESCLUSIVAMENTE IN CENSIMENTO) */}
       <Card className="p-5 space-y-3">
         <div className="flex items-center gap-3">
-          <Checkbox id="census-income" checked={includeCensus} disabled={savingAccounting} onCheckedChange={value => saveAccountingSetting(value === true)} />
+          <Checkbox id="census-income" checked={includeCensus} disabled={savingAccounting || !canManageSettings} onCheckedChange={value => saveAccountingSetting(value === true)} />
           <Label htmlFor="census-income">Includi il censimento nelle entrate</Label>
         </div>
         <p className="text-sm text-muted-foreground">Disattivato per impostazione predefinita. Il censimento resta saldato, ma non modifica entrate, saldi di cassa e banca o report. Attivando l’opzione vengono conteggiati anche i pagamenti già registrati, in tutti gli anni. Disattivandola, i pagamenti restano conservati.</p>
@@ -286,6 +288,7 @@ export default function CensimentoClient({
             <Label className="text-xs font-medium">Quota Annuale (€):</Label>
             <Input 
               type="number"
+              disabled={!canManageSettings}
               value={quotaStandard}
               onChange={e => setQuotaStandard(e.target.value)}
               className="w-20 h-9 text-xs font-bold"
@@ -296,6 +299,7 @@ export default function CensimentoClient({
             <Label className="text-xs font-bold text-amber-700 dark:text-amber-400">Quota Fratelli (€):</Label>
             <Input 
               type="number"
+              disabled={!canManageSettings}
               value={quotaFratelli}
               onChange={e => setQuotaFratelli(e.target.value)}
               className="w-20 h-9 text-xs font-bold border-amber-500 bg-amber-50/50 dark:bg-amber-950/20"
@@ -304,7 +308,7 @@ export default function CensimentoClient({
 
           <Button 
             onClick={handleSaveQuota} 
-            disabled={isSaving}
+            disabled={isSaving || !canManageSettings}
             size="sm"
             className="bg-black hover:bg-black/90 text-white font-medium px-4 h-9 text-xs"
           >

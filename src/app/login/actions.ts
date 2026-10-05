@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getUserRole } from '@/lib/security/auth'
 
 export async function login(formData: FormData) {
   const hasSupabaseConfig =
@@ -20,10 +21,15 @@ export async function login(formData: FormData) {
     password: formData.get('password') as string,
   }
 
-  const { error } = await supabase.auth.signInWithPassword(data)
+  const { data: result, error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
     redirect('/login?error=' + encodeURIComponent(error.message))
+  }
+
+  if (!result.user || !getUserRole(result.user)) {
+    await supabase.auth.signOut()
+    redirect('/login?error=' + encodeURIComponent('Account non abilitato. Contatta l’amministratore.'))
   }
 
   revalidatePath('/', 'layout')

@@ -41,12 +41,14 @@ const isMobileReceiptOcr = () => /iPhone|iPad|Android/i.test(navigator.userAgent
 export default function CassaClient({
   initialSpese,
   includeCensus = false,
+  canManageSettings = false,
   startDate,
   endDate,
   initialCategorie,
   initialBalances = { contanti: 0, banca: 0 },
 }: {
   startDate: string
+  canManageSettings?: boolean
   includeCensus?: boolean
   endDate: string
   initialSpese: Spesa[]
@@ -559,13 +561,13 @@ export default function CassaClient({
             <Plus className="mr-2 h-4 w-4" /><span className="md:hidden">Movimento</span><span className="hidden md:inline">Nuovo Movimento</span>
           </DialogTrigger>
 
-          <Button 
+          {canManageSettings && (<Button
             variant="outline" 
             className="flex-1 md:flex-none border-purple-200 text-purple-700 hover:bg-purple-50"
             onClick={() => { window.location.href = '/impostazioni' }}
           >
             <Settings2 className="mr-2 h-4 w-4" /> Importa Sheets
-          </Button>
+          </Button>)}
           <DialogContent className="max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingSpesa ? 'Modifica Movimento' : 'Registra Movimento'}</DialogTitle>

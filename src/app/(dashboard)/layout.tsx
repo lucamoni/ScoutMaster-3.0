@@ -1,3 +1,5 @@
+import { getUserRole } from '@/lib/security/auth'
+import { canManageSystem } from '@/lib/security/roles'
 import { AppShell } from '@/components/layout/AppShell'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
@@ -13,7 +15,7 @@ export default async function DashboardLayout({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
+  if (!user || !getUserRole(user)) {
     redirect('/login')
   }
 
@@ -37,7 +39,7 @@ export default async function DashboardLayout({
   const availableYears = Array.from({ length: last - first + 1 }, (_, index) => `${last - index}-${last - index + 1}`)
 
   return (
-    <AppShell selectedYear={selectedYear} availableYears={availableYears}>
+    <AppShell canManageSettings={canManageSystem(getUserRole(user))} selectedYear={selectedYear} availableYears={availableYears}>
       {children}
     </AppShell>
   )

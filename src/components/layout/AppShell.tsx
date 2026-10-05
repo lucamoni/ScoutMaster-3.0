@@ -39,7 +39,7 @@ import ScoutMasterLogo from '@/components/layout/Logo'
 import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 import { WORKING_YEAR_COOKIE, workingYearSettings } from '@/lib/utils/workingYear'
 
-export function AppShell({ children, selectedYear, availableYears }: { children: React.ReactNode; selectedYear: string; availableYears: string[] }) {
+export function AppShell({ children, selectedYear, availableYears, canManageSettings }: { children: React.ReactNode; selectedYear: string; availableYears: string[]; canManageSettings: boolean }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -124,7 +124,7 @@ export function AppShell({ children, selectedYear, availableYears }: { children:
         { name: 'Raccordo Bilancio AGESCI', href: '/report/bilancio-agesci', icon: FileSpreadsheet },
         { name: 'Report Completi', href: '/report', icon: Download },
         { name: 'Reminder', href: '/reminder', icon: Bell },
-        { name: 'Impostazioni', href: '/impostazioni', icon: Settings },
+        ...(canManageSettings ? [{ name: 'Impostazioni', href: '/impostazioni', icon: Settings }] : []),
       ]
     }
   ]

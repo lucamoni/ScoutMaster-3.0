@@ -1,3 +1,5 @@
+import { requireAuthenticatedUser, getUserRole } from '@/lib/security/auth'
+import { canManageSystem } from '@/lib/security/roles'
 import { getWorkingYear } from '@/lib/workingYear'
 import { workingYearSettings } from '@/lib/utils/workingYear'
 import { createClient } from '@/lib/supabase/server'
@@ -9,6 +11,7 @@ import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 export const dynamic = 'force-dynamic'
 
 export default async function CassaPage() {
+  const user = await requireAuthenticatedUser()
   const supabase = await createClient()
 
   const [{ data: impostazioni }, { data: categorie }] = await Promise.all([
@@ -39,6 +42,7 @@ export default async function CassaPage() {
         </div>
       </div>
       <CassaClient
+        canManageSettings={canManageSystem(getUserRole(user))}
         includeCensus={settings.get(CENSUS_INCOME_SETTING) === 'true'}
         startDate={startDate}
         endDate={endDate}
