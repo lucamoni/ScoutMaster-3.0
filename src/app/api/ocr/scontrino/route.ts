@@ -18,7 +18,7 @@ function textOrNull(value: unknown, length: number): string | null {
 export async function POST(request: Request) {
   try {
     await requireAuthenticatedUser()
-    if (!process.env.GEMINI_API_KEY) return NextResponse.json({ error: 'Lettura scontrini da telefono non configurata. Puoi compilare i dati manualmente.' }, { status: 503 })
+    if (!process.env.GEMINI_API_KEY && !process.env.GROQ_API_KEY) return NextResponse.json({ error: 'Lettura scontrini da telefono non configurata. Puoi compilare i dati manualmente.' }, { status: 503 })
     const form = await request.formData()
     const file = form.get('file')
     if (!(file instanceof File) || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return NextResponse.json({ error: 'Carica una foto JPEG, PNG o WebP.' }, { status: 415 })
@@ -29,22 +29,46 @@ export async function POST(request: Request) {
       if (Array.isArray(parsed)) categories = parsed.filter((item): item is string => typeof item === 'string').slice(0, 100).map(item => item.slice(0, 80))
     } catch { /* Categoria facoltativa */ }
     const base64 = Buffer.from(await file.arrayBuffer()).toString('base64')
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-    const response = await ai.models.generateContent({
+    const prompt = `Leggi questo scontrino italiano. Restituisci solo JSON con importo (numero totale effettivamente pagato, non subtotale/IVA/resto), data (YYYY-MM-DD o null), fornitore (stringa o null), voce_spesa (una delle categorie indicate o null), raw_text (testo breve leggibile sullo scontrino). Non inventare valori non visibili. Categorie: ${JSON.stringify(categories)}.`
+    let resultText: string | undefined
+    let provider: ReceiptOcrResult['provider'] = 'gemini-server'
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+          signal: AbortSignal.timeout(12_000),
+          body: JSON.stringify({ model: 'qwen/qwen3.8-27b', response_format: { type: 'json_object' }, temperature: 0, max_completion_tokens: 1500, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${file.type};base64,${base64}` } }] }] }),
+        })
+        if (!response.ok) throw new Error(`Groq OCR HTTP ${response.status}`)
+        const data = await response.json()
+        resultText = data.choices?.[0]?.message?.content
+        if (!resultText) throw new Error('Groq OCR risposta vuota')
+        provider = 'groq-server'
+      } catch (error) {
+        console.warn('Groq receipt OCR unavailable', error instanceof Error ? error.name : 'Errore')
+        if (!process.env.GEMINI_API_KEY) throw error
+      }
+    }
+    if (!resultText) {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+      const response = await ai.models.generateContent({
       model: 'gemini-3.5-flash-lite',
       contents: [
-        { text: `Leggi questo scontrino italiano. Restituisci solo JSON con importo (numero totale effettivamente pagato, non subtotale/IVA/resto), data (YYYY-MM-DD o null), fornitore (stringa o null), voce_spesa (una delle categorie indicate o null), raw_text (testo breve leggibile sullo scontrino). Non inventare valori non visibili. Categorie: ${JSON.stringify(categories)}.` },
+        { text: prompt },
         { inlineData: { mimeType: file.type, data: base64 } },
       ],
-      config: { responseMimeType: 'application/json', httpOptions: { timeout: 25_000 } },
-    })
-    const parsed: unknown = JSON.parse(response.text || '{}')
+      config: { responseMimeType: 'application/json', httpOptions: { timeout: 12_000 } },
+      })
+      resultText = response.text
+    }
+    const parsed: unknown = JSON.parse(resultText || '{}')
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Risposta OCR non valida')
     const value = parsed as Record<string, unknown>
     const amount = typeof value.importo === 'number' ? value.importo : Number(String(value.importo ?? '').replace(',', '.'))
     const category = textOrNull(value.voce_spesa, 80)
     const result: ReceiptOcrResult = {
-      provider: 'gemini-server',
+      provider,
       importo: Number.isFinite(amount) && amount > 0 && amount < 100000 ? Math.round(amount * 100) / 100 : null,
       data: dateOrNull(value.data),
       fornitore: textOrNull(value.fornitore, 120),

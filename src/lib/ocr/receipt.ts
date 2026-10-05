@@ -1,5 +1,5 @@
 export type ReceiptOcrResult = {
-  provider: 'paddleocr-browser' | 'gemini-server'
+  provider: 'paddleocr-browser' | 'gemini-server' | 'groq-server'
   importo: number | null
   data: string | null
   fornitore: string | null
