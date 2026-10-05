@@ -144,8 +144,8 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         )}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-agesci-blue-light/60 bg-agesci-blue">
-          <Link href="/" className="flex items-center gap-3 overflow-hidden">
+        <div className={cn("flex shrink-0 items-center border-b border-agesci-blue-light/60 bg-agesci-blue", collapsed ? "flex-col gap-1 px-2 py-2" : "h-16 justify-between gap-2 px-4")}>
+          <Link href="/" className="flex shrink-0 items-center gap-3">
             {collapsed ? (
               <ScoutMasterLogo className="h-8 w-8" variant="icon" theme="dark" />
             ) : (
@@ -154,7 +154,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           </Link>
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-agesci-blue-light/80 transition-colors"
+            className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-agesci-blue-light/80 transition-colors"
             title={collapsed ? "Espandi Sidebar" : "Riduci Sidebar"}
           >
             {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
@@ -402,7 +402,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         </button>
       </nav>
 
-      <CassaBot />
+      <CassaBot key={selectedYear} />
       <Toaster richColors position="top-center" />
     </div>
   )
