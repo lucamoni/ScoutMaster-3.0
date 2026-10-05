@@ -36,6 +36,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { getAccountingPeriod, calculateAccountingBalances } from '@/lib/utils/accounting'
 import ScoutMasterLogo from '@/components/layout/Logo'
+import { LogoutButton } from '@/components/layout/LogoutButton'
 import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 import { WORKING_YEAR_COOKIE, workingYearSettings } from '@/lib/utils/workingYear'
 
@@ -206,6 +207,9 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         </div>
 
         {/* Footer Brand Info */}
+        <div className="shrink-0 border-t border-agesci-blue-light/60">
+          <LogoutButton collapsed={collapsed} />
+        </div>
         {!collapsed && (
           <div className="p-3 border-t border-agesci-blue-light/60 bg-agesci-blue text-xs text-slate-300/70 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
@@ -290,6 +294,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
             </div>
 
             {/* Mobile Cash Summary inside menu */}
+            <LogoutButton />
             <div className="p-4 bg-agesci-blue-light/50 border-b border-agesci-blue-light space-y-2">
               <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Saldi Live</div>
               <div className="grid grid-cols-2 gap-2">
