@@ -5,6 +5,14 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getUserRole } from '@/lib/security/auth'
 
+export async function logout(): Promise<{ error: string } | never> {
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signOut({ scope: 'local' })
+  if (error) return { error: 'Impossibile uscire dall’account. Riprova.' }
+  revalidatePath('/', 'layout')
+  redirect('/login')
+}
+
 export async function login(formData: FormData) {
   const hasSupabaseConfig =
     Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
