@@ -1,3 +1,4 @@
+import { getAnnualBoys } from '@/lib/annualRoster/server'
 import { getWorkingYear } from '@/lib/workingYear'
 import { workingYearSettings } from '@/lib/utils/workingYear'
 import { createClient } from '@/lib/supabase/server'
@@ -14,16 +15,13 @@ export default async function BilancioAgesciPage() {
     .select('*')
     .order('data', { ascending: true })
 
-  // Fetch dei ragazzi per calcolo censimento AGESCI
-  const { data: ragazzi } = await supabase
-    .from('ragazzi')
-    .select('*')
-    .eq('attivo', true)
-
   // Fetch delle impostazioni (saldi iniziali e stati di chiusura)
   const { data: impostazioni } = await supabase
     .from('impostazioni')
     .select('*')
+
+  const currentYear = await getWorkingYear(impostazioni?.find(i => i.chiave === 'anno_scout_corrente')?.valore)
+  const ragazzi = await getAnnualBoys(currentYear, false)
 
   const settingsMap: Record<string, string> = {}
   impostazioni?.forEach(i => {
@@ -33,9 +31,10 @@ export default async function BilancioAgesciPage() {
   return (
     <div className="p-4 md:p-6 w-full max-w-7xl mx-auto space-y-6">
       <BilancioAgesciClient 
+        key={currentYear}
         initialSpese={registroSpese || []}
         initialRagazzi={ragazzi || []}
-        initialSettings={Object.fromEntries(workingYearSettings(new Map(Object.entries(settingsMap)), await getWorkingYear(settingsMap.anno_scout_corrente))) as Record<string, string>}
+        initialSettings={Object.fromEntries(workingYearSettings(new Map(Object.entries(settingsMap)), currentYear)) as Record<string, string>}
       />
     </div>
   )

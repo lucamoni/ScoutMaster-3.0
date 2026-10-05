@@ -1,3 +1,4 @@
+vi.mock('@/lib/annualRoster/server', () => ({ getAnnualBoys: vi.fn().mockResolvedValue([]) }))
 import { beforeEach, expect, it, vi } from 'vitest'
 import { buildScoutBotContext } from '@/lib/scoutbot/context'
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), load: vi.fn(), settings: vi.fn(), year: vi.fn(), fetch: vi.fn() }))

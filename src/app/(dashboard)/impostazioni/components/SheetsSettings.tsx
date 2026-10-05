@@ -97,6 +97,7 @@ export default function SheetsSettings({
   const [selectedSheets, setSelectedSheets] = useState<string[]>([])
   const [annoScout, setAnnoScout] = useState<string>(initialAnnoScout || getCurrentAnnoScout())
   const [eventAccountingDate, setEventAccountingDate] = useState('')
+  const [monthlyAmount, setMonthlyAmount] = useState('')
   const [importWarnings, setImportWarnings] = useState<string[]>([])
   const [showDetails, setShowDetails] = useState<boolean>(false)
 
@@ -203,7 +204,8 @@ export default function SheetsSettings({
           selectedTables,
           selectedSheets,
           annoScout,
-          eventAccountingDate
+          eventAccountingDate,
+          monthlyAmount
         })
       })
       const data = await res.json()
@@ -389,9 +391,12 @@ export default function SheetsSettings({
                     placeholder="es. 2024-2025"
                     className="h-8 text-xs font-mono"
                   />
-                  <Label htmlFor="eventAccountingDate" className="text-xs font-medium">Data contabile per eventi e campi senza data</Label>
+                  <Label htmlFor="monthlyAmount" className="text-xs font-medium">Importo di una quota mensile nel foglio (€)</Label>
+                  <Input id="monthlyAmount" type="number" min="0.01" step="0.01" inputMode="decimal" value={monthlyAmount} onChange={e => setMonthlyAmount(e.target.value)} placeholder="es. 8,00" />
+                  <p className="text-xs text-muted-foreground">Obbligatorio se importi le quote mensili. La tariffa sarà conservata per questo anno scout.</p>
+                  <Label htmlFor="eventAccountingDate" className="text-xs font-medium">Data contabile per quote, eventi e campi senza data</Label>
                   <Input id="eventAccountingDate" type="date" value={eventAccountingDate} onChange={e => setEventAccountingDate(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">Obbligatoria per importare eventi e campi: sarà usata per gli incassi quando manca la data dell’evento. Le date già presenti vengono conservate. Per periodi diversi, importa i fogli separatamente.</p>
+                  <p className="text-xs text-muted-foreground">La data deve appartenere all’anno scelto. Sarà usata per le quote importate e quando manca la data dell’evento. Le date degli eventi già presenti vengono conservate. Per anni diversi, importa i fogli separatamente.</p>
                   <p className="text-[11px] text-muted-foreground">Le quote mensili sbloccate verranno salvate sotto questo anno scout.</p>
                 </div>
                 <div className="space-y-1.5">

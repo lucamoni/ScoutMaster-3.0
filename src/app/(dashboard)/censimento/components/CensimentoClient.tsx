@@ -1,5 +1,6 @@
 'use client'
 
+import { annualBoyUpdate, annualBoys } from '@/lib/annualRoster/client'
 import { useState } from 'react'
 import { Database } from '@/types/database.types'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,6 @@ import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 
 import { createClient } from '@/lib/supabase/client'
-import { normalizeAnnoScout } from '@/lib/utils/payment'
 import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 import { useRouter } from 'next/navigation'
 
@@ -43,6 +43,7 @@ export default function CensimentoClient({
   const [includeCensus, setIncludeCensus] = useState(initialIncludeCensus)
   const [savingAccounting, setSavingAccounting] = useState(false)
   const router = useRouter()
+  useEffect(() => { setRagazzi(initialRagazzi) }, [initialRagazzi])
   useEffect(() => { setIncludeCensus(initialIncludeCensus) }, [initialIncludeCensus])
   const [filterPattuglia, setFilterPattuglia] = useState<string>('TUTTE')
   const [calcNumFratelli, setCalcNumFratelli] = useState<number>(2)
@@ -50,20 +51,21 @@ export default function CensimentoClient({
   const supabase = createClient()
 
   useEffect(() => {
+    const refresh = async () => {
+      const { data } = await annualBoys(currentYear)
+      if (data) setRagazzi(data.filter(item => item.attivo))
+    }
     const channel = supabase
       .channel('censimento_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ragazzi' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          const updated = payload.new as Ragazzo
-          setRagazzi(prev => prev.map(r => r.id === updated.id ? updated : r))
-        }
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ragazzi' }, refresh)
       .subscribe()
+    window.addEventListener('focus', refresh)
 
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('focus', refresh)
     }
-  }, [supabase])
+  }, [supabase, currentYear])
 
   const numStandard = Number(quotaStandard) || 45
   const numFratelli = Number(quotaFratelli) || 35
@@ -116,51 +118,11 @@ export default function CensimentoClient({
 
     setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: newVal } : item))
 
-    const { error: ragazzoError } = await supabase
-      .from('ragazzi')
-      .update({ quota_censimento: newVal })
-      .eq('id', id)
+    const { error: ragazzoError } = await annualBoyUpdate(id, { quota_censimento: newVal }, currentYear)
 
     if (ragazzoError) {
       setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: current } : item))
       toast.error('Impossibile aggiornare il censimento')
-      return
-    }
-
-    const accountingYear = normalizeAnnoScout(currentYear)
-    const { data: existingMovement, error: lookupError } = await supabase
-      .from('registro_spese')
-      .select('id, metodo')
-      .eq('ragazzo_id', id)
-      .eq('riferimento_censimento_anno', accountingYear)
-      .maybeSingle()
-
-    let movementError = lookupError
-    if (!movementError && newVal) {
-      const movement = {
-        importo: Number(ragazzo.importo_censimento ?? numStandard),
-        metodo: existingMovement?.metodo || 'Contanti',
-        voce_spesa: 'Quota Censimento',
-        tipo_movimento: 'ENTRATA',
-        data: new Date().toISOString().split('T')[0],
-        ragazzo_id: id,
-        riferimento_censimento_anno: accountingYear,
-        note: `Censimento ${accountingYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
-      }
-
-      const result = existingMovement
-        ? await supabase.from('registro_spese').update(movement).eq('id', existingMovement.id)
-        : await supabase.from('registro_spese').insert(movement)
-      movementError = result.error
-    } else if (!movementError && !newVal && existingMovement) {
-      const result = await supabase.from('registro_spese').delete().eq('id', existingMovement.id)
-      movementError = result.error
-    }
-
-    if (movementError) {
-      await supabase.from('ragazzi').update({ quota_censimento: current }).eq('id', id)
-      setRagazzi(prev => prev.map(item => item.id === id ? { ...item, quota_censimento: current } : item))
-      toast.error('Pagamento non registrato in prima nota')
       return
     }
 
@@ -170,10 +132,7 @@ export default function CensimentoClient({
   const toggleRicevuta = async (id: string, current: boolean | null) => {
     const newVal = !current
     setRagazzi(prev => prev.map(r => r.id === id ? { ...r, ricevuta_censimento: newVal } : r))
-    const { error } = await supabase
-      .from('ragazzi')
-      .update({ ricevuta_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update'])
-      .eq('id', id)
+    const { error } = await annualBoyUpdate(id, { ricevuta_censimento: newVal } as Database['public']['Tables']['ragazzi']['Update'], currentYear)
 
     if (error) {
       setRagazzi(prev => prev.map(r => r.id === id ? { ...r, ricevuta_censimento: current } : r))
@@ -185,29 +144,13 @@ export default function CensimentoClient({
     const previous = ragazzi.find(item => item.id === id)
     setRagazzi(prev => prev.map(item => item.id === id ? { ...item, importo_censimento: val } : item))
 
-    const { error } = await supabase.from('ragazzi').update({ importo_censimento: val }).eq('id', id)
+    const { error } = await annualBoyUpdate(id, { importo_censimento: val }, currentYear)
     if (error) {
       setRagazzi(prev => prev.map(item => item.id === id ? { ...item, importo_censimento: previous?.importo_censimento ?? null } : item))
       toast.error('Importo censimento non aggiornato')
       return
     }
 
-    if (previous?.quota_censimento === true) {
-      const { error: cashError } = await supabase
-        .from('registro_spese')
-        .update({ importo: Number(val ?? numStandard) })
-        .eq('ragazzo_id', id)
-        .eq('riferimento_censimento_anno', normalizeAnnoScout(currentYear))
-
-      if (cashError) {
-        const previousAmount = previous.importo_censimento ?? null
-        await supabase.from('ragazzi').update({ importo_censimento: previousAmount }).eq('id', id)
-        setRagazzi(prev => prev.map(item =>
-          item.id === id ? { ...item, importo_censimento: previousAmount } : item
-        ))
-        toast.error('Importo non aggiornato: la prima nota ha rifiutato la modifica')
-      }
-    }
   }
 
   const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]

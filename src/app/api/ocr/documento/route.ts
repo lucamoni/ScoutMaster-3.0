@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
-import { createClient } from '@/lib/supabase/server'
+import { getAnnualBoys, resolveAnnualYear } from '@/lib/annualRoster/server'
 import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
 import { normalizeDocumentData } from '@/lib/ocr/document'
 
@@ -170,19 +170,15 @@ RESTITUISCI UN JSON CON QUESTA STRUTTURA ESATTA:
 
     extracted = normalizeDocumentData(extracted)
 
-    const supabase = await createClient()
+    const year = await resolveAnnualYear(formData.get('year') || undefined)
 
     let matchedScout: any = null
     let isNewScout = true
     const discrepancies: { field: string; label: string; dbValue: any; extractedValue: any }[] = []
 
     if (extracted.nome && extracted.cognome) {
-      const { data: existing } = await supabase
-        .from('ragazzi')
-        .select('*')
-        .ilike('nome', extracted.nome.trim())
-        .ilike('cognome', extracted.cognome.trim())
-        .maybeSingle()
+      const candidates = (await getAnnualBoys(year, true)).filter(boy => boy.nome.trim().toLocaleLowerCase('it') === extracted.nome.trim().toLocaleLowerCase('it') && boy.cognome.trim().toLocaleLowerCase('it') === extracted.cognome.trim().toLocaleLowerCase('it'))
+      const existing = candidates.length === 1 ? candidates[0] : null
 
       if (existing) {
         matchedScout = existing

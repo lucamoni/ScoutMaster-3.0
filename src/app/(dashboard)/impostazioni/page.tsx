@@ -9,6 +9,9 @@ import DataResetSettings from './components/DataResetSettings'
 import AuditSettings from './components/AuditSettings'
 import CensimentoSettings from './components/CensimentoSettings'
 import { createClient } from '@/lib/supabase/server'
+import { getWorkingYear } from '@/lib/workingYear'
+import { workingYearSettings } from '@/lib/utils/workingYear'
+import { getMonthlyQuotaAmount } from '@/lib/utils/monthlyQuota'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +29,7 @@ export default async function ImpostazioniPage() {
     })
   }
 
-  const period = getAccountingPeriod(new Map(Object.entries(settings)), getCurrentAnnoScout())
+  const period = getAccountingPeriod(workingYearSettings(new Map(Object.entries(settings)), await getWorkingYear(settings.anno_scout_corrente)), getCurrentAnnoScout())
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-8">
@@ -38,13 +41,13 @@ export default async function ImpostazioniPage() {
       </div>
 
       <UserSettings />
-      <RosterSettings />
+      <RosterSettings key={period.currentYear} currentYear={period.currentYear} />
 
-      <CensimentoSettings
+      <CensimentoSettings key={period.currentYear}
         currentYear={period.currentYear}
         initialCensimentoStandard={settings.quota_censimento_standard || '45'}
         initialCensimentoFratelli={settings.quota_censimento_fratelli || '35'}
-        initialMensileStandard={settings.quota_mensile_standard || '10'}
+        initialMensileStandard={String(getMonthlyQuotaAmount(new Map(Object.entries(settings)), period.currentYear))}
         initialSaldoContanti={String(period.initialCash)}
         initialSaldoBanca={String(period.initialBank)}
       />
@@ -55,10 +58,10 @@ export default async function ImpostazioniPage() {
         initialSpreadsheetId={settings.spreadsheet_id || ''}
         initialSheetName={settings.sheet_name || 'Foglio1'}
         initialSheetNameSpese={settings.sheet_name_spese || 'SPESE'}
-        initialAnnoScout={settings.anno_scout_corrente || ''}
+        initialAnnoScout={period.currentYear}
       />
 
-      <DataResetSettings />
+      <DataResetSettings currentYear={period.currentYear} />
     </div>
   )
 }

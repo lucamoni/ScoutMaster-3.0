@@ -1,7 +1,10 @@
 'use client'
 
+import { annualBoyUpdate, annualBoyCreate } from '@/lib/annualRoster/client'
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { loadAnnualDocuments, saveAnnualDocument, deleteAnnualDocument } from '@/lib/annualDocuments'
+import { documentFileUrl } from '@/lib/annualDocumentsModel'
+import { LegacyDocuments } from '@/components/documents/LegacyDocuments'
 import { Database } from '@/types/database.types'
 import { 
   Check, 
@@ -64,8 +67,7 @@ interface ArchivedDocumentFile {
   created_at: string
 }
 
-export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] }) {
-  const supabase = createClient()
+export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazzi: Ragazzo[]; currentYear: string }) {
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -77,6 +79,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
   // Archivio File Documenti Salvati (PDF / Immagini)
   const [archivedFiles, setArchivedFiles] = useState<ArchivedDocumentFile[]>([])
+  const [legacyFiles, setLegacyFiles] = useState<ArchivedDocumentFile[]>([])
+  const [legacyCustomDocs, setLegacyCustomDocs] = useState<CustomDocPerRagazzo[]>([])
+  const [documentsError, setDocumentsError] = useState<string | null>(null)
   const [isArchivioModalOpen, setIsArchivioModalOpen] = useState(false)
   const [targetRagazzoForArchivio, setTargetRagazzoForArchivio] = useState<Ragazzo | null>(null)
   const [isUploadingToArchivio, setIsUploadingToArchivio] = useState(false)
@@ -97,43 +102,29 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   const [bulkValue, setBulkValue] = useState<boolean>(true)
   const [isApplyingBulk, setIsApplyingBulk] = useState(false)
 
-  // Carica dati da Supabase
+  useEffect(() => { setRagazzi(initialRagazzi) }, [initialRagazzi])
   useEffect(() => {
-    async function loadData() {
-      const [{ data: cDocs }, { data: aFiles }] = await Promise.all([
-        supabase.from('impostazioni').select('valore').eq('chiave', 'custom_docs_ragazzi').maybeSingle(),
-        supabase.from('impostazioni').select('valore').eq('chiave', 'archivio_documenti_digitale').maybeSingle()
-      ])
+    let active = true
+    setCustomDocs([]); setArchivedFiles([]); setLegacyFiles([]); setLegacyCustomDocs([]); setDocumentsError(null)
+    setIsAiUploadOpen(false); setIsArchivioModalOpen(false); setIsAddCustomDocOpen(false)
+    setScanResult(null); setScannedFileObj(null)
+    setTargetRagazzoForDoc(null); setTargetScoutForAi(null); setTargetRagazzoForArchivio(null)
+    loadAnnualDocuments(currentYear).then(data => {
+      if (!active) return
+      setCustomDocs(data.customDocs); setArchivedFiles(data.archivedFiles)
+      setLegacyFiles(data.legacyFiles); setLegacyCustomDocs(data.legacyCustomDocs)
+    }).catch(() => { if (active) setDocumentsError('Impossibile caricare i documenti. Ricarica la pagina prima di modificarli.') })
+    return () => { active = false }
+  }, [currentYear])
 
-      if (cDocs && cDocs.valore) {
-        try {
-          const parsed = JSON.parse(cDocs.valore)
-          if (Array.isArray(parsed)) setCustomDocs(parsed)
-        } catch {}
-      }
-
-      if (aFiles && aFiles.valore) {
-        try {
-          const parsed = JSON.parse(aFiles.valore)
-          if (Array.isArray(parsed)) setArchivedFiles(parsed)
-        } catch {}
-      }
-    }
-    loadData()
-  }, [supabase])
-
-  const saveCustomDocsToDb = async (newList: CustomDocPerRagazzo[]) => {
-    setCustomDocs(newList)
-    await supabase.from('impostazioni').upsert([
-      { chiave: 'custom_docs_ragazzi', valore: JSON.stringify(newList) }
-    ])
+  const saveCustomDocToDb = async (item: CustomDocPerRagazzo) => {
+    await saveAnnualDocument(currentYear, 'custom', item)
+    setCustomDocs(previous => [...previous.filter(doc => doc.doc_id !== item.doc_id), item])
   }
 
-  const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
-    setArchivedFiles(newList)
-    await supabase.from('impostazioni').upsert([
-      { chiave: 'archivio_documenti_digitale', valore: JSON.stringify(newList) }
-    ])
+  const saveArchivedFileToDb = async (item: ArchivedDocumentFile) => {
+    await saveAnnualDocument(currentYear, 'file', item)
+    setArchivedFiles(previous => [{ ...item, file_url: documentFileUrl(currentYear, item.id) }, ...previous.filter(file => file.id !== item.id)])
   }
 
   const cleanFileNameToTitle = (fileName: string) => {
@@ -151,34 +142,41 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
     const newItem: CustomDocPerRagazzo = {
       ragazzo_id: targetRagazzoForDoc.id,
-      doc_id: 'cd_' + Date.now(),
+      doc_id: crypto.randomUUID(),
       titolo: newCustomDocTitolo.trim(),
       consegnato: false
     }
 
-    const updated = [...customDocs, newItem]
-    await saveCustomDocsToDb(updated)
-    toast.success(`Documento "${newItem.titolo}" aggiunto per ${targetRagazzoForDoc.nome}!`)
-    setNewCustomDocTitolo('')
-    setIsAddCustomDocOpen(false)
+    try {
+      await saveCustomDocToDb(newItem)
+      toast.success(`Documento "${newItem.titolo}" aggiunto per ${targetRagazzoForDoc.nome}!`)
+      setNewCustomDocTitolo('')
+      setIsAddCustomDocOpen(false)
+    } catch { toast.error('Documento non aggiunto. Riprova.') }
   }
 
   const toggleCustomDocStatus = async (docId: string) => {
-    const updated = customDocs.map(cd => cd.doc_id === docId ? { ...cd, consegnato: !cd.consegnato } : cd)
-    await saveCustomDocsToDb(updated)
+    const item = customDocs.find(doc => doc.doc_id === docId)
+    if (!item) return
+    try { await saveCustomDocToDb({ ...item, consegnato: !item.consegnato }) }
+    catch { toast.error('Stato del documento non salvato') }
   }
 
   const deleteCustomDoc = async (docId: string) => {
-    const updated = customDocs.filter(cd => cd.doc_id !== docId)
-    await saveCustomDocsToDb(updated)
-    toast.success('Documento personalizzato rimosso')
+    try {
+      await deleteAnnualDocument(currentYear, 'custom', docId)
+      setCustomDocs(previous => previous.filter(doc => doc.doc_id !== docId))
+      toast.success('Documento personalizzato rimosso')
+    } catch { toast.error('Documento non eliminato') }
   }
 
   const handleDeleteArchivedFile = async (fileId: string) => {
-    if (!confirm('Eliminare questo documento salvato dall\'archivio?')) return
-    const updated = archivedFiles.filter(af => af.id !== fileId)
-    await saveArchivedFilesToDb(updated)
-    toast.success('File rimosso dall\'Archivio Digitale')
+    if (!confirm('Eliminare questo documento dall’archivio dell’anno selezionato?')) return
+    try {
+      await deleteAnnualDocument(currentYear, 'file', fileId)
+      setArchivedFiles(previous => previous.filter(file => file.id !== fileId))
+      toast.success('File rimosso dall’archivio')
+    } catch { toast.error('File non eliminato') }
   }
 
   const toggleStatus = async (
@@ -188,10 +186,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
   ) => {
     const newValue = !currentValue
     setRagazzi(prev => prev.map(r => r.id === id ? { ...r, [field]: newValue } : r))
-    const { error } = await supabase
-      .from('ragazzi')
-      .update({ [field]: newValue } as Database['public']['Tables']['ragazzi']['Update'])
-      .eq('id', id)
+    const { error } = await annualBoyUpdate(id, { [field]: newValue } as Database['public']['Tables']['ragazzi']['Update'], currentYear)
     if (error) {
       setRagazzi(prev => prev.map(r => r.id === id ? { ...r, [field]: currentValue } : r))
       toast.error('Impossibile salvare lo stato del documento')
@@ -200,12 +195,17 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
   // Scansione ed Analisi IA Documento
   const handleFileUploadWithAi = async (file: File) => {
+    if (!file.size || file.size > 3 * 1024 * 1024) {
+      toast.error('Carica un documento o una foto di massimo 3 MB')
+      return
+    }
     setIsScanning(true)
     setScanResult(null)
     setScannedFileObj(file)
 
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('year', currentYear)
 
     try {
       const res = await fetch('/api/ocr/documento', {
@@ -244,25 +244,19 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
   const autoArchiveScannedFile = async (ragazzoId: string, ragazzoNome: string, tipoDocLabel: string) => {
     if (!scannedFileObj) return
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const base64Url = e.target?.result as string
-      const titleClean = cleanFileNameToTitle(scannedFileObj.name)
-      const newArchivedItem: ArchivedDocumentFile = {
-        id: 'arch_' + Date.now(),
-        ragazzo_id: ragazzoId,
-        ragazzo_nome: ragazzoNome,
-        titolo_documento: `${tipoDocLabel} (${titleClean})`,
-        tipo_documento: selectedCategory,
-        file_name: scannedFileObj.name,
-        file_url: base64Url,
-        mime_type: scannedFileObj.type,
-        created_at: new Date().toISOString()
-      }
-      const updated = [newArchivedItem, ...archivedFiles]
-      await saveArchivedFilesToDb(updated)
-    }
-    reader.readAsDataURL(scannedFileObj)
+    if (!scannedFileObj.size || scannedFileObj.size > 3 * 1024 * 1024) throw new Error('Il documento deve avere una dimensione massima di 3 MB')
+    const base64Url = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('File non leggibile'))
+      reader.onerror = () => reject(new Error('File non leggibile'))
+      reader.readAsDataURL(scannedFileObj)
+    })
+    await saveArchivedFileToDb({
+      id: crypto.randomUUID(), ragazzo_id: ragazzoId, ragazzo_nome: ragazzoNome,
+      titolo_documento: `${tipoDocLabel} (${cleanFileNameToTitle(scannedFileObj.name)})`,
+      tipo_documento: selectedCategory, file_name: scannedFileObj.name, file_url: base64Url,
+      mime_type: scannedFileObj.type, created_at: new Date().toISOString()
+    })
   }
 
   // Salva Documento e Spunta Categoria Selezionata
@@ -292,10 +286,9 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
     }
 
     try {
-      const { error } = await supabase.from('ragazzi').update(updatePayload).eq('id', scout.id)
-      if (error) throw error
-
       await autoArchiveScannedFile(scout.id, `${scout.nome} ${scout.cognome}`, getCategoryLabel(selectedCategory))
+      const { error } = await annualBoyUpdate(scout.id, updatePayload, currentYear)
+      if (error) throw error
 
       toast.success(`Documento per ${scout.nome} ${scout.cognome} salvato in "${getCategoryLabel(selectedCategory)}" ed anagrafica aggiornata!`)
       setRagazzi(prev => prev.map(r => r.id === scout.id ? { ...r, ...updatePayload } : r))
@@ -325,16 +318,18 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         genitore_1_telefono: ext.genitore_1_telefono || null,
         genitore_2_nome: ext.genitore_2_nome || null,
         genitore_2_telefono: ext.genitore_2_telefono || null,
-        [selectedCategory]: true
+        [selectedCategory]: false
       }
 
-      const { data, error } = await supabase.from('ragazzi').insert(newRagazzoPayload).select().single()
+      const { data, error } = await annualBoyCreate(newRagazzoPayload, currentYear)
       if (error) throw error
 
       await autoArchiveScannedFile(data.id, `${data.nome} ${data.cognome}`, getCategoryLabel(selectedCategory))
+      const { data: updated, error: updateError } = await annualBoyUpdate(data.id, { [selectedCategory]: true }, currentYear)
+      if (updateError) throw updateError
 
       toast.success(`Nuovo ragazzo ${data.nome} ${data.cognome} aggiunto ed archiviato!`)
-      setRagazzi(prev => [...prev, data])
+      setRagazzi(prev => [...prev.filter(person => person.id !== data.id), updated])
       setIsAiUploadOpen(false)
       setScanResult(null)
       setScannedFileObj(null)
@@ -354,14 +349,11 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
         return
       }
 
-      setRagazzi(prev => prev.map(r => targetIds.includes(r.id) ? { ...r, [bulkField]: bulkValue } : r))
-
-      const { error } = await supabase
-        .from('ragazzi')
-        .update({ [bulkField]: bulkValue } as Database['public']['Tables']['ragazzi']['Update'])
-        .in('id', targetIds)
-
-      if (error) throw error
+      const results = await Promise.all(targetIds.map(id => annualBoyUpdate(id, { [bulkField]: bulkValue }, currentYear)))
+      const saved = new Map(results.flatMap(result => result.data ? [[result.data.id, result.data] as const] : []))
+      setRagazzi(previous => previous.map(person => saved.get(person.id) || person))
+      const error = results.find(result => result.error)?.error
+      if (error) throw new Error(`${targetIds.length - saved.size} ragazzi non aggiornati. ${error.message}`)
 
       toast.success(`Aggiornati ${targetIds.length} ragazzi per la squadriglia ${bulkSquadriglia}!`)
       setIsBulkOpen(false)
@@ -466,6 +458,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+      {documentsError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">{documentsError}</p>}
       {/* Intestazione */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -804,6 +797,11 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
           </DialogHeader>
 
           <div className="space-y-5 py-2 text-xs">
+            <LegacyDocuments
+              files={targetRagazzoForArchivio ? legacyFiles.filter(file => file.ragazzo_id === targetRagazzoForArchivio.id) : legacyFiles}
+              customDocs={targetRagazzoForArchivio ? legacyCustomDocs.filter(doc => doc.ragazzo_id === targetRagazzoForArchivio.id) : legacyCustomDocs}
+              year={currentYear}
+            />
             <div className="space-y-2">
               <h3 className="font-bold text-slate-800 text-xs">File Salvati in Archivio ({targetRagazzoForArchivio ? archivedFiles.filter(a => a.ragazzo_id === targetRagazzoForArchivio.id).length : archivedFiles.length}):</h3>
 
@@ -831,13 +829,13 @@ export function PrivacyClient({ ragazzi: initialRagazzi }: { ragazzi: Ragazzo[] 
                           size="sm" 
                           variant="outline"
                           onClick={() => {
-                            const win = window.open()
-                            win?.document.write(`<iframe src="${af.file_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`)
+                            window.open(af.file_url, '_blank', 'noopener,noreferrer')
                           }}
                           className="h-8 text-xs gap-1"
                         >
                           <Eye className="w-3.5 h-3.5" /> Apri File
                         </Button>
+                        <a href={documentFileUrl(currentYear, af.id, true)} className="inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs"><Download className="h-3.5 w-3.5" /> Scarica</a>
                         <Button 
                           size="sm" 
                           variant="ghost" 

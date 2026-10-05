@@ -1,3 +1,4 @@
+import { annualBoyUpdate } from '@/lib/annualRoster/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database.types'
 
@@ -69,7 +70,7 @@ export async function deleteExpenseRecord(client: Client, expense: ReceiptExpens
       if (result.error) throw result.error
     }
     if (expense.ragazzo_id && (expense.riferimento_censimento_anno || /^(quota\s+)?censimento$/i.test(expense.voce_spesa || ''))) {
-      const result = await client.from('ragazzi').update({ quota_censimento: false }).eq('id', expense.ragazzo_id)
+      const result = await annualBoyUpdate(expense.ragazzo_id, { quota_censimento: false },expense.riferimento_censimento_anno || (expense.data ? `${Number(expense.data.slice(0,4))-(expense.data.slice(5,7)<'10'?1:0)}-${Number(expense.data.slice(0,4))+(expense.data.slice(5,7)<'10'?0:1)}` : undefined))
       if (result.error) throw result.error
     }
   } catch {

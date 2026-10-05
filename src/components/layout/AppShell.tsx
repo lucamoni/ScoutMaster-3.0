@@ -272,7 +272,6 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto pb-20 md:pb-6 p-4 md:p-6 bg-surface-bg">
-          {pathname === '/censimento' && selectedYear !== getCurrentAnnoScout() && <p className="mb-4 rounded border bg-white p-3 text-sm">Il censimento mostra lo stato attuale delle persone, non uno storico annuale. Gli incassi degli anni precedenti sono consultabili nella Cassa dell’anno selezionato.</p>}
           {children}
         </main>
       </div>

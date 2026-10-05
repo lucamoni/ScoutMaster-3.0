@@ -54,7 +54,7 @@ export function answerFromData(message: string, facts: ScoutBotContext, previous
   const people = facts.ragazzi.filter(p => text.includes(normalized(p.nome)))
   if (people.length === 1 && /pag|quota|censimento|deve|devono|pendenz/.test(text)) {
     const person = people[0]
-    return `${heading}\n**${person.nome}**\n- Quote mensili scadute da pagare: **${euro(person.mensili_da_pagare)}**${person.quote_mensili.some(m => m.scaduto && !m.pagato) ? ` (${person.quote_mensili.filter(m => m.scaduto && !m.pagato).map(m => m.mese).join(', ')})` : ''}\n- Censimento, stato attuale: **${person.censimento_pagato ? 'saldato' : 'non saldato'}** (${euro(person.quota_censimento)})\n${facts.eventi.flatMap(e => e.partecipanti.filter(p => p.nome === person.nome).map(p => `- ${e.nome}: ${p.quota === 0 ? 'quota zero' : `${euro(p.quota)} · ${p.pagato ? 'pagato' : 'da pagare'}`}`)).join('\n')}`
+    return `${heading}\n**${person.nome}**\n- Quote mensili scadute da pagare: **${euro(person.mensili_da_pagare)}**${person.quote_mensili.some(m => m.scaduto && !m.pagato) ? ` (${person.quote_mensili.filter(m => m.scaduto && !m.pagato).map(m => m.mese).join(', ')})` : ''}\n- Censimento: **${person.censimento_pagato ? 'saldato' : 'non saldato'}** (${euro(person.quota_censimento)})\n${facts.eventi.flatMap(e => e.partecipanti.filter(p => p.nome === person.nome).map(p => `- ${e.nome}: ${p.quota === 0 ? 'quota zero' : `${euro(p.quota)} · ${p.pagato ? 'pagato' : 'da pagare'}`}`)).join('\n')}`
   }
   if (/mensil|\bnovembre\b|\bdicembre\b|\bgennaio\b|\bfebbraio\b|\bmarzo\b|\baprile\b|\bmaggio\b|\bgiugno\b/.test(text) && /quota|pag|pendenz|manca/.test(text)) {
     const month = SCOUT_FEE_MONTHS.find(m => text.includes(m))
@@ -62,11 +62,11 @@ export function answerFromData(message: string, facts: ScoutBotContext, previous
     const rows = facts.ragazzi.map(p => ({ person: p, months: p.quote_mensili.filter(m => (!month || m.mese === month) && (month ? true : m.scaduto) && m.pagato === wantPaid) })).filter(p => p.months.length)
     return `${heading}\n**${rows.length} ragazzi** con quote mensili ${wantPaid ? 'pagate' : 'non pagate'}${month ? ` di ${month}` : ' già scadute'}.\n${rows.map(({ person, months }) => `- ${person.nome}: ${months.map(m => `${m.mese}${m.scaduto ? '' : ' (non ancora scaduta)'}`).join(', ')}`).join('\n') || 'Nessuna corrispondenza.'}`
   }
-  if (/censimento/.test(text)) return `${heading}\nCensimento, **stato attuale dell’anagrafica**: ${facts.ragazzi.filter(p => p.censimento_pagato).length} saldati, ${facts.ragazzi.filter(p => !p.censimento_pagato).length} non saldati.\n${facts.ragazzi.filter(p => !p.censimento_pagato).map(p => `- ${p.nome}: ${euro(p.quota_censimento)}`).join('\n')}\nIl censimento è ${facts.cassa.censimento_incluso ? 'incluso' : 'escluso'} dal computo delle entrate.`
+  if (/censimento/.test(text)) return `${heading}\nCensimento dell’anno selezionato: ${facts.ragazzi.filter(p => p.censimento_pagato).length} saldati, ${facts.ragazzi.filter(p => !p.censimento_pagato).length} non saldati.\n${facts.ragazzi.filter(p => !p.censimento_pagato).map(p => `- ${p.nome}: ${euro(p.quota_censimento)}`).join('\n')}\nIl censimento è ${facts.cassa.censimento_incluso ? 'incluso' : 'escluso'} dal computo delle entrate.`
   if (/ragazz|anagrafica|squadrigl/.test(text) && /quant|qual|elenc|ci sono/.test(text)) {
     const squad = facts.ragazzi.find(p => p.squadriglia && text.includes(normalized(p.squadriglia)))?.squadriglia
     const selected = squad ? facts.ragazzi.filter(p => p.squadriglia === squad) : facts.ragazzi
-    return `${heading}\nL’anagrafica attuale contiene **${selected.length} ragazzi attivi**${squad ? ` nella squadriglia ${squad}` : ''}.\n${selected.map(p => `- ${p.nome}${p.squadriglia ? ` (${p.squadriglia})` : ''}`).join('\n')}`
+    return `${heading}\nL’anagrafica dell’anno contiene **${selected.length} ragazzi attivi**${squad ? ` nella squadriglia ${squad}` : ''}.\n${selected.map(p => `- ${p.nome}${p.squadriglia ? ` (${p.squadriglia})` : ''}`).join('\n')}`
   }
   return null
 }

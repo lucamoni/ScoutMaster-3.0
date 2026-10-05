@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
+import { getAnnualBoys } from '@/lib/annualRoster/server'
+import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 
 export async function POST(request: Request) {
@@ -55,10 +57,11 @@ export async function POST(request: Request) {
 
     // 3. Batch Fetch: Ragazzi & Partecipazioni Esistenti
     const [{ data: ragazziList }, { data: existingParts }] = await Promise.all([
-      supabase.from('ragazzi').select('id, nome, cognome').in('id', ragazziIds),
+      getAnnualBoys(getCurrentAnnoScout(new Date(`${evento.data_inizio}T12:00:00Z`)), true).then(data => ({data:data.filter(boy => ragazziIds.includes(boy.id))})),
       supabase.from('partecipazioni_eventi').select('*').eq('evento_id', eventoId).in('ragazzo_id', ragazziIds)
     ])
 
+    if (!ragazziList || new Set(ragazziIds).size !== ragazziIds.length || ragazziList.length !== ragazziIds.length) return NextResponse.json({error:'Ragazzi non presenti nell’anagrafica dell’anno dell’evento'}, {status:400})
     const ragazziMap = new Map((ragazziList || []).map(r => [r.id, r]))
     const existingPartsMap = new Map((existingParts || []).map(p => [p.ragazzo_id, p]))
 
@@ -165,7 +168,7 @@ export async function POST(request: Request) {
           metodo: canonicalMetodo,
           voce_spesa: `Evento: ${evento.nome_evento}`,
           tipo_movimento: 'ENTRATA',
-          data: dateStr,
+          data: existingSpesa?.data || evento.data_inizio || dateStr,
           ragazzo_id: rId,
           partecipazione_evento_id: part.id,
           note: `Pagamento ${evento.nome_evento} - ${rag?.nome || ''} ${rag?.cognome || ''}`.trim()

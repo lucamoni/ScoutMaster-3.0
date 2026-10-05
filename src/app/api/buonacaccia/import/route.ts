@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
 import { authorizationErrorResponse, requireAuthenticatedUser } from '@/lib/security/auth'
+import { getAnnualBoys } from '@/lib/annualRoster/server'
+import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { fetchBuonaCacciaHtml } from '@/lib/security/safeFetch'
 
 export async function POST(request: Request) {
@@ -125,7 +127,7 @@ Restituisci i dati con la seguente struttura:
     }
 
     // 2. Assicura che tutti gli esploratori abbiano la riga di partecipazione per questo evento
-    const { data: ragazzi } = await supabase.from('ragazzi').select('id').eq('attivo', true)
+    const ragazzi = await getAnnualBoys(getCurrentAnnoScout(new Date(`${targetEvento.data_inizio}T12:00:00Z`)), false)
 
     if (ragazzi && ragazzi.length > 0) {
       const partecRows = ragazzi.map(r => ({

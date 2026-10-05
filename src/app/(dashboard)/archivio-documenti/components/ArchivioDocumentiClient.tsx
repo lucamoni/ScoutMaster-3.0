@@ -1,5 +1,6 @@
 'use client'
 
+import { annualBoyUpdate } from '@/lib/annualRoster/client'
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,7 +29,9 @@ import {
   Paperclip
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
+import { loadAnnualDocuments, saveAnnualDocument, deleteAnnualDocument } from '@/lib/annualDocuments'
+import { documentFileUrl } from '@/lib/annualDocumentsModel'
+import { LegacyDocuments } from '@/components/documents/LegacyDocuments'
 import { Database } from '@/types/database.types'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -46,9 +49,11 @@ interface ArchivedDocumentFile {
   created_at: string
 }
 
-export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ragazzo[] }) {
-  const [ragazzi] = useState<Ragazzo[]>(initialRagazzi)
+export function ArchivioDocumentiClient({ initialRagazzi, currentYear }: { initialRagazzi: Ragazzo[]; currentYear: string }) {
+  const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialRagazzi)
   const [archivedFiles, setArchivedFiles] = useState<ArchivedDocumentFile[]>([])
+  const [legacyFiles, setLegacyFiles] = useState<ArchivedDocumentFile[]>([])
+  const [documentsError, setDocumentsError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedPattuglia, setSelectedPattuglia] = useState<string>('TUTTE')
   
@@ -63,27 +68,20 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   const [uploadTipoDoc, setUploadTipoDoc] = useState('foglio_privacy_firmato')
   const [isUploading, setIsUploading] = useState(false)
 
-  const supabase = createClient()
-
+  useEffect(() => { setRagazzi(initialRagazzi) }, [initialRagazzi])
   useEffect(() => {
-    async function loadArchivio() {
-      const { data } = await supabase.from('impostazioni').select('valore').eq('chiave', 'archivio_documenti_digitale').maybeSingle()
-      if (data && data.valore) {
-        try {
-          const parsed = JSON.parse(data.valore)
-          if (Array.isArray(parsed)) setArchivedFiles(parsed)
-        } catch {}
-      }
-    }
-    loadArchivio()
-  }, [supabase])
+    let active = true
+    setArchivedFiles([]); setLegacyFiles([]); setDocumentsError(null); setPreviewFile(null)
+    setIsUploadOpen(false); setTargetScoutForUpload(null); setSelectedFileObj(null)
+    loadAnnualDocuments(currentYear).then(data => {
+      if (active) { setArchivedFiles(data.archivedFiles); setLegacyFiles(data.legacyFiles) }
+    }).catch(() => { if (active) setDocumentsError('Impossibile caricare i documenti. Ricarica la pagina prima di modificarli.') })
+    return () => { active = false }
+  }, [currentYear])
 
-  const saveArchivedFilesToDb = async (newList: ArchivedDocumentFile[]) => {
-    const { error } = await supabase.from('impostazioni').upsert([
-      { chiave: 'archivio_documenti_digitale', valore: JSON.stringify(newList) }
-    ])
-    if (error) throw error
-    setArchivedFiles(newList)
+  const saveArchivedFileToDb = async (item: ArchivedDocumentFile) => {
+    await saveAnnualDocument(currentYear, 'file', item)
+    setArchivedFiles(previous => [{ ...item, file_url: documentFileUrl(currentYear, item.id) }, ...previous.filter(file => file.id !== item.id)])
   }
 
   const cleanFileNameToTitle = (fileName: string) => {
@@ -109,8 +107,8 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
     setIsUploading(true)
     try {
       const file = selectedFileObj
-      if (file.size === 0 || file.size > 5 * 1024 * 1024) {
-        toast.error('Il documento deve avere una dimensione massima di 5 MB')
+      if (file.size === 0 || file.size > 3 * 1024 * 1024) {
+        toast.error('Il documento deve avere una dimensione massima di 3 MB')
         return
       }
       const base64Url = await new Promise<string>((resolve, reject) => {
@@ -122,7 +120,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
       const finalTitle = uploadTitolo.trim() || cleanFileNameToTitle(file.name)
 
       const newArchivedItem: ArchivedDocumentFile = {
-          id: 'arch_' + Date.now(),
+          id: crypto.randomUUID(),
           ragazzo_id: targetScoutForUpload.id,
           ragazzo_nome: `${targetScoutForUpload.nome} ${targetScoutForUpload.cognome}`,
           titolo_documento: finalTitle,
@@ -133,12 +131,11 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
           created_at: new Date().toISOString()
       }
 
-      const updated = [newArchivedItem, ...archivedFiles]
-      await saveArchivedFilesToDb(updated)
+      await saveArchivedFileToDb(newArchivedItem)
 
       if (uploadTipoDoc in targetScoutForUpload) {
         const field = uploadTipoDoc as PrivacyField
-        const { error } = await supabase.from('ragazzi').update({ [field]: true } as any).eq('id', targetScoutForUpload.id)
+        const { error } = await annualBoyUpdate(targetScoutForUpload.id, { [field]: true }, currentYear)
         if (error) throw error
       }
 
@@ -154,11 +151,13 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
   }
 
   const handleDeleteFile = async (fileId: string) => {
-    if (!confirm('Sei sicuro di voler eliminare questo documento dall\'Archivio Digitale?')) return
-    const updated = archivedFiles.filter(f => f.id !== fileId)
-    await saveArchivedFilesToDb(updated)
-    toast.success('Documento rimosso dall\'Archivio')
-    if (previewFile?.id === fileId) setPreviewFile(null)
+    if (!confirm('Eliminare questo documento dall’archivio dell’anno selezionato?')) return
+    try {
+      await deleteAnnualDocument(currentYear, 'file', fileId)
+      setArchivedFiles(previous => previous.filter(file => file.id !== fileId))
+      toast.success('Documento rimosso dall’archivio')
+      if (previewFile?.id === fileId) setPreviewFile(null)
+    } catch { toast.error('Documento non eliminato') }
   }
 
   const pattuglie = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]
@@ -173,6 +172,8 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+      {documentsError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">{documentsError}</p>}
+      <LegacyDocuments files={legacyFiles} year={currentYear} />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -181,7 +182,7 @@ export function ArchivioDocumentiClient({ initialRagazzi }: { initialRagazzi: Ra
             Archivio Documenti Diviso per Esploratore
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Ogni persona ha la sua scheda con tutti i documenti salvati e consultabili in 1 clic.
+            Anno scout {currentYear.replace('-', '/')} · ogni persona ha la sua scheda con i documenti di questo anno.
           </p>
         </div>
       </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { annualBoyUpdate } from '@/lib/annualRoster/client'
 import React, { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -121,6 +122,16 @@ export function PanoramicaClient({
     }))
   }
 
+  const updateCensusAmount = async (id: string, value: number) => {
+    const previous = ragazzi.find(person => person.id === id)?.importo_censimento ?? null
+    setRagazzi(people => people.map(person => person.id === id ? { ...person, importo_censimento: value } : person))
+    const { error } = await annualBoyUpdate(id, { importo_censimento: value }, currentYear)
+    if (error) {
+      setRagazzi(people => people.map(person => person.id === id ? { ...person, importo_censimento: previous } : person))
+      toast.error(error.message)
+    }
+  }
+
   const saldaRagazzo = async (
     ragazzoId: string, 
     method: 'Contanti'|'Bonifico', 
@@ -134,12 +145,8 @@ export function PanoramicaClient({
     const ragazzo = ragazzi.find(r => r.id === ragazzoId)
     try {
       if (sel.censimento) {
-        const { error } = await supabase.from('ragazzi').update({ quota_censimento: true }).eq('id', ragazzoId)
+        const { error } = await annualBoyUpdate(ragazzoId, { quota_censimento: true }, currentYear, { method })
         if (error) throw error
-        const { data: movements, error: ledgerError } = await supabase.from('registro_spese').update({ metodo: method })
-          .eq('ragazzo_id', ragazzoId).eq('riferimento_censimento_anno', normalizeAnnoScout(currentYear)).select('id')
-        if (ledgerError) throw ledgerError
-        if (!movements?.length) throw new Error('Movimento di cassa mancante: verificare la sincronizzazione del database')
       }
       if (sel.months.length > 0) {
         const existing = quoteState.find(q => q.ragazzo_id === ragazzoId && normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(currentYear))
@@ -386,7 +393,7 @@ export function PanoramicaClient({
 
               const waVoci: string[] = []
               if (missingCensimento) waVoci.push(`- Quota Censimento: €${quotaCensimentoRagazzo}`)
-              if (unpaidMonths.length > 0) waVoci.push(`- Quote mensili (${unpaidMonths.map(m => m.substring(0,3).toUpperCase()).join(', ')}): €${unpaidMonths.length * quotaMensileNum}`)
+              if (unpaidMonths.length > 0) waVoci.push(`- Quote mensili (${unpaidMonths.map(m => m.substring(0,3).toUpperCase()).join(', ')}): €${debt.quoteDebt}`)
               if (unpaidEventsData.length > 0) {
                 unpaidEventsData.forEach(e => waVoci.push(`- ${e.nome}: €${e.quota}`))
               }
@@ -476,8 +483,7 @@ export function PanoramicaClient({
                                   type="button"
                                   onClick={async () => {
                                     const val = Number(initialQuotaCensimento) || 45
-                                    setRagazzi(prev => prev.map(r => r.id === ragazzo.id ? { ...r, importo_censimento: val } : r))
-                                    await supabase.from('ragazzi').update({ importo_censimento: val } as unknown as Database['public']['Tables']['ragazzi']['Update']).eq('id', ragazzo.id)
+                                    await updateCensusAmount(ragazzo.id, val)
                                   }}
                                   className={`text-[10px] px-2 py-1 rounded-md border font-semibold transition-colors ${
                                     (ragazzo.importo_censimento === null || ragazzo.importo_censimento === undefined || Number(ragazzo.importo_censimento) === (Number(initialQuotaCensimento) || 45))
@@ -491,8 +497,7 @@ export function PanoramicaClient({
                                   type="button"
                                   onClick={async () => {
                                     const val = Number(quotaCensimentoFratelli) || 35
-                                    setRagazzi(prev => prev.map(r => r.id === ragazzo.id ? { ...r, importo_censimento: val } : r))
-                                    await supabase.from('ragazzi').update({ importo_censimento: val } as unknown as Database['public']['Tables']['ragazzi']['Update']).eq('id', ragazzo.id)
+                                    await updateCensusAmount(ragazzo.id, val)
                                   }}
                                   className={`text-[10px] px-2 py-1 rounded-md border font-semibold transition-colors ${
                                     (Number(ragazzo.importo_censimento) === (Number(quotaCensimentoFratelli) || 35))
@@ -521,7 +526,7 @@ export function PanoramicaClient({
                                 <Checkbox checked={sel.months.includes(m)} onCheckedChange={() => toggleMonth(ragazzo.id, m)} className="touch-min" />
                                 <div className="flex-1 flex justify-between items-center text-sm">
                                   <span className="font-medium text-slate-800 capitalize">Quota {m}</span>
-                                  <span className="font-bold text-slate-700 tabular-nums">€{quotaMensileNum}</span>
+                                  <span className="font-bold text-slate-700 tabular-nums">€{debt.monthlyQuotaAmount}</span>
                                 </div>
                               </div>
                             ))}

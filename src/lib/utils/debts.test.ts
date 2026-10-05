@@ -76,6 +76,13 @@ describe('calcolo pendenze', () => {
 })
 
 describe('coerenza panoramica e salda ora', () => {
+  it('usa la tariffa della quota importata nei debiti e preserva l’esenzione', () => {
+    const input = { scout: { ...scout, quota_censimento: true }, events: [], participations: [], currentYear: '2025-2026', activeMonths: ['novembre', 'dicembre'] as const, monthlyFee: 10, censusFee: 45 }
+    const historical = calculateScoutDebt({ ...input, activeMonths: [...input.activeMonths], quote: [{ ragazzo_id: scout.id, anno_scout: '2025-2026', importo_mensile: 8, novembre: true }] })
+    expect(historical.quoteDebt).toBe(8)
+    expect(historical.monthlyQuotaAmount).toBe(8)
+    expect(calculateScoutDebt({ ...input, activeMonths: [...input.activeMonths], quote: [{ ragazzo_id: scout.id, anno_scout: '2025-2026', importo_mensile: 0 }] }).quoteDebt).toBe(0)
+  })
   it('mantiene gli arretrati a settembre e distingue anni passati e futuri', () => {
     expect(getScoutMonthsUpTo(new Date(2026, 8, 28), '2025/2026')).toHaveLength(8)
     expect(getScoutMonthsUpTo(new Date(2026, 8, 28), '2026-2027')).toEqual([])

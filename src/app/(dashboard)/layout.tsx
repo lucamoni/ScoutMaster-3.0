@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { getWorkingYear } from '@/lib/workingYear'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { validWorkingYear } from '@/lib/utils/workingYear'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export default async function DashboardLayout({
   children,
@@ -19,14 +20,15 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  const [{ data: settings }, { data: oldestMovement }, { data: oldestQuote }, { data: oldestEvent }] = await Promise.all([
+  const [{ data: settings }, { data: oldestMovement }, { data: oldestQuote }, { data: oldestEvent }, { data: oldestRoster }] = await Promise.all([
     supabase.from('impostazioni').select('chiave,valore'),
     supabase.from('registro_spese').select('data').not('data', 'is', null).order('data').limit(1),
     supabase.from('quote_mensili').select('anno_scout').order('anno_scout').limit(1),
     supabase.from('eventi').select('data_inizio').not('data_inizio', 'is', null).order('data_inizio').limit(1),
+    createAdminClient().from('ragazzi_anni').select('anno_scout').order('anno_scout').limit(1),
   ])
   const selectedYear = await getWorkingYear(settings?.find(row => row.chiave === 'anno_scout_corrente')?.valore)
-  const candidates = [getCurrentAnnoScout(), selectedYear, oldestQuote?.[0]?.anno_scout]
+  const candidates = [getCurrentAnnoScout(), selectedYear, oldestQuote?.[0]?.anno_scout, oldestRoster?.[0]?.anno_scout]
   for (const date of [oldestMovement?.[0]?.data, oldestEvent?.[0]?.data_inizio]) {
     if (date) candidates.push(getCurrentAnnoScout(new Date(`${date}T12:00:00`)))
   }

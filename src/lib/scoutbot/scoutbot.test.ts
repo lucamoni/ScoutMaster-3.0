@@ -1,3 +1,4 @@
+vi.mock('@/lib/annualRoster/server', () => ({ getAnnualBoys: vi.fn().mockResolvedValue([]) }))
 import { expect, it, vi } from 'vitest'
 import type { Tables } from '@/types/database.types'
 import { buildScoutBotContext, readAllRows } from './context'

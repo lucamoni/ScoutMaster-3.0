@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
+import { annualBoyUpdate, annualBoyCreate, annualBoys } from '@/lib/annualRoster/client'
+import { ROSTER_FIELDS } from '@/lib/roster'
 import {
   Table,
   TableBody,
@@ -99,7 +101,7 @@ const ALLOWED_RAGAZZI_COLUMNS = new Set([
   'note_sanitarie'
 ])
 
-export default function AnagraficaClient({ initialData, initialPattuglie, initialCandidature }: { initialData: Ragazzo[], initialPattuglie: Pattuglia[], initialCandidature?: Candidatura[] }) {
+export default function AnagraficaClient({ initialData, initialPattuglie, initialCandidature, currentYear }: { currentYear: string, initialData: Ragazzo[], initialPattuglie: Pattuglia[], initialCandidature?: Candidatura[] }) {
   const router = useRouter()
   const [ragazzi, setRagazzi] = useState<Ragazzo[]>(initialData)
   const [squadriglie, setSquadriglie] = useState<Pattuglia[]>(initialPattuglie)
@@ -113,16 +115,9 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
   const supabase = createClient()
 
   useEffect(() => {
-    if (initialData && initialData.length > 0) {
-      setDbColumns(new Set(Object.keys(initialData[0])))
-    } else {
-      supabase.from('ragazzi').select('*').limit(1).then(({ data }) => {
-        if (data && data.length > 0) {
-          setDbColumns(new Set(Object.keys(data[0])))
-        }
-      })
-    }
-  }, [initialData, supabase])
+    setDbColumns(new Set(ROSTER_FIELDS))
+    setRagazzi(initialData)
+  }, [initialData, currentYear])
   
   const defaultForm = {
     nome: '', cognome: '', sesso: '', pattuglia: '', 
@@ -152,7 +147,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
       setScanResult(result.data)
       toast.success(`Dati scansionati! ${result.data.db_status === 'updated' ? 'Anagrafica ed aiuti aggiornati!' : 'Nuovo ragazzo caricato in anagrafica!'}`)
 
-      const { data } = await supabase.from('ragazzi').select('*').order('nome')
+      const { data } = await annualBoys(currentYear)
       if (data) setRagazzi(data)
     } catch (err: any) {
       toast.error(err.message || 'Impossibile leggere il documento')
@@ -174,50 +169,10 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
       return { data: null, error: null, sanitized: {} }
     }
 
-    let res = id
-      ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
-      : await supabase.from('ragazzi').insert(sanitized as any).select().single()
-
-    // 1. Se Supabase restituisce PGRST204 (colonna non trovata nella schema cache), rimuovi la colonna non esistente e riprova
-    let attempts = 0
-    while (res.error && res.error.code === 'PGRST204' && attempts < 20) {
-      attempts++
-      const match = res.error.message.match(/Could not find the '([^']+)' column/)
-      const badCol = match ? match[1] : null
-      if (badCol && badCol in sanitized) {
-        delete sanitized[badCol]
-        if (Object.keys(sanitized).length === 0) break
-        res = id
-          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
-          : await supabase.from('ragazzi').insert(sanitized as any).select().single()
-      } else {
-        break
-      }
-    }
-
-    // 2. Se Supabase restituisce 23514 (check constraint ragazzi_pattuglia_check)
-    if (res.error && res.error.code === '23514' && res.error.message.includes('ragazzi_pattuglia_check')) {
-      if (sanitized.pattuglia) {
-        // Tentativo A: Prova con il nome in MAIUSCOLO (es. "AQUILE")
-        sanitized.pattuglia = String(sanitized.pattuglia).toUpperCase()
-        res = id
-          ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
-          : await supabase.from('ragazzi').insert(sanitized as any).select().single()
-
-        // Tentativo B: Se ancora viola il check, rimuovi la pattuglia per completare comunque l'update
-        if (res.error && res.error.code === '23514') {
-          delete sanitized.pattuglia
-          res = id
-            ? await supabase.from('ragazzi').update(sanitized as any).eq('id', id)
-            : await supabase.from('ragazzi').insert(sanitized as any).select().single()
-        }
-      }
-    }
-
-    if (res.error) {
-      console.error('SAFE_UPSERT_RAGAZZO_ERROR:', res.error)
-      toast.error(`Errore DB (${res.error.code}): ${res.error.message}`)
-    }
+    const res = id
+      ? await annualBoyUpdate(id, sanitized, currentYear)
+      : await annualBoyCreate(sanitized, currentYear)
+    if (res.error) toast.error(res.error.message)
 
     return { data: res.data, error: res.error, sanitized }
   }
@@ -463,10 +418,10 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Sesso</Label>
                     <Select value={formData.sesso} onValueChange={v => setFormData({...formData, sesso: v || ''})}>
-                      <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-xs rounded-xl"><SelectValue placeholder="-" /></SelectTrigger>
+                      <SelectTrigger aria-label="Sesso" className="w-full h-11 text-base sm:h-9 sm:text-xs rounded-xl"><SelectValue placeholder="Non indicato">{formData.sesso === 'M' ? 'Maschile' : formData.sesso === 'F' ? 'Femminile' : undefined}</SelectValue></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="M">M</SelectItem>
-                        <SelectItem value="F">F</SelectItem>
+                        <SelectItem value="M">Maschile</SelectItem>
+                        <SelectItem value="F">Femminile</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -652,7 +607,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
           <TableHeader className="bg-slate-50 border-b border-slate-200/80">
             <TableRow className="h-10">
               <TableHead className="py-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Esploratore</TableHead>
-              <TableHead className="py-2 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-20">Sesso</TableHead>
+              <TableHead className="py-2 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-36">Sesso</TableHead>
               <TableHead className="py-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Squadriglia Ricamata</TableHead>
               <TableHead className="py-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Contatti Genitori</TableHead>
               <TableHead className="py-2 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-center w-24">Azioni</TableHead>
@@ -675,15 +630,15 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                   </TableCell>
                   <TableCell className="text-center px-3">
                     <Select
-                      defaultValue={ragazzo.sesso || undefined}
+                      value={ragazzo.sesso || undefined}
                       onValueChange={(val) => updateRagazzo(ragazzo.id, 'sesso', val)}
                     >
-                      <SelectTrigger className="h-7 w-12 mx-auto border-0 shadow-none text-center font-bold text-xs">
-                        <SelectValue placeholder="-" />
+                      <SelectTrigger aria-label={`Sesso di ${ragazzo.nome} ${ragazzo.cognome}`} className="h-9 w-32 min-w-32 mx-auto gap-3 rounded-lg border bg-white px-3 text-sm font-medium shadow-none">
+                        <SelectValue placeholder="Non indicato">{ragazzo.sesso === 'M' ? 'Maschile' : ragazzo.sesso === 'F' ? 'Femminile' : undefined}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="M">M</SelectItem>
-                        <SelectItem value="F">F</SelectItem>
+                        <SelectItem value="M">Maschile</SelectItem>
+                        <SelectItem value="F">Femminile</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>

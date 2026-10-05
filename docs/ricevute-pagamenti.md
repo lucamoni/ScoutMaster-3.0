@@ -3,7 +3,7 @@
 ## Uso
 
 - Impostazioni → Importa ed esporta anagrafiche: modello Excel, esportazione di tutte le colonne (compresi archiviati e dati sanitari), anteprima e importazione transazionale. Le celle vuote mantengono i dati esistenti. Mantieni i codici/telefoni come testo. Puoi compilare il modello in Google Sheets e scaricarlo in Excel; per importazione diretta di fogli privati usa l'account di servizio configurato. Non occorre pubblicare dati personali.
-- Gestione utenti: TESORIERE DI UNITÀ ha accesso operativo e gestione della firma; non può accedere alle impostazioni di sistema o gestire utenti.
+- Gestione utenti: scegli il ruolo ADMIN, CAPO UNITÀ o AIUTO CAPO UNITÀ, poi assegna separatamente la qualifica TESORIERE DI UNITÀ. La qualifica consente la gestione di nome e firma delle ricevute; non amplia i permessi sulle impostazioni di sistema o sulla gestione utenti, che dipendono dal ruolo. Gli account con il precedente ruolo tesoriere sono riconosciuti come AIUTO CAPO UNITÀ con la qualifica aggiuntiva.
 - Anagrafica: codice fiscale ragazzo, telefono ragazzo, due genitori con nome, WhatsApp, email e codice fiscale del pagatore.
 - Cassa: associa le entrate individuali al ragazzo, senza reinterpretare entrate generiche. I collegamenti provenienti da quote/eventi restano protetti.
 - Ricevute pagamenti → Prove bonifico: seleziona uno o più movimenti di un ragazzo coperti dal documento, carica PNG/JPEG/PDF, leggi ordinante/importo/data/stato, verifica e conferma il genitore e l'avvenuta esecuzione. La prova non crea nuovi movimenti né considera saldato un pagamento da eseguire.
@@ -28,6 +28,8 @@ Il refresh token è cifrato AES-256-GCM in una tabella accessibile soltanto al s
 ## Architettura e verifica
 
 Migrazione `20261005123500_issued_receipts_and_roster_contacts.sql`: quattro nuove colonne anagrafica, riconoscimento ruolo tesoriere, sei tabelle con RLS e privilegi client revocati, due bucket privati senza policy client, tre RPC SECURITY INVOKER riservate a service_role. Le API verificano lo staff tramite `getUser`/app_metadata e l'origine delle mutazioni. Firma e token non sono pubblici. L'assenza di policy sulle tabelle server-only è intenzionale (advisor INFO).
+
+La qualifica è salvata in `app_metadata.treasurer` come booleano, impostato soltanto dalle API amministrative. `user_metadata` non autorizza la gestione della firma. La lettura compatibile di `role: tesoriere_unita` conserva qualifica e permessi durante la conversione degli account; al salvataggio il ruolo torna uno dei tre ruoli base.
 
 Emissione/import/prove sono transazionali; l'emissione e l'associazione prove condividono un lock e verificano importi e pagatore. Unicità movimento certificato e numero per anno. Le prove conservano fonte/ragazzo/importo/data per segnalare modifiche successive. Il PDF viene archiviato nel bucket; in caso di upload fallito il documento è recuperabile dallo snapshot senza nuova emissione.
 

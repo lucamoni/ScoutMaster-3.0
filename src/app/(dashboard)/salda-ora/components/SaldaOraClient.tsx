@@ -1,5 +1,6 @@
 'use client'
 
+import { annualBoyUpdate } from '@/lib/annualRoster/client'
 import React, { useState, useEffect } from 'react'
 import { Database } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
@@ -28,6 +29,7 @@ import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
 import { calculateScoutDebt, getScoutMonthsUpTo, ScoutFeeMonth } from '@/lib/utils/debts'
+import { getIndividualMonthlyQuotaAmount, getMonthlyQuotaAccountingDate } from '@/lib/utils/monthlyQuota'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Evento = Database['public']['Tables']['eventi']['Row']
@@ -194,61 +196,18 @@ export default function SaldaOraClient({
       return
     }
 
+    const quotaRecord = quote.find(item => item.id === quotaId)
     const { error } = await supabase.from('registro_spese').insert({
-      importo: quotaMensileNum,
+      importo: getIndividualMonthlyQuotaAmount(quotaRecord ? [quotaRecord] : [], quotaMensileNum),
       metodo: effectiveMetodo,
       voce_spesa: 'Quota Mensile',
       tipo_movimento: 'ENTRATA',
-      data: new Date().toISOString().split('T')[0],
+      data: getMonthlyQuotaAccountingDate(currentYear, quotaRecord?.data_contabile),
       ragazzo_id: ragazzo.id,
       quota_mensile_id: quotaId,
       riferimento_quota: month,
       note: `Quota ${MONTH_LABELS[month]} - ${ragazzo.nome} ${ragazzo.cognome}`,
     })
-
-    if (error) throw error
-  }
-
-  const syncCensimentoMovement = async (
-    ragazzo: Ragazzo,
-    paid: boolean,
-    metodo?: 'Contanti' | 'Bonifico'
-  ) => {
-    const accountingYear = normalizeAnnoScout(currentYear)
-    const { data: existing, error: lookupError } = await supabase
-      .from('registro_spese')
-      .select('id, metodo')
-      .eq('ragazzo_id', ragazzo.id)
-      .eq('riferimento_censimento_anno', accountingYear)
-      .maybeSingle()
-
-    if (lookupError) throw lookupError
-
-    if (!paid) {
-      if (!existing) return
-      const { error } = await supabase
-        .from('registro_spese')
-        .delete()
-        .eq('id', existing.id)
-      if (error) throw error
-      return
-    }
-
-    const effectiveMetodo = metodo ?? existing?.metodo ?? 'Contanti'
-    const movement = {
-      importo: Number(ragazzo.importo_censimento ?? quotaCensimentoNum),
-      metodo: effectiveMetodo,
-      voce_spesa: 'Quota Censimento',
-      tipo_movimento: 'ENTRATA',
-      data: new Date().toISOString().split('T')[0],
-      ragazzo_id: ragazzo.id,
-      riferimento_censimento_anno: accountingYear,
-      note: `Censimento ${accountingYear} - ${ragazzo.nome} ${ragazzo.cognome}`,
-    }
-
-    const { error } = existing
-      ? await supabase.from('registro_spese').update(movement).eq('id', existing.id)
-      : await supabase.from('registro_spese').insert(movement)
 
     if (error) throw error
   }
@@ -264,14 +223,9 @@ export default function SaldaOraClient({
 
       // A. Salda Censimento e registra l'entrata in prima nota.
       if (debtInfo.censimentoDue) {
-        await syncCensimentoMovement(ragazzo, true)
-        const { error: censusError } = await supabase
-          .from('ragazzi')
-          .update({ quota_censimento: true } as Database['public']['Tables']['ragazzi']['Update'])
-          .eq('id', ragazzo.id)
+        const { error: censusError } = await annualBoyUpdate(ragazzo.id, { quota_censimento: true } as Database['public']['Tables']['ragazzi']['Update'], currentYear)
 
         if (censusError) {
-          await syncCensimentoMovement(ragazzo, false)
           throw censusError
         }
 
@@ -359,16 +313,9 @@ export default function SaldaOraClient({
 
       // Censimento: mantiene sincronizzati stato e prima nota.
       const censusPaid = !modalSelections.censimento
-      const previousCensusPaid = r.quota_censimento === true
-      await syncCensimentoMovement(r, censusPaid, modalSelections.metodo)
-
-      const { error: censusError } = await supabase
-        .from('ragazzi')
-        .update({ quota_censimento: censusPaid } as Database['public']['Tables']['ragazzi']['Update'])
-        .eq('id', r.id)
+      const { error: censusError } = await annualBoyUpdate(r.id, { quota_censimento: censusPaid } as Database['public']['Tables']['ragazzi']['Update'], currentYear, { method: modalSelections.metodo })
 
       if (censusError) {
-        await syncCensimentoMovement(r, previousCensusPaid)
         throw censusError
       }
 
@@ -674,7 +621,7 @@ export default function SaldaOraClient({
 
               {/* Sezione Mesi Non Saldati */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <span className="text-xs font-bold text-slate-800 block">Quote Mensili Arretrate (€{quotaMensileStandard}/mese)</span>
+                <span className="text-xs font-bold text-slate-800 block">Quote Mensili Arretrate (€{selectedBoyForModal ? computeBoyDebt(selectedBoyForModal).monthlyQuotaAmount : quotaMensileStandard}/mese)</span>
                 <div className="grid grid-cols-3 gap-1.5 pt-1">
                   {activeMonths.map(m => {
                     const isUnpaid = modalSelections.months.includes(m)

@@ -16,7 +16,7 @@ it('nega le operazioni all’aiuto prima di usare il servizio amministrativo', a
 it('crea utenti con ruolo protetto nei metadati applicativi e non restituisce password', async () => {
   const response = await POST(request())
   expect(response.status).toBe(201)
-  expect(mocks.createUser).toHaveBeenCalledWith(expect.objectContaining({ app_metadata: { role: input.role }, email_confirm: true }))
+  expect(mocks.createUser).toHaveBeenCalledWith(expect.objectContaining({ app_metadata: { role: input.role, treasurer: false }, email_confirm: true }))
   expect(JSON.stringify(await response.json())).not.toContain(input.password)
 })
 it('blocca origine esterna, ruoli inventati e password corte', async () => {
@@ -48,4 +48,22 @@ it('impedisce a un amministratore di togliere i propri permessi', async () => {
   mocks.getUserById.mockResolvedValue({ data: { user: { id, app_metadata: { role: 'admin' } } }, error: null })
   expect((await PATCH(request(input, 'PATCH'))).status).toBe(400)
   expect(mocks.updateUserById).not.toHaveBeenCalled()
+})
+it('assegna la qualifica senza cambiare il ruolo e usa soltanto app_metadata', async () => {
+  expect((await POST(request({ ...input, role: 'capo_unita', ...{ treasurer: true } }))).status).toBe(201)
+  const attributes = mocks.createUser.mock.calls[0][0]
+  expect(attributes.app_metadata).toEqual({ role: 'capo_unita', treasurer: true })
+  expect(attributes.user_metadata).not.toHaveProperty('treasurer')
+})
+it('esporta il vecchio ruolo tesoriere come aiuto con qualifica anche se disattivato', async () => {
+  mocks.listUsers.mockResolvedValue({ data: { users: [{ id, email: input.email, app_metadata: { role: 'tesoriere_unita', disabled: true } }], nextPage: null }, error: null })
+  expect(await (await GET(new Request('https://scoutmaster.test/api/admin/users'))).json()).toMatchObject({ users: [{ role: 'aiuto_capo_unita', treasurer: true, enabled: false }] })
+})
+it('conserva la qualifica legacy se omessa e permette di revocarla separatamente', async () => {
+  mocks.getUserById.mockResolvedValue({ data: { user: { id, app_metadata: { role: 'tesoriere_unita', marker: 'kept' } } }, error: null })
+  mocks.updateUserById.mockResolvedValue({ data: { user: { id, app_metadata: { role: 'aiuto_capo_unita', treasurer: true } } }, error: null })
+  expect((await PATCH(request({ ...input, password: '' }, 'PATCH'))).status).toBe(200)
+  expect(mocks.updateUserById.mock.calls[0][1].app_metadata).toEqual({ role: 'aiuto_capo_unita', treasurer: true, marker: 'kept' })
+  expect((await PATCH(request({ ...input, password: '', ...{ treasurer: false } }, 'PATCH'))).status).toBe(200)
+  expect(mocks.updateUserById.mock.calls[1][1].app_metadata).toEqual({ role: 'aiuto_capo_unita', treasurer: false, marker: 'kept' })
 })

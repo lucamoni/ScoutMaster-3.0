@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Trash2, AlertTriangle, RefreshCw, Users, Calendar, Wallet, CreditCard, Compass } from 'lucide-react'
 import { toast } from 'sonner'
 
-export default function DataResetSettings() {
+export default function DataResetSettings({currentYear}: {currentYear:string}) {
   const [loadingTarget, setLoadingTarget] = useState<string | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<{ id: string, name: string } | null>(null)
   const [confirmationInput, setConfirmationInput] = useState('')
@@ -21,7 +21,7 @@ export default function DataResetSettings() {
       const res = await fetch('/api/admin/reset-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: targetId, confirmation: `RESET ${targetId}` })
+        body: JSON.stringify({ target: targetId, confirmation: `RESET ${targetId}`, year: currentYear })
       })
 
       const data = await res.json()
@@ -46,8 +46,8 @@ export default function DataResetSettings() {
   const sections = [
     {
       id: 'ragazzi',
-      title: 'Anagrafica & Squadriglie',
-      description: 'Elimina tutti i ragazzi censiti, contatti e squadriglie.',
+      title: 'Anagrafica annuale',
+      description: 'Archivia i ragazzi dell’anno selezionato. Lo storico e le squadriglie restano conservati.',
       icon: Users,
       color: 'text-blue-600 bg-blue-50 border-blue-200'
     },
@@ -88,7 +88,7 @@ export default function DataResetSettings() {
           <Trash2 className="h-5 w-5" /> Gestione & Pulizia Dati Database
         </CardTitle>
         <CardDescription>
-          Svuota i dati delle singole sezioni oppure esegui un reset totale di ScoutMaster.
+          Svuota i dati dell’anno {currentYear}. Gli altri anni restano conservati.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -131,19 +131,19 @@ export default function DataResetSettings() {
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-8 w-8 text-red-600 shrink-0" />
             <div>
-              <h3 className="font-bold text-red-900 text-base">Reset Totale del Database</h3>
+              <h3 className="font-bold text-red-900 text-base">Reset dell’anno {currentYear}</h3>
               <p className="text-xs text-red-700">
-                Elimina TUTTI i dati di ScoutMaster (Ragazzi, Spese, Eventi, Quote e BuonaCaccia) per ripartire da zero.
+                Svuota anagrafica, movimenti, eventi, quote e candidature dell’anno selezionato. Le ricevute emesse e gli allegati impediscono il reset dei movimenti collegati.
               </p>
             </div>
           </div>
           <Button 
             variant="destructive"
             disabled={loadingTarget !== null}
-            onClick={() => setConfirmTarget({ id: 'all', name: 'TUTTI I DATI DEL DATABASE' })}
+            onClick={() => setConfirmTarget({ id: 'all', name: `TUTTI I DATI DELL’ANNO ${currentYear}` })}
             className="w-full md:w-auto font-semibold shadow-sm shrink-0"
           >
-            <Trash2 className="h-4 w-4 mr-2" /> Elimina Tutto il Database
+            <Trash2 className="h-4 w-4 mr-2" /> Svuota anno {currentYear}
           </Button>
         </div>
 

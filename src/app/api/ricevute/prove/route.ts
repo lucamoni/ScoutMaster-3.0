@@ -1,3 +1,4 @@
+import { getAnnualBoy } from '@/lib/annualRoster/server'
 import { randomUUID } from 'node:crypto'
 import { GoogleGenAI } from '@google/genai'
 import { requireAuthenticatedUser } from '@/lib/security/auth'
@@ -11,7 +12,7 @@ export async function POST(request:Request){try{
  await requireAuthenticatedUser();sameOrigin(request);const form=await request.formData();const file=form.get('file');if(!(file instanceof File)||!['application/pdf','image/png','image/jpeg'].includes(file.type)||file.size<1||file.size>4000000)throw Error('Carica PDF, PNG o JPEG, massimo 4 MB')
  const ids=JSON.parse(String(form.get('ids')||'[]'));if(!Array.isArray(ids)||!ids.length||ids.length>500||ids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id))||new Set(ids).size!==ids.length)throw Error('Selezione non valida')
  const db=createAdminClient();const {data:movements,error:me}=await db.from('registro_spese').select('*').in('id',ids);if(me||!movements||movements.length!==ids.length||movements.some(m=>m.tipo_movimento!=='ENTRATA'||m.importo<=0||!m.ragazzo_id||!['bonifico','banca','bonifici'].includes(m.metodo?.toLowerCase()||''))||new Set(movements.map(m=>m.ragazzo_id)).size!==1)throw Error('Seleziona bonifici di un solo ragazzo')
- const {data:boy,error:be}=await db.from('ragazzi').select('*').eq('id',movements[0].ragazzo_id!).single();if(be||!boy)throw Error('Ragazzo non trovato')
+ const firstDate=movements[0].data;if(!firstDate)throw Error('Data movimento mancante');const firstYear=Number(firstDate.slice(0,4))-(firstDate.slice(5,7)<'10'?1:0);const year=`${firstYear}-${firstYear+1}`;if(movements.some(m=>!m.data||m.data<`${firstYear}-10-01`||m.data>`${firstYear+1}-09-30`))throw Error('Seleziona pagamenti dello stesso anno scout');const boy=await getAnnualBoy(year,movements[0].ragazzo_id!);if(!boy)throw Error('Ragazzo non trovato nell’anno')
  const bytes=new Uint8Array(await file.arrayBuffer())
  if(form.get('action')==='analyze'){
   if(['local','self-hosted'].includes((process.env.DOCUMENT_OCR_PROVIDER||'').toLowerCase()))return reply({reading:{payer:'',amount:null,date:null,status:'',reference:'',suggestedParent:null,warning:'Lettura esterna disattivata: conferma i dati manualmente.'}})
