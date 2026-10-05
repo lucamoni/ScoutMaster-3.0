@@ -567,11 +567,11 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
 
             <div className="space-y-2">
               <Label>Apertura Iscrizioni</Label>
-              <Input type="datetime-local" value={editingEvento.apertura_iscrizioni ? editingEvento.apertura_iscrizioni.slice(0,16) : ''} onChange={e => setEditingEvento({...editingEvento, apertura_iscrizioni: e.target.value ? new Date(e.target.value).toISOString() : null})} />
+              <Input type="datetime-local" value={editingEvento.apertura_iscrizioni ? format(new Date(editingEvento.apertura_iscrizioni), "yyyy-MM-dd'T'HH:mm") : ''} onChange={e => setEditingEvento({...editingEvento, apertura_iscrizioni: e.target.value ? new Date(e.target.value).toISOString() : null})} />
             </div>
             <div className="space-y-2">
               <Label>Chiusura Iscrizioni</Label>
-              <Input type="datetime-local" value={editingEvento.chiusura_iscrizioni ? editingEvento.chiusura_iscrizioni.slice(0,16) : ''} onChange={e => setEditingEvento({...editingEvento, chiusura_iscrizioni: e.target.value ? new Date(e.target.value).toISOString() : null})} />
+              <Input type="datetime-local" value={editingEvento.chiusura_iscrizioni ? format(new Date(editingEvento.chiusura_iscrizioni), "yyyy-MM-dd'T'HH:mm") : ''} onChange={e => setEditingEvento({...editingEvento, chiusura_iscrizioni: e.target.value ? new Date(e.target.value).toISOString() : null})} />
             </div>
 
             <div className="space-y-2">

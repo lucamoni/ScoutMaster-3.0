@@ -18,5 +18,10 @@ it('non inventa eventi, date e quote quando non sono presenti', () => {
 it('legge i dettagli ufficiali senza dipendere dall’IA', () => {
   const fields: Record<string, string> = { lbTitle: '[Marche] Campo test', Type: 'CFM E/G', lbRegion: 'Marche', lbEventFrom: '30/10/2026', lbEventTo: '08/12/2026', lbFee: '0,00 €', lbSubsFrom: '19/09/2026', lbSubsTo: '14/10/2026' }
   const html = '<img src="Images/branch_fc.png">' + Object.entries(fields).map(([id, value]) => `<span id="MainContent_EventFormView_${id}">${value}</span>`).join('')
-  expect(parseEventDetail(html)).toMatchObject({ branca: 'CAPI', costo_evento: 0, data_inizio: '2026-10-30', apertura_iscrizioni: '2026-09-19T00:00:00' })
+  expect(parseEventDetail(html)).toMatchObject({ branca: 'CAPI', costo_evento: 0, data_inizio: '2026-10-30', apertura_iscrizioni: '2026-09-19T00:00:00+02:00' })
+})
+
+it('mantiene la data italiana di chiusura anche in inverno', () => {
+  const html = '<span id="MainContent_EventFormView_lbTitle">Campo</span><span id="MainContent_EventFormView_lbSubsTo">14/12/2026</span>'
+  expect(parseEventDetail(html).chiusura_iscrizioni).toBe('2026-12-14T23:59:59+01:00')
 })

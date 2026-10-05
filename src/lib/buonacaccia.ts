@@ -60,6 +60,14 @@ export function parseEventCatalog(html: string): CatalogEvent[] {
   return [...unique.values()]
 }
 
+// The portal publishes calendar dates in Italy, not UTC timestamps.
+function registrationBoundary(date: string | null, end: boolean) {
+  if (!date) return null
+  const noon = new Date(`${date}T12:00:00Z`)
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hourCycle: 'h23' }).format(noon))
+  return `${date}T${end ? '23:59:59' : '00:00:00'}+0${hour - 12}:00`
+}
+
 export function parseEventDetail(html: string) {
   const field = (id: string) => htmlText(html.match(new RegExp(`<span[^>]*id=["']MainContent_EventFormView_${id}["'][^>]*>([\\s\\S]*?)<\\/span>`, 'i'))?.[1] || '')
   const title = field('lbTitle')
@@ -72,6 +80,6 @@ export function parseEventDetail(html: string) {
   const location = field('lbLocation') || (firstAppointment ? htmlText(outerElements(firstAppointment, 'td')[1] || '') : '')
   return { titolo: title, categoria: eventCategory(type), branca: capi ? 'CAPI' : 'EG', regione: field('lbRegion') || null, luogo: location || null,
     data_inizio: italianDate(field('lbEventFrom')), data_fine: italianDate(field('lbEventTo')), costo_evento: fee(field('lbFee')),
-    apertura_iscrizioni: from ? `${from}T00:00:00` : null, chiusura_iscrizioni: to ? `${to}T23:59:59` : null,
+    apertura_iscrizioni: registrationBoundary(from, false), chiusura_iscrizioni: registrationBoundary(to, true),
     note: field('lbDescription') || null }
 }
