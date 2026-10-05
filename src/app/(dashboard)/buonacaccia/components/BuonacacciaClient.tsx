@@ -16,6 +16,7 @@ import { Database } from '@/types/database.types'
 import { toast } from 'sonner'
 import { format, isBefore, isAfter, differenceInDays } from 'date-fns'
 import { it } from 'date-fns/locale'
+import type { CatalogEvent } from '@/lib/buonacaccia'
 
 type Evento = {
   id?: string
@@ -72,7 +73,8 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   
   // Modale Link Rapidi
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
-  const [fetchedEvents, setFetchedEvents] = useState<{id: string, titolo: string, luogo?: string, date?: string, categoria?: string}[]>([])
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [fetchedEvents, setFetchedEvents] = useState<CatalogEvent[]>([])
   const [isFetchingList, setIsFetchingList] = useState(false)
   const [activeTab, setActiveTab] = useState<'eg' | 'capi'>('eg')
   const [linkModalTab, setLinkModalTab] = useState<'EG' | 'CAPI'>('EG')
@@ -140,6 +142,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
 
   const fetchEventList = async (type: 'EG' | 'CAPI') => {
     setIsFetchingList(true)
+    setCatalogError(null)
     setFetchedEvents([])
     try {
       const res = await fetch(`/api/buonacaccia/list?type=${type}`)
@@ -150,52 +153,10 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
       else toast.success(`Trovati ${(data || []).length} eventi verificati!`)
     } catch (error: unknown) {
       const err = error as Error
+      setCatalogError(err.message)
       toast.error(err.message)
     } finally {
       setIsFetchingList(false)
-    }
-  }
-
-  // Helper parsing date string da italiano (es: "17-20 Aprile 2026")
-  const parseDateRangeString = (dateStr?: string) => {
-    if (!dateStr) return {}
-    const months: Record<string, string> = {
-      'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04',
-      'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
-      'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12'
-    }
-
-    const yearMatch = dateStr.match(/20\d\d/)
-    const year = yearMatch ? yearMatch[0] : '2026'
-
-    const foundMonths: { month: string; index: number }[] = []
-    const lower = dateStr.toLowerCase()
-    Object.keys(months).forEach(m => {
-      const idx = lower.indexOf(m)
-      if (idx !== -1) foundMonths.push({ month: months[m], index: idx })
-    })
-    foundMonths.sort((a, b) => a.index - b.index)
-
-    const numbers = dateStr.match(/\b\d{1,2}\b/g)
-    if (!numbers || numbers.length === 0 || foundMonths.length === 0) return {}
-
-    const startDay = numbers[0].padStart(2, '0')
-    const endDay = numbers.length > 1 ? numbers[1].padStart(2, '0') : startDay
-    const startMonth = foundMonths[0].month
-    const endMonth = foundMonths.length > 1 ? foundMonths[1].month : startMonth
-
-    const data_inizio = `${year}-${startMonth}-${startDay}`
-    const data_fine = `${year}-${endMonth}-${endDay}`
-
-    const startDateObj = new Date(data_inizio)
-    const aperturaObj = new Date(startDateObj.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const chiusuraObj = new Date(startDateObj.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-    return {
-      data_inizio,
-      data_fine,
-      apertura_iscrizioni: aperturaObj.toISOString(),
-      chiusura_iscrizioni: chiusuraObj.toISOString()
     }
   }
 
@@ -203,7 +164,6 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     const upper = title.toUpperCase()
     let branca: 'EG' | 'CAPI' = hintBranca || 'EG'
     let categoria = hintCategoria || 'Specialita'
-    let costo = 35
 
     if (hintBranca === 'CAPI' || upper.includes('CFT') || upper.includes('CFM') || upper.includes('CFA') || upper.includes('ROSS') || upper.includes('CAPI') || upper.includes('FORMAZIONE') || upper.includes('TIROCINANTI')) {
       branca = 'CAPI'
@@ -212,16 +172,15 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
       else if (upper.includes('CFA') || hintCategoria === 'CFA') categoria = 'CFA'
       else if (upper.includes('ROSS')) categoria = 'Altro'
       else categoria = hintCategoria && hintCategoria !== 'Specialita' ? hintCategoria : 'CFT'
-      costo = 60
     } else {
       branca = 'EG'
       if (upper.includes('COMPETENZA')) categoria = 'Competenza'
       else if (upper.includes('ORME') || upper.includes('PICCOLE')) categoria = 'Piccole Orme'
-      else if (upper.includes('ESTIVO')) { categoria = 'Specialita'; costo = 150; }
+      else if (upper.includes('ESTIVO')) categoria = 'Specialita'
       else categoria = hintCategoria || 'Specialita'
     }
 
-    return { branca, categoria, costo }
+    return { branca, categoria }
   }
 
   const isGenericTitle = (t?: string | null) => {
@@ -234,10 +193,10 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   const handleImport = useCallback(async (
     urlParam?: string, 
     directTitle?: string, 
-    directDate?: string, 
     directLuogo?: string,
     directCategoria?: string,
-    directBranca?: 'EG' | 'CAPI'
+    directBranca?: 'EG' | 'CAPI',
+    directEvent?: CatalogEvent
   ) => {
     const targetUrl = typeof urlParam === 'string' ? urlParam : importUrl
     if (!targetUrl) {
@@ -248,7 +207,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
     try {
       const activeCategoryHint: 'EG' | 'CAPI' = directBranca || ((isLinkModalOpen && linkModalTab === 'CAPI') || (!isLinkModalOpen && activeTab === 'capi') ? 'CAPI' : 'EG')
       const derivedMeta = deriveEventMetadata(directTitle || '', activeCategoryHint, directCategoria)
-      const parsedDates = parseDateRangeString(directDate)
+      const parsedDates = directEvent ? { data_inizio: directEvent.data_inizio, data_fine: directEvent.data_fine, regione: directEvent.regione } : {}
 
       const initialTitle = !isGenericTitle(directTitle) ? directTitle! : 'Evento BuonaCaccia'
 
@@ -257,7 +216,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         categoria: derivedMeta.categoria,
         branca: derivedMeta.branca,
         luogo: directLuogo || null,
-        costo_evento: derivedMeta.costo,
+        costo_evento: directEvent?.costo ?? null,
         url_evento: targetUrl,
         ...parsedDates
       }
@@ -274,7 +233,9 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
           if (data.categoria && data.categoria !== 'Specialita') eventPayload.categoria = data.categoria
           if (data.branca) eventPayload.branca = data.branca
           if (data.luogo) eventPayload.luogo = data.luogo
-          if (data.costo_evento) eventPayload.costo_evento = data.costo_evento
+          if (data.regione) eventPayload.regione = data.regione
+          if (data.note) eventPayload.note = data.note
+          if (data.costo_evento != null) eventPayload.costo_evento = data.costo_evento
           if (data.data_inizio) eventPayload.data_inizio = data.data_inizio
           if (data.data_fine) eventPayload.data_fine = data.data_fine
           if (data.apertura_iscrizioni) eventPayload.apertura_iscrizioni = data.apertura_iscrizioni
@@ -297,6 +258,8 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         }
       }
 
+      if (isGenericTitle(eventPayload.titolo) || !eventPayload.data_inizio) throw new Error('Dati ufficiali incompleti: apri il link BuonaCaccia o inserisci l’evento manualmente.')
+
       const insertData = {
         titolo: !isGenericTitle(eventPayload.titolo) ? eventPayload.titolo : (!isGenericTitle(directTitle) ? directTitle : 'Evento BuonaCaccia'),
         categoria: eventPayload.categoria || derivedMeta.categoria,
@@ -307,7 +270,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
         data_fine: eventPayload.data_fine || null,
         apertura_iscrizioni: eventPayload.apertura_iscrizioni || null,
         chiusura_iscrizioni: eventPayload.chiusura_iscrizioni || null,
-        costo_evento: eventPayload.costo_evento || derivedMeta.costo,
+        costo_evento: eventPayload.costo_evento ?? null,
         url_evento: targetUrl,
         note: eventPayload.note || null
       }
@@ -534,14 +497,14 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
           <DialogHeader>
             <DialogTitle>{editingEvento.id ? 'Modifica Evento' : 'Aggiungi Evento BuonaCaccia'}</DialogTitle>
             <DialogDescription>
-              Incolla il link dell&apos;evento per estrarre i dati automaticamente con l&apos;IA, oppure compila manualmente.
+              Incolla il link dell&apos;evento per estrarre i dati automaticamente dal portale ufficiale, oppure compila manualmente.
             </DialogDescription>
           </DialogHeader>
 
           {!editingEvento.id && (
             <div className="flex gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20 mb-2">
               <Input 
-                placeholder="https://buonacaccia.net/..." 
+                placeholder="https://buonacaccia.agesci.it/..."
                 value={importUrl} 
                 onChange={e => setImportUrl(e.target.value)} 
                 className="bg-background"
@@ -625,18 +588,18 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                 <Label>Link Evento BuonaCaccia</Label>
                 {isImporting && (
                   <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Estrazione IA in corso...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Lettura evento in corso...
                   </span>
                 )}
               </div>
               <Input 
                 type="url" 
-                placeholder="https://buonacaccia.net/Event.aspx?e=..." 
+                placeholder="https://buonacaccia.agesci.it/Event.aspx?e=..."
                 value={editingEvento.url_evento || ''} 
                 onChange={async (e) => {
                   const val = e.target.value
                   setEditingEvento(prev => ({ ...prev, url_evento: val }))
-                  if (val && val.includes('buonacaccia.net/Event.aspx?e=') && val.length > 25) {
+                  if (val && /^https:\/\/(?:buonacaccia\.agesci\.it|(?:www\.)?buonacaccia\.net)\/Event\.aspx\?e=/.test(val) && val.length > 25) {
                     try {
                       setIsImporting(true)
                       const res = await fetch('/api/buonacaccia', {
@@ -650,7 +613,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                           ...prev,
                           titolo: data.titolo || prev.titolo,
                           luogo: data.luogo || prev.luogo,
-                          costo_evento: data.costo_evento || prev.costo_evento,
+                          costo_evento: data.costo_evento ?? prev.costo_evento,
                           data_inizio: data.data_inizio || prev.data_inizio,
                           data_fine: data.data_fine || prev.data_fine,
                           apertura_iscrizioni: data.apertura_iscrizioni || prev.apertura_iscrizioni,
@@ -841,12 +804,13 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                 </div>
               ) : fetchedEvents.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500 border border-dashed rounded-lg">
-                  Nessun evento disponibile al momento per la categoria selezionata.
+                  {catalogError || `Il catalogo ufficiale non pubblica eventi ${linkModalTab === 'CAPI' ? 'di Formazione Capi' : 'E/G'} al momento.`}
+                  <a className="mt-2 block text-blue-700 underline" href={`https://buonacaccia.agesci.it/Events.aspx?CID=${linkModalTab === 'CAPI' ? '4000000' : '2000000'}`} target="_blank" rel="noopener noreferrer">Controlla il catalogo ufficiale</a>
                 </div>
               ) : (
                 <div className="border rounded-md divide-y max-h-[50vh] overflow-y-auto bg-white">
                   {fetchedEvents.map((ev, idx) => (
-                    <div key={idx} className="p-3.5 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                    <div key={idx} className="p-3 flex flex-col items-stretch gap-2 sm:flex-row sm:justify-between sm:items-center hover:bg-slate-50 transition-colors">
                       <div className="flex-1 pr-4">
                         <div className="font-bold text-sm text-slate-900">{ev.titolo}</div>
                         <div className="text-xs text-slate-500 flex flex-wrap gap-3 mt-1.5 font-medium">
@@ -859,11 +823,11 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
                         className="whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs gap-1.5 shadow-2xs" 
                         disabled={isImporting} 
                         onClick={() => {
-                          handleImport(`https://buonacaccia.net/Event.aspx?e=${ev.id}`, ev.titolo, ev.date, ev.luogo, ev.categoria, linkModalTab)
+                          handleImport(`https://buonacaccia.agesci.it/Event.aspx?e=${ev.id}`, ev.titolo, ev.luogo, ev.categoria, linkModalTab, ev)
                         }}
                       >
                         {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                        📥 Importa in ScoutMaster
+                        Importa
                       </Button>
                     </div>
                   ))}

@@ -42,7 +42,7 @@ const defaultLinks: ScoutLink[] = [
     titolo: 'BuonaCaccia.net',
     categoria: 'Ufficiali AGESCI',
     descrizione: 'Portale ufficiale per l\'iscrizione a Campi di Specialità, Eventi Regionali, Nazionali e Corsi di Formazione Capi.',
-    url: 'https://buonacaccia.net',
+    url: 'https://buonacaccia.agesci.it',
     isExternal: true,
     badge: 'Ufficiale'
   },
