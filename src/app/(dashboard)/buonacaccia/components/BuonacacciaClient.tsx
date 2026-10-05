@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +73,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   
   // Modale Link Rapidi
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
+  const catalogRequest = useRef(0)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [fetchedEvents, setFetchedEvents] = useState<CatalogEvent[]>([])
   const [isFetchingList, setIsFetchingList] = useState(false)
@@ -141,22 +142,25 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
   }, [supabase, ragazzi])
 
   const fetchEventList = async (type: 'EG' | 'CAPI') => {
+    const requestId = ++catalogRequest.current
     setIsFetchingList(true)
     setCatalogError(null)
     setFetchedEvents([])
     try {
       const res = await fetch(`/api/buonacaccia/list?type=${type}`)
       const { data, error, warning } = await res.json()
+      if (requestId !== catalogRequest.current) return
       if (error) throw new Error(error)
       setFetchedEvents(data || [])
       if (warning) toast.warning(warning)
       else toast.success(`Trovati ${(data || []).length} eventi verificati!`)
     } catch (error: unknown) {
+      if (requestId !== catalogRequest.current) return
       const err = error as Error
       setCatalogError(err.message)
       toast.error(err.message)
     } finally {
-      setIsFetchingList(false)
+      if (requestId === catalogRequest.current) setIsFetchingList(false)
     }
   }
 
@@ -449,7 +453,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
           <p className="text-muted-foreground">Gestisci le iscrizioni agli eventi formativi e ai campi di specialità/competenza.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => { setIsLinkModalOpen(true); fetchEventList(activeTab === 'capi' ? 'CAPI' : 'EG'); }} className="gap-2">
+          <Button variant="outline" onClick={() => { const category = activeTab === 'capi' ? 'CAPI' : 'EG'; setLinkModalTab(category); setIsLinkModalOpen(true); fetchEventList(category); }} className="gap-2">
             <ExternalLink className="w-4 h-4" /> Esplora BuonaCaccia
           </Button>
           <Button onClick={() => { 
@@ -781,7 +785,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
       </Dialog>
 
 
-      <Dialog open={isLinkModalOpen} onOpenChange={(open) => { setIsLinkModalOpen(open); if(!open) setFetchedEvents([]); }}>
+      <Dialog open={isLinkModalOpen} onOpenChange={(open) => { setIsLinkModalOpen(open); if(!open) { catalogRequest.current++; setFetchedEvents([]); } }}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Esplora Eventi su BuonaCaccia</DialogTitle>
@@ -790,7 +794,7 @@ export function BuonacacciaClient({ initialEventi, initialCandidature, ragazzi }
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={linkModalTab} onValueChange={(v) => { const newT = v === 'capi_links' ? 'CAPI' : 'EG'; setLinkModalTab(newT); fetchEventList(newT); }} className="w-full mt-4">
+          <Tabs value={linkModalTab === 'CAPI' ? 'capi_links' : 'eg_links'} onValueChange={(v) => { const newT = v === 'capi_links' ? 'CAPI' : 'EG'; setLinkModalTab(newT); fetchEventList(newT); }} className="w-full mt-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="eg_links">Eventi Ragazzi E/G</TabsTrigger>
               <TabsTrigger value="capi_links">Formazione Capi</TabsTrigger>
