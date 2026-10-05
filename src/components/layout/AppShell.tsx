@@ -40,7 +40,7 @@ import { LogoutButton } from '@/components/layout/LogoutButton'
 import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 import { WORKING_YEAR_COOKIE, workingYearSettings } from '@/lib/utils/workingYear'
 
-export function AppShell({ children, selectedYear, availableYears, canManageSettings }: { children: React.ReactNode; selectedYear: string; availableYears: string[]; canManageSettings: boolean }) {
+export function AppShell({ children, selectedYear, availableYears, canManageSettings, userName }: { children: React.ReactNode; selectedYear: string; availableYears: string[]; canManageSettings: boolean; userName: string }) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -208,6 +208,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
 
         {/* Footer Brand Info */}
         <div className="shrink-0 border-t border-agesci-blue-light/60">
+          {!collapsed && <p className="px-6 pt-3 text-sm font-semibold text-white break-words">Ciao, {userName} 👋</p>}
           <LogoutButton collapsed={collapsed} />
         </div>
         {!collapsed && (
@@ -294,6 +295,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
             </div>
 
             {/* Mobile Cash Summary inside menu */}
+            <p className="px-6 pt-3 text-sm font-semibold text-white break-words">Ciao, {userName} 👋</p>
             <LogoutButton />
             <div className="p-4 bg-agesci-blue-light/50 border-b border-agesci-blue-light space-y-2">
               <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Saldi Live</div>

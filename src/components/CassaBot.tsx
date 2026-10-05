@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Dialog } from '@base-ui/react/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MessageSquare, X, Send, Loader2, Compass } from 'lucide-react'
+import { X, Send, Loader2, Compass } from 'lucide-react'
 
 function renderMarkdownMessage(text: string) {
   const lines = text.split('\n')
@@ -44,9 +44,36 @@ export function CassaBot() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [viewportStyle, setViewportStyle] = useState<CSSProperties>({})
+  const messageList = useRef<HTMLDivElement>(null)
+  const closeButton = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    const viewport = window.visualViewport
+    const resize = () => {
+      setViewportStyle(window.matchMedia('(max-width: 767px)').matches ? {
+        '--scoutbot-top': `${viewport?.offsetTop ?? 0}px`,
+        '--scoutbot-height': `${viewport?.height ?? window.innerHeight}px`,
+      } as CSSProperties : {})
+    }
+    resize()
+    window.addEventListener('resize', resize)
+    viewport?.addEventListener('resize', resize)
+    viewport?.addEventListener('scroll', resize)
+    return () => {
+      window.removeEventListener('resize', resize)
+      viewport?.removeEventListener('resize', resize)
+      viewport?.removeEventListener('scroll', resize)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (messageList.current) messageList.current.scrollTop = messageList.current.scrollHeight
+  }, [messages, loading, isOpen])
 
   const handleSend = async () => {
-    if (!input.trim()) return
+    if (loading || !input.trim()) return
 
     const userMsg = input.trim()
     setMessages(prev => [...prev, { role: 'user', text: userMsg }])
@@ -70,32 +97,32 @@ export function CassaBot() {
   }
 
   return (
-    <div className="fixed bottom-20 right-4 md:bottom-4 md:right-4 z-50">
-      {!isOpen && (
-        <Button 
-          onClick={() => setIsOpen(true)} 
+    <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog.Trigger render={<Button
           className="rounded-full h-10 w-10 md:h-14 md:w-14 shadow-md bg-agesci-blue hover:bg-agesci-blue-light text-amber-400 border border-amber-400/30 transition-transform hover:scale-105"
           title="Apri ScoutBot"
-        >
+          aria-label="Apri ScoutBot"
+        />} className="fixed bottom-20 right-4 md:bottom-4 md:right-4 z-50">
           <Compass className="h-5 w-5 md:h-7 md:w-7" />
-        </Button>
-      )}
+      </Dialog.Trigger>
 
-      {isOpen && (
-        <Card className="w-80 md:w-96 shadow-2xl border-agesci-blue/20 flex flex-col h-[440px] rounded-xl overflow-hidden bg-white">
-          <CardHeader className="p-3 bg-agesci-blue text-white flex flex-row justify-between items-center">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-[60] bg-slate-950/40" />
+        <Dialog.Popup initialFocus={closeButton} style={viewportStyle}
+          className="fixed right-0 top-[var(--scoutbot-top,0px)] z-[61] flex h-[var(--scoutbot-height,100dvh)] w-full min-h-0 flex-col overflow-hidden bg-white outline-none md:top-auto md:bottom-4 md:right-4 md:h-[min(600px,calc(100dvh-2rem))] md:w-96 md:rounded-xl md:shadow-2xl">
+          <header className="flex shrink-0 items-center justify-between bg-agesci-blue p-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white">
+            <Dialog.Title className="text-base font-bold flex items-center gap-2">
               <Compass className="h-4 w-4 text-amber-400" /> ScoutBot ⚜️
-            </CardTitle>
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-white hover:bg-agesci-blue-light" onClick={() => setIsOpen(false)}>
+            </Dialog.Title>
+            <Dialog.Close aria-label="Chiudi ScoutBot" render={<Button ref={closeButton} variant="ghost" size="icon" className="h-11 w-11 text-white hover:bg-agesci-blue-light" />}>
               <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex-1 p-3 overflow-y-auto space-y-3 bg-slate-50">
+            </Dialog.Close>
+          </header>
+          <div ref={messageList} role="log" aria-label="Conversazione ScoutBot" aria-live="polite" className="min-h-0 flex-1 p-3 overflow-y-auto overscroll-contain space-y-3 bg-slate-50">
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div 
-                  className={`px-3.5 py-2.5 rounded-xl max-w-[88%] text-xs md:text-sm shadow-2xs leading-relaxed ${
+                  className={`px-3.5 py-2.5 rounded-xl max-w-[88%] break-words [overflow-wrap:anywhere] text-sm shadow-2xs leading-relaxed ${
                     msg.role === 'user' 
                       ? 'bg-agesci-blue text-white rounded-br-none' 
                       : 'bg-white text-slate-800 border border-slate-200/90 rounded-bl-none'
@@ -112,8 +139,8 @@ export function CassaBot() {
                 </div>
               </div>
             )}
-          </CardContent>
-          <CardFooter className="p-3 bg-white border-t border-slate-200">
+          </div>
+          <footer className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-slate-200">
             <form 
               onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
               className="flex w-full gap-2"
@@ -122,15 +149,16 @@ export function CassaBot() {
                 value={input} 
                 onChange={(e) => setInput(e.target.value)} 
                 placeholder="Chiedi a ScoutBot..." 
-                className="flex-1 text-xs md:text-sm h-9"
+                aria-label="Messaggio a ScoutBot"
+                className="min-w-0 flex-1 text-base md:text-base h-11"
               />
-              <Button type="submit" size="icon" className="h-9 w-9 bg-agesci-blue hover:bg-agesci-blue-light text-white" disabled={loading || !input.trim()}>
+              <Button type="submit" size="icon" aria-label="Invia messaggio" className="h-11 w-11 bg-agesci-blue hover:bg-agesci-blue-light text-white" disabled={loading || !input.trim()}>
                 <Send className="h-4 w-4" />
               </Button>
             </form>
-          </CardFooter>
-        </Card>
-      )}
-    </div>
+          </footer>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
