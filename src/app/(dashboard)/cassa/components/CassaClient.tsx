@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Camera, Plus, Trash2, Settings2, Pencil, Check, X, Loader2, Receipt, Paperclip, Filter, Search } from 'lucide-react'
+import { Camera, Plus, Trash2, Settings2, Pencil, Check, X, Loader2, Receipt, Paperclip, Filter, Search, ChevronDown } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
@@ -73,6 +73,7 @@ export default function CassaClient({
   const [deleteFiles, setDeleteFiles] = useState(false)
   const [deletingMovements, setDeletingMovements] = useState(false)
   const [activeTab, setActiveTab] = useState('TUTTI')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [filterCategoria, setFilterCategoria] = useState('TUTTE')
   const [filterMomento, setFilterMomento] = useState('TUTTI')
   const [filterMetodo, setFilterMetodo] = useState('TUTTI')
@@ -81,6 +82,7 @@ export default function CassaClient({
   const [filterImportoMin, setFilterImportoMin] = useState('')
   const [filterImportoMax, setFilterImportoMax] = useState('')
   const [filterRicerca, setFilterRicerca] = useState('')
+  const hasActiveFilters = filterCategoria !== 'TUTTE' || filterMomento !== 'TUTTI' || filterMetodo !== 'TUTTI' || Boolean(filterDataDa || filterDataA || filterImportoMin || filterImportoMax || filterRicerca)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   useEffect(() => { setSelectedIds(new Set()) }, [includeCensus])
 
@@ -823,19 +825,21 @@ export default function CassaClient({
 
           <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <Filter className="h-4 w-4 text-primary" />
-                Filtri movimenti
-                <span className="text-xs font-normal text-slate-500">
-                  ({speseFiltrate.length} di {cassaSpese.length})
-                </span>
+              <button type="button" aria-expanded={filtersOpen} aria-controls="movement-filters" onClick={() => setFiltersOpen(open => !open)} className="flex min-h-9 items-center gap-2 text-sm font-semibold text-slate-700 md:hidden">
+                <Filter className="h-4 w-4 text-primary" /> Filtri
+                <span className="text-xs font-normal text-slate-500">({speseFiltrate.length} di {cassaSpese.length}){hasActiveFilters ? ' · attivi' : ''}</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+              </button>
+              <div className="hidden items-center gap-2 text-sm font-semibold text-slate-700 md:flex">
+                <Filter className="h-4 w-4 text-primary" /> Filtri movimenti
+                <span className="text-xs font-normal text-slate-500">({speseFiltrate.length} di {cassaSpese.length})</span>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={resetFiltri} className="h-8 text-xs">
                 Azzera filtri
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            <div id="movement-filters" className={`${filtersOpen ? 'grid' : 'hidden md:grid'} grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8`}>
               <Select value={filterCategoria} onValueChange={v => setFilterCategoria(v || 'TUTTE')}>
                 <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
                 <SelectContent>
@@ -893,7 +897,7 @@ export default function CassaClient({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+            <div className={`${filtersOpen || hasActiveFilters ? 'grid' : 'hidden md:grid'} grid-cols-2 gap-2 sm:grid-cols-4 text-xs`}>
               <div className="rounded-lg bg-white px-3 py-2 text-slate-600">
                 <span className="block text-[10px] uppercase tracking-wide text-slate-400">Movimenti</span>
                 <strong className="text-slate-900">{speseFiltrate.length}</strong>
