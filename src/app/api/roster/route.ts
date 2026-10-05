@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { allBoys,reply,failure,sameOrigin } from '@/lib/issuedReceipts/server'
 import { previewRoster } from '@/lib/roster'
 import type { Json } from '@/types/database.types'
-export async function GET(request?:Request){try{await requireRole(['admin']);const boys=await allBoys();if(request&&new URL(request.url).searchParams.get('format')==='xlsx'){const [{rosterWorkbook},XLSX]=await Promise.all([import('@/lib/rosterWorkbook'),import('xlsx')]);return new Response(XLSX.write(rosterWorkbook(boys),{type:'buffer',bookType:'xlsx'}),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="anagrafiche-complete.xlsx"','Cache-Control':'no-store'}})}return reply({boys})}catch(e){return failure(e)}}
+export async function GET(request:Request){try{await requireRole(['admin']);const boys=await allBoys();if(new URL(request.url).searchParams.get('format')==='xlsx'){const [{rosterWorkbook},XLSX]=await Promise.all([import('@/lib/rosterWorkbook'),import('xlsx')]);return new Response(XLSX.write(rosterWorkbook(boys),{type:'buffer',bookType:'xlsx'}),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':'attachment; filename="anagrafiche-complete.xlsx"','Cache-Control':'no-store'}})}return reply({boys})}catch(e){return failure(e)}}
 export async function POST(request:Request){try{
  await requireRole(['admin']);sameOrigin(request)
  if(Number(request.headers.get('content-length')||0)>10000000)throw Error('File troppo grande')
