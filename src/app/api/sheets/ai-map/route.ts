@@ -6,7 +6,7 @@ import { authorizationErrorResponse, requireRole } from '@/lib/security/auth'
 
 export async function GET(request: Request) {
   try {
-    await requireRole(['admin', 'capo', 'tesoriere'])
+    await requireRole(['admin'])
     const raw = new URL(request.url).searchParams.get('spreadsheetId') ?? ''
     const id = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? raw.trim()
     if (!/^[a-zA-Z0-9_-]{20,}$/.test(id)) return NextResponse.json({ error: 'ID Google Sheets non valido' }, { status: 400 })

@@ -632,7 +632,7 @@ function importErrorResponse(error: unknown) {
 
 export async function GET() {
   try {
-    await requireRole(['admin', 'capo', 'tesoriere'])
+    await requireRole(['admin'])
     return NextResponse.json({ error: 'Usa POST dalla procedura guidata nelle Impostazioni per importare i dati.' }, { status: 405 })
   } catch (error: unknown) {
     return importErrorResponse(error)
@@ -641,7 +641,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireRole(['admin', 'capo', 'tesoriere'])
+    await requireRole(['admin'])
 
     let body: ImportRequest
     try {

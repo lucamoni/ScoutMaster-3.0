@@ -1,3 +1,4 @@
+import { getStaffRole, canManageSystem } from '@/lib/security/roles'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -28,19 +29,23 @@ export async function updateSession(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const role = user ? getStaffRole(user, process.env.ADMIN_EMAILS || '') : null
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
   
-  if (!user && !isAuthRoute) {
+  if ((!user || !role) && !isAuthRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthRoute) {
+  if (user && role && isAuthRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
+  if (user && role && request.nextUrl.pathname.startsWith('/impostazioni') && !canManageSystem(role)) {
+    const url = request.nextUrl.clone(); url.pathname = '/'; return NextResponse.redirect(url)
+  }
   return supabaseResponse
 }

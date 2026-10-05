@@ -1,3 +1,6 @@
+import { requireRole, AuthorizationError } from '@/lib/security/auth'
+import { redirect } from 'next/navigation'
+import UserSettings from './components/UserSettings'
 import { getAccountingPeriod } from '@/lib/utils/accounting'
 import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import SheetsSettings from './components/SheetsSettings'
@@ -9,6 +12,7 @@ import { createClient } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 
 export default async function ImpostazioniPage() {
+  try { await requireRole(['admin']) } catch (error) { if (error instanceof AuthorizationError) redirect('/'); throw error }
   const supabase = await createClient()
   
   // Fetch impostazioni attuali
@@ -31,6 +35,8 @@ export default async function ImpostazioniPage() {
           Gestisci le configurazioni di sistema, le quote censimento (standard e scontate fratelli), la sincronizzazione con Google Sheets e la pulizia dei dati.
         </p>
       </div>
+
+      <UserSettings />
 
       <CensimentoSettings
         currentYear={period.currentYear}

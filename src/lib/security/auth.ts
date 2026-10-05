@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getStaffRole, roleAllowed } from './roles'
 
 export class AuthorizationError extends Error {
   constructor(
@@ -10,18 +11,8 @@ export class AuthorizationError extends Error {
   }
 }
 
-function getUserRole(user: { email?: string; app_metadata?: Record<string, unknown> }) {
-  const configuredAdmins = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map(email => email.trim().toLowerCase())
-    .filter(Boolean)
-
-  if (user.email && configuredAdmins.includes(user.email.toLowerCase())) {
-    return 'admin'
-  }
-
-  const role = user.app_metadata?.role
-  return typeof role === 'string' ? role.toLowerCase() : null
+export function getUserRole(user: { email?: string; app_metadata?: Record<string, unknown> }) {
+  return getStaffRole(user, process.env.ADMIN_EMAILS || '')
 }
 
 export async function requireAuthenticatedUser() {
@@ -32,6 +23,7 @@ export async function requireAuthenticatedUser() {
     throw new AuthorizationError('Autenticazione richiesta', 401)
   }
 
+  if (!getUserRole(user)) throw new AuthorizationError('Account non abilitato. Contatta l’amministratore.', 403)
   return user
 }
 
@@ -40,7 +32,7 @@ export async function requireRole(allowedRoles: string[]) {
   const role = getUserRole(user)
   const normalizedRoles = allowedRoles.map(value => value.toLowerCase())
 
-  if (!role || (!normalizedRoles.includes(role) && role !== 'admin')) {
+  if (!roleAllowed(role, normalizedRoles)) {
     throw new AuthorizationError('Permessi insufficienti', 403)
   }
 
