@@ -39,7 +39,7 @@ export default async function DashboardLayout({
   const availableYears = Array.from({ length: last - first + 1 }, (_, index) => `${last - index}-${last - index + 1}`)
 
   return (
-    <AppShell canManageSettings={canManageSystem(getUserRole(user))} selectedYear={selectedYear} availableYears={availableYears}>
+    <AppShell userName={typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim() ? user.user_metadata.name.trim() : user.email?.split('@')[0] || 'Capo'} canManageSettings={canManageSystem(getUserRole(user))} selectedYear={selectedYear} availableYears={availableYears}>
       {children}
     </AppShell>
   )
