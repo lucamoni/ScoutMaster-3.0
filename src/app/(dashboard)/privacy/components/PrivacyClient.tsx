@@ -457,13 +457,13 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-4 md:space-y-6 max-w-7xl mx-auto min-w-0">
       {documentsError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">{documentsError}</p>}
       {/* Intestazione */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <FileText className="w-8 h-8 text-agesci-blue" />
+          <h1 className="text-xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 md:w-8 md:h-8 shrink-0 text-agesci-blue" />
             Documenti & Privacy Reparto
           </h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -484,7 +484,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
 
       {/* KPI Cards Bento Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span>Modulo Privacy</span>
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -497,7 +497,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span>Medica C. Invernale</span>
             <HeartPulse className="w-4 h-4 text-sky-600" />
@@ -510,7 +510,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span>Medica C. Estivo</span>
             <HeartPulse className="w-4 h-4 text-amber-500" />
@@ -523,7 +523,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 md:p-4 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span>Ricevute Censimento</span>
             <FileCheck className="w-4 h-4 text-purple-600" />
@@ -544,17 +544,18 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
           placeholder="Cerca per nome o pattuglia..." 
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          className="pl-9 h-10 bg-white"
+          className="pl-9 h-11 bg-white text-base md:text-sm"
         />
       </div>
       
       {/* Tabella Registri Documenti */}
       <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+        <p className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600 xl:hidden">Scorri verso destra per vedere tutti i documenti e le azioni. Il nome resta sempre visibile.</p>
+        <div className="overflow-x-auto overscroll-x-contain">
+          <table className="w-full min-w-[1120px] border-separate border-spacing-0 text-sm text-left">
             <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200/80">
               <tr>
-                <th className="px-4 py-3 border-r border-slate-200/80">Esploratore / Guida</th>
+                <th className="sticky left-0 z-20 w-36 min-w-36 max-w-36 bg-slate-50 px-3 py-3 border-r border-slate-200/80 shadow-[2px_0_4px_-2px_rgba(15,23,42,0.15)] md:w-48 md:min-w-48 md:max-w-48">Esploratore / Guida</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Privacy</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Part. CI</th>
                 <th className="px-3 py-3 text-center border-r border-slate-200/80 w-24">Medica CI</th>
@@ -574,8 +575,8 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
 
                 return (
                   <tr key={r.id} className={cn("hover:bg-slate-50/80 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/40")}>
-                    <td className="px-4 py-2.5 border-r border-slate-100 font-medium">
-                      <div className="font-semibold text-slate-900">{r.nome} {r.cognome}</div>
+                    <td className="sticky left-0 z-10 w-36 min-w-36 max-w-36 bg-white px-3 py-2.5 border-r border-slate-200 font-medium shadow-[2px_0_4px_-2px_rgba(15,23,42,0.15)] md:w-48 md:min-w-48 md:max-w-48">
+                      <div className="break-words font-semibold text-slate-900">{r.nome} {r.cognome}</div>
                       <div className="text-xs text-slate-500 font-normal">{r.pattuglia || 'Nessuna Pattuglia'}</div>
                     </td>
                     <td className="p-0">{renderCell(r, 'foglio_privacy_firmato')}</td>
@@ -587,13 +588,13 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
                     <td className="p-0">{renderCell(r, 'ricevuta_censimento')}</td>
 
                     {/* Colonna Documenti Personalizzati & Azioni Caricamento AI per Persona */}
-                    <td className="px-3 py-2 border-r border-slate-100">
+                    <td className="min-w-64 px-3 py-2 border-r border-slate-100">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {/* PULSANTE DEDICATO CARICAMENTO AI PER SINGOLO RAGAZZO */}
                         <Button 
                           size="sm" 
                           onClick={() => { setTargetScoutForAi(r); setIsAiUploadOpen(true); }}
-                          className="h-7 text-[11px] bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium px-2.5 shadow-2xs gap-1"
+                          className="h-11 md:h-7 text-xs md:text-[11px] bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium px-2.5 shadow-2xs gap-1"
                         >
                           <Sparkles className="w-3 h-3 text-amber-400" /> Carica / Modifica Doc (AI)
                         </Button>
@@ -635,7 +636,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
                           variant="ghost" 
                           size="sm" 
                           onClick={() => { setTargetRagazzoForDoc(r); setIsAddCustomDocOpen(true); }}
-                          className="h-7 text-[11px] text-agesci-blue hover:bg-sky-50 px-2 font-medium border border-dashed border-sky-300"
+                          className="h-11 md:h-7 text-xs md:text-[11px] text-agesci-blue hover:bg-sky-50 px-2 font-medium border border-dashed border-sky-300"
                         >
                           <Plus className="w-3 h-3 mr-1" /> Doc Specifico
                         </Button>
@@ -647,7 +648,7 @@ export function PrivacyClient({ ragazzi: initialRagazzi, currentYear }: { ragazz
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          className="h-11 w-11 md:h-8 md:w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                           onClick={() => window.open(waLink, '_blank')}
                           title="Invia sollecito documenti su WhatsApp"
                         >

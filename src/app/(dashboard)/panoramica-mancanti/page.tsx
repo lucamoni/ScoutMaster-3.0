@@ -37,7 +37,7 @@ export default async function PanoramicaMancantiPage() {
     .in('anno_scout', annoScoutVariants(currentYear))
 
   return (
-    <div className="p-4 md:p-6 w-full max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Panoramica Mancanti & Debiti</h1>
       </div>

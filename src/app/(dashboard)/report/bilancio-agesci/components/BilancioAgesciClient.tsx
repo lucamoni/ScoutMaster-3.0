@@ -297,10 +297,10 @@ export default function BilancioAgesciClient({
     <div className="space-y-6">
       
       {/* Header Pagina & Selezione Anno Scout */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-card p-6 rounded-xl border shadow-sm">
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-primary">Raccordo Bilancio AGESCI</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-primary">Raccordo Bilancio AGESCI</h1>
             <Badge variant={isAnnoChiuso ? "secondary" : "default"} className={isAnnoChiuso ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-green-600"}>
               {isAnnoChiuso ? <Lock className="h-3 w-3 mr-1" /> : <Unlock className="h-3 w-3 mr-1" />}
               {isAnnoChiuso ? "Anno Scout Chiuso" : "Anno in Corso"}
@@ -311,11 +311,11 @@ export default function BilancioAgesciClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:flex xl:flex-wrap items-center gap-2 w-full xl:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2 xl:w-auto">
             <span className="text-xs font-semibold text-muted-foreground uppercase">Anno Scout:</span>
             <Select value={selectedAnnoScout} onValueChange={(v) => setSelectedAnnoScout(v || '')}>
-              <SelectTrigger className="w-36 font-semibold">
+              <SelectTrigger className="min-h-11 w-full min-w-0 flex-1 text-base font-semibold sm:w-44 sm:flex-none">
                 <SelectValue placeholder="Seleziona..." />
               </SelectTrigger>
               <SelectContent>
@@ -331,7 +331,7 @@ export default function BilancioAgesciClient({
           <Button 
             variant="outline" 
             onClick={handleExportCSV}
-            className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
+            className="min-h-11 w-full xl:w-auto bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" /> Esporta CSV / Excel
           </Button>
@@ -339,7 +339,7 @@ export default function BilancioAgesciClient({
           <Button 
             variant={isAnnoChiuso ? "outline" : "default"}
             onClick={handleToggleChiusuraAnno}
-            className={isAnnoChiuso ? "border-amber-300 text-amber-900 bg-amber-50" : "bg-primary"}
+            className={isAnnoChiuso ? "min-h-11 w-full xl:w-auto border-amber-300 text-amber-900 bg-amber-50" : "min-h-11 w-full xl:w-auto bg-primary"}
           >
             {isAnnoChiuso ? <Unlock className="h-4 w-4 mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
             {isAnnoChiuso ? "Riapri Anno" : "Chiudi Anno Contabile"}
@@ -348,46 +348,46 @@ export default function BilancioAgesciClient({
       </div>
 
       {/* KPI Sintesi Bilancio & Quadratura */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-green-200 bg-green-50/20">
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center justify-between text-green-700">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
+        <Card className="gap-1 py-0 border-green-200 bg-green-50/20">
+          <CardHeader className="gap-1 p-3 md:p-4">
+            <CardDescription className="flex flex-wrap items-center justify-between gap-2 text-green-700">
               Totale Entrate Reparto <TrendingUp className="h-4 w-4 text-green-600" />
             </CardDescription>
-            <CardTitle className="text-2xl font-bold text-green-800">
+            <CardTitle className="text-lg md:text-2xl font-bold tabular-nums text-green-800">
               € {totaleEntrate.toFixed(2)}
             </CardTitle>
           </CardHeader>
         </Card>
 
-        <Card className="border-red-200 bg-red-50/20">
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center justify-between text-red-700">
+        <Card className="gap-1 py-0 border-red-200 bg-red-50/20">
+          <CardHeader className="gap-1 p-3 md:p-4">
+            <CardDescription className="flex flex-wrap items-center justify-between gap-2 text-red-700">
               Totale Uscite Reparto <TrendingDown className="h-4 w-4 text-red-600" />
             </CardDescription>
-            <CardTitle className="text-2xl font-bold text-red-800">
+            <CardTitle className="text-lg md:text-2xl font-bold tabular-nums text-red-800">
               € {totaleUscite.toFixed(2)}
             </CardTitle>
           </CardHeader>
         </Card>
 
-        <Card className={risultatoEsercizio >= 0 ? "border-blue-200 bg-blue-50/20" : "border-amber-200 bg-amber-50/20"}>
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center justify-between text-primary">
+        <Card className={risultatoEsercizio >= 0 ? "gap-1 py-0 border-blue-200 bg-blue-50/20" : "gap-1 py-0 border-amber-200 bg-amber-50/20"}>
+          <CardHeader className="gap-1 p-3 md:p-4">
+            <CardDescription className="flex flex-wrap items-center justify-between gap-2 text-primary">
               Risultato d&apos;Esercizio <Scale className="h-4 w-4" />
             </CardDescription>
-            <CardTitle className={`text-2xl font-bold ${risultatoEsercizio >= 0 ? "text-blue-800" : "text-amber-800"}`}>
+            <CardTitle className={`text-lg md:text-2xl font-bold tabular-nums ${risultatoEsercizio >= 0 ? "text-blue-800" : "text-amber-800"}`}>
               € {risultatoEsercizio.toFixed(2)}
             </CardTitle>
           </CardHeader>
         </Card>
 
-        <Card className={isQuadrato ? "border-emerald-300 bg-emerald-500/10" : "border-amber-300 bg-amber-500/10"}>
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center justify-between font-semibold">
+        <Card className={isQuadrato ? "gap-1 py-0 border-emerald-300 bg-emerald-500/10" : "gap-1 py-0 border-amber-300 bg-amber-500/10"}>
+          <CardHeader className="gap-1 p-3 md:p-4">
+            <CardDescription className="flex flex-wrap items-center justify-between gap-2 font-semibold">
               Quadratura Bilancio <ShieldCheck className={isQuadrato ? "h-4 w-4 text-emerald-600" : "h-4 w-4 text-amber-600"} />
             </CardDescription>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
               <Badge className={isQuadrato ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
                 {isQuadrato ? "QUADRATO" : hasSaldiEffettivi ? "CONTROLLARE" : "SALDI MANCANTI"}
               </Badge>
@@ -400,12 +400,12 @@ export default function BilancioAgesciClient({
       </div>
 
       {/* Sezione Raccordo Voci Piano dei Conti AGESCI */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-5">
         
         {/* ENTRATE AGESCI */}
         <Card className="border-green-200 shadow-sm">
           <CardHeader className="bg-green-50/40 border-b border-green-100">
-            <CardTitle className="text-lg font-bold text-green-900 flex items-center justify-between">
+            <CardTitle className="text-lg font-bold text-green-900 flex flex-wrap items-center justify-between gap-2">
               <span>ENTRATE — Piano dei Conti AGESCI</span>
               <Badge variant="outline" className="border-green-300 text-green-800">
                 Totale: € {totaleEntrate.toFixed(2)}
@@ -420,9 +420,9 @@ export default function BilancioAgesciClient({
               const importo = totaliVoci[voce.codice] || 0
               const isCopied = copiedCode === voce.codice
               return (
-                <div key={voce.codice} className="p-4 flex items-center justify-between hover:bg-muted/10 transition-colors">
-                  <div className="space-y-0.5 max-w-[65%]">
-                    <div className="flex items-center gap-2">
+                <div key={voce.codice} className="p-3 md:p-4 flex flex-wrap items-center justify-between gap-2 hover:bg-muted/10 transition-colors">
+                  <div className="min-w-0 flex-1 basis-48 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-800">
                         {voce.codice}
                       </span>
@@ -431,7 +431,7 @@ export default function BilancioAgesciClient({
                     <p className="text-xs text-muted-foreground line-clamp-1">{voce.descrizione}</p>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-bold text-base text-green-800">
                       € {importo.toFixed(2)}
                     </span>
@@ -439,7 +439,7 @@ export default function BilancioAgesciClient({
                       size="sm" 
                       variant="outline"
                       onClick={() => handleCopyAmount(voce.codice, importo)}
-                      className={`h-8 px-2.5 text-xs border-green-200 ${isCopied ? "bg-green-600 text-white" : "hover:bg-green-100 text-green-800"}`}
+                      className={`min-h-11 px-2.5 text-xs border-green-200 ${isCopied ? "bg-green-600 text-white" : "hover:bg-green-100 text-green-800"}`}
                     >
                       {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
                       {isCopied ? "Copiato" : "Copia"}
@@ -454,7 +454,7 @@ export default function BilancioAgesciClient({
         {/* USCITE AGESCI */}
         <Card className="border-red-200 shadow-sm">
           <CardHeader className="bg-red-50/40 border-b border-red-100">
-            <CardTitle className="text-lg font-bold text-red-900 flex items-center justify-between">
+            <CardTitle className="text-lg font-bold text-red-900 flex flex-wrap items-center justify-between gap-2">
               <span>USCITE — Piano dei Conti AGESCI</span>
               <Badge variant="outline" className="border-red-300 text-red-800">
                 Totale: € {totaleUscite.toFixed(2)}
@@ -469,9 +469,9 @@ export default function BilancioAgesciClient({
               const importo = totaliVoci[voce.codice] || 0
               const isCopied = copiedCode === voce.codice
               return (
-                <div key={voce.codice} className="p-4 flex items-center justify-between hover:bg-muted/10 transition-colors">
-                  <div className="space-y-0.5 max-w-[65%]">
-                    <div className="flex items-center gap-2">
+                <div key={voce.codice} className="p-3 md:p-4 flex flex-wrap items-center justify-between gap-2 hover:bg-muted/10 transition-colors">
+                  <div className="min-w-0 flex-1 basis-48 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-800">
                         {voce.codice}
                       </span>
@@ -480,7 +480,7 @@ export default function BilancioAgesciClient({
                     <p className="text-xs text-muted-foreground line-clamp-1">{voce.descrizione}</p>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-bold text-base text-red-800">
                       € {importo.toFixed(2)}
                     </span>
@@ -488,7 +488,7 @@ export default function BilancioAgesciClient({
                       size="sm" 
                       variant="outline"
                       onClick={() => handleCopyAmount(voce.codice, importo)}
-                      className={`h-8 px-2.5 text-xs border-red-200 ${isCopied ? "bg-red-600 text-white" : "hover:bg-red-100 text-red-800"}`}
+                      className={`min-h-11 px-2.5 text-xs border-red-200 ${isCopied ? "bg-red-600 text-white" : "hover:bg-red-100 text-red-800"}`}
                     >
                       {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
                       {isCopied ? "Copiato" : "Copia"}
@@ -521,9 +521,9 @@ export default function BilancioAgesciClient({
                 <span>Cassa Contanti</span>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-muted-foreground">Saldo Iniziale (01/10):</span>
-                  <div className="flex items-center gap-1 w-32">
+                  <div className="flex shrink-0 items-center gap-1 w-28 sm:w-32">
                     <span className="text-xs font-bold text-muted-foreground">€</span>
                     <Input 
                       type="number"
@@ -532,34 +532,34 @@ export default function BilancioAgesciClient({
                       value={settings[cassaInizialeKey] || ''}
                       onChange={e => handleSaveSaldo(cassaInizialeKey, e.target.value)}
                       placeholder="0.00"
-                      className="h-8 text-right font-mono"
+                      className="min-h-11 text-base text-right font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-green-700">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-green-700">
                   <span>(+) Entrate Contanti:</span>
                   <span className="font-mono font-semibold">+ € {entrateContanti.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between text-red-700 border-b pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-red-700 border-b pb-2">
                   <span>(-) Uscite Contanti:</span>
                   <span className="font-mono font-semibold">- € {usciteContanti.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between text-amber-800">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-amber-800">
                   <span>Movimenti capi fuori bilancio:</span>
                   <span className="font-mono font-semibold">€ {deltaFuoriBilancioCassa.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between pt-1 font-bold text-base">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 font-bold text-base">
                   <span>(=) Saldo Finale Cassa (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleCassa.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between border-t pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
                   <span className="font-semibold">Cassa realmente contata:</span>
-                  <div className="flex items-center gap-1 w-32">
+                  <div className="flex shrink-0 items-center gap-1 w-28 sm:w-32">
                     <span className="text-xs font-bold text-muted-foreground">€</span>
                     <Input
                       type="number"
@@ -568,7 +568,7 @@ export default function BilancioAgesciClient({
                       value={settings[cassaEffettivaKey] || ''}
                       onChange={e => handleSaveSaldo(cassaEffettivaKey, e.target.value)}
                       placeholder="Da verificare"
-                      className="h-8 text-right font-mono"
+                      className="min-h-11 text-base text-right font-mono"
                     />
                   </div>
                 </div>
@@ -582,9 +582,9 @@ export default function BilancioAgesciClient({
                 <span>Banca / Conto Corrente (C/C)</span>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-muted-foreground">Saldo Iniziale (01/10):</span>
-                  <div className="flex items-center gap-1 w-32">
+                  <div className="flex shrink-0 items-center gap-1 w-28 sm:w-32">
                     <span className="text-xs font-bold text-muted-foreground">€</span>
                     <Input 
                       type="number"
@@ -593,34 +593,34 @@ export default function BilancioAgesciClient({
                       value={settings[bancaInizialeKey] || ''}
                       onChange={e => handleSaveSaldo(bancaInizialeKey, e.target.value)}
                       placeholder="0.00"
-                      className="h-8 text-right font-mono"
+                      className="min-h-11 text-base text-right font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-green-700">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-green-700">
                   <span>(+) Entrate Bonifico/Banca:</span>
                   <span className="font-mono font-semibold">+ € {entrateBanca.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between text-red-700 border-b pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-red-700 border-b pb-2">
                   <span>(-) Uscite Bonifico/Carta:</span>
                   <span className="font-mono font-semibold">- € {usciteBanca.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between text-amber-800">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-amber-800">
                   <span>Movimenti capi fuori bilancio:</span>
                   <span className="font-mono font-semibold">€ {deltaFuoriBilancioBanca.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between pt-1 font-bold text-base">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 font-bold text-base">
                   <span>(=) Saldo Finale Banca (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleBanca.toFixed(2)}</span>
                 </div>
 
-                <div className="flex items-center justify-between border-t pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
                   <span className="font-semibold">Saldo da estratto conto:</span>
-                  <div className="flex items-center gap-1 w-32">
+                  <div className="flex shrink-0 items-center gap-1 w-28 sm:w-32">
                     <span className="text-xs font-bold text-muted-foreground">€</span>
                     <Input
                       type="number"
@@ -629,7 +629,7 @@ export default function BilancioAgesciClient({
                       value={settings[bancaEffettivaKey] || ''}
                       onChange={e => handleSaveSaldo(bancaEffettivaKey, e.target.value)}
                       placeholder="Da verificare"
-                      className="h-8 text-right font-mono"
+                      className="min-h-11 text-base text-right font-mono"
                     />
                   </div>
                 </div>
@@ -650,7 +650,7 @@ export default function BilancioAgesciClient({
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {isQuadrato ? (
                 <Badge className="bg-green-600 text-white text-sm py-1 px-3">
                   <Check className="h-4 w-4 mr-1" /> BILANCIO QUADRATO A ZERO

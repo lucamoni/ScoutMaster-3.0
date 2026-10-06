@@ -295,7 +295,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
         <div>
           <h1 className="text-xl font-heading font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Compass className="h-6 w-6 text-agesci-blue" /> Anagrafica & Taccuino Esploratori
+            <Compass className="h-6 w-6 text-agesci-blue" /> Anagrafica e taccuino
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Gestione dati personali, sanitari, squadriglie e sentiero di progressione del Reparto.
@@ -403,6 +403,7 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
 
               {/* Tab 1: Dati & Sanitari */}
               <TabsContent value="anagrafica" className="space-y-4 mt-4">
+                <h3 className="text-sm font-semibold text-agesci-blue">Dati del ragazzo</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Nome *</Label>
@@ -448,7 +449,8 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
                   <label className="space-y-1 text-xs font-semibold">Data di nascita<Input type="date" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.data_nascita} onChange={e => setFormData({...formData, data_nascita: e.target.value})} /></label>
                   <label className="space-y-1 text-xs font-semibold">Residenza<Input type="text" className="h-11 text-base sm:h-9 sm:text-xs" value={formData.residenza} onChange={e => setFormData({...formData, residenza: e.target.value})} /></label>
                 </div>
-                <div className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-2">
+                <h3 className="border-t pt-4 text-sm font-semibold text-agesci-blue">Contatti dei genitori</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-slate-700">Genitore 1 (Nome)</Label>
                     <Input className="h-11 text-base sm:h-9 sm:text-xs rounded-xl" value={formData.genitore_1_nome} onChange={e => setFormData({...formData, genitore_1_nome: e.target.value})} />
@@ -547,8 +549,8 @@ export default function AnagraficaClient({ initialData, initialPattuglie, initia
               </TabsContent>
             </Tabs>
 
-            <Button type="submit" className="w-full h-10 bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium rounded-xl shadow-xs">
-              Salva Scheda Taccuino
+            <Button type="submit" className="sticky bottom-0 z-10 w-full min-h-11 bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium rounded-xl shadow-xs">
+              Salva scheda
             </Button>
           </form>
         </DialogContent>

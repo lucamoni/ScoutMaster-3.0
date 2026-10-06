@@ -20,5 +20,5 @@ export default async function ReminderPage() {
   ])
   if (people.error || events.error || participations.error || quotes.error) return <p role="alert">Impossibile caricare quote, uscite o moduli. Riprova.</p>
   const data = buildReminderPeople(people.data || [], quotes.data || [], events.data || [], participations.data || [], year)
-  return <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6"><div><h1 className="text-2xl font-bold">Reminder</h1><p className="text-sm text-muted-foreground">Anno scout {year.replace('-', '/')} · scegli le voci, modifica il testo e apri WhatsApp.</p></div><ReminderClient key={year} data={data} initialGroupLink={settings?.find(row => row.chiave === 'reminder_link_gruppo')?.valore || ''} /></div>
+  return <div className="mx-auto max-w-7xl space-y-6"><div><h1 className="text-2xl font-bold">Reminder</h1><p className="text-sm text-muted-foreground">Anno scout {year.replace('-', '/')} · scegli le voci, modifica il testo e apri WhatsApp.</p></div><ReminderClient key={year} data={data} initialGroupLink={settings?.find(row => row.chiave === 'reminder_link_gruppo')?.valore || ''} /></div>
 }

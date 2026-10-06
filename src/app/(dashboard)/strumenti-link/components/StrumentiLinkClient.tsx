@@ -218,12 +218,12 @@ export function StrumentiLinkClient() {
   )
 
   return (
-    <div className="p-4 md:p-6 space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Globe className="w-8 h-8 text-agesci-blue" />
+            <Globe className="w-5 h-5 text-agesci-blue" />
             Strumenti & Link Utili
           </h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -248,10 +248,10 @@ export function StrumentiLinkClient() {
       </div>
 
       {/* Grid dei Link */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {filteredLinks.map((link) => (
           <Card key={link.id} className="flex flex-col justify-between border-slate-200/80 shadow-2xs hover:shadow-md transition-all rounded-xl bg-white group">
-            <CardHeader className="p-5 pb-2">
+            <CardHeader className="p-3 pb-0 md:p-4 md:pb-1">
               <div className="flex items-center justify-between">
                 <Badge variant="outline" className="bg-slate-50 text-slate-700 text-xs">
                   {link.categoria}
@@ -285,16 +285,16 @@ export function StrumentiLinkClient() {
                   </Button>
                 </div>
               </div>
-              <CardTitle className="text-base font-bold text-slate-900 mt-3 group-hover:text-agesci-blue transition-colors flex items-center gap-2">
+              <CardTitle className="text-base font-bold text-slate-900 mt-1 md:mt-3 group-hover:text-agesci-blue transition-colors flex items-center gap-2">
                 {link.titolo}
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-5 py-2 flex-1">
+            <CardContent className="px-3 py-1 md:px-4 flex-1">
               <p className="text-xs text-slate-600 leading-relaxed">
                 {link.descrizione}
               </p>
             </CardContent>
-            <CardFooter className="p-5 pt-3 border-t border-slate-100 bg-slate-50/40 rounded-b-xl">
+            <CardFooter className="p-3 pt-2 md:p-4 md:pt-3 border-t border-slate-100 bg-slate-50/40 rounded-b-xl">
               {link.isExternal ? (
                 <Button 
                   onClick={() => window.open(link.url, '_blank')}
