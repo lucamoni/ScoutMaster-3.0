@@ -60,7 +60,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
       if (settingsRes.error) return
       const settings = new Map<string, string | null>((settingsRes.data || []).map(item => [item.chiave, item.valore]))
       const period = getAccountingPeriod(workingYearSettings(settings, selectedYear), getCurrentAnnoScout())
-      const speseRes = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo, riferimento_censimento_anno, voce_spesa')
+      const speseRes = await supabase.from('registro_spese').select('importo, tipo_movimento, metodo, riferimento_censimento_anno, voce_spesa, anticipo_capi_id')
         .gte('data', period.startDate).lte('data', period.endDate)
       if (speseRes.error || !speseRes.data) return
       const balances = calculateAccountingBalances(speseRes.data, period.initialCash, period.initialBank, settings.get(CENSUS_INCOME_SETTING) === 'true')
@@ -92,7 +92,8 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
     {
       groupLabel: 'VITA DI REPARTO',
       links: [
-        { name: 'Anagrafica', href: '/', icon: Users },
+        { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+        { name: 'Anagrafica', href: '/anagrafica', icon: Users },
         { name: 'Panoramica & Bento', href: '/panoramica', icon: LayoutDashboard },
         { name: 'Presenze & Uscite', href: '/uscite', icon: Calendar },
         { name: 'BuonaCaccia', href: '/buonacaccia', icon: Compass },
@@ -104,6 +105,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         { name: 'Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
         { name: 'Spese anticipate e rimborsi', href: '/cassa/rimborsi', icon: Wallet },
+        { name: 'Da restituire alla cassa', href: '/cassa/anticipi-capi', icon: Banknote },
         { name: 'Archivio Scontrini e File', href: '/cassa/archivio', icon: FolderArchive },
         { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: ScanLine },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
@@ -384,10 +386,10 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         </Link>
 
         <Link
-          href="/"
+          href="/anagrafica"
           className={cn(
             "flex flex-1 flex-col items-center justify-center gap-1 touch-min transition-colors",
-            pathname === '/' ? "text-agesci-blue font-bold" : "text-slate-500 hover:text-agesci-blue"
+            pathname === '/anagrafica' ? "text-agesci-blue font-bold" : "text-slate-500 hover:text-agesci-blue"
           )}
         >
           <Users className="h-5 w-5" />

@@ -23,7 +23,7 @@ export function makeSnapshot(boy: Boy, movements: Movement[], year: string, pare
  if (!config.treasurer.trim() || !/^data:image\/(png|jpeg);base64,/.test(config.signature)) throw new Error('Inserisci nome e firma del tesoriere nella sezione Firma')
  if (!movements.length || movements.length>500 || new Set(movements.map(m=>m.id)).size!==movements.length) throw new Error('Seleziona da 1 a 500 movimenti distinti')
  const lines=movements.map(m=> {
-  if (m.tipo_movimento!=='ENTRATA' || m.ragazzo_id!==boy.id || !dateInWorkingYear(m.data,year) || !Number.isFinite(m.importo) || m.importo<=0 || issuedIds.has(m.id)) throw new Error('Movimento non valido, fuori anno o già certificato')
+  if (m.anticipo_capi_id || m.tipo_movimento!=='ENTRATA' || m.ragazzo_id!==boy.id || !dateInWorkingYear(m.data,year) || !Number.isFinite(m.importo) || m.importo<=0 || issuedIds.has(m.id)) throw new Error('Movimento non valido, fuori anno o già certificato')
   return { id:m.id,date:m.data!,amount:Math.round(m.importo*100)/100,method:paymentMethod(m.metodo),sourceMethod:m.metodo || '',category:m.voce_spesa || '',note:m.note || '',period:m.momento_anno || '' }
  }).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id))
  return { year,date,parent,boy:{id:boy.id,name:`${boy.nome} ${boy.cognome}`,cf:boy.codice_fiscale.trim().toUpperCase()},payer:{name:name.trim(),cf,email:(parent===1?boy.genitore_1_email:boy.genitore_2_email)||'',phone:(parent===1?boy.genitore_1_telefono:boy.genitore_2_telefono)||''},lines,total:lines.reduce((sum,l)=>sum+Math.round(l.amount*100),0)/100,treasurer:config.treasurer.trim(),signature:config.signature }

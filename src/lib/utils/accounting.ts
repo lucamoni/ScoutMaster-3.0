@@ -2,6 +2,7 @@ import { normalizeAnnoScout, toCanonicalMetodo } from './payment'
 import { isIncludedInAccounting } from './censusAccounting'
 
 export type AccountingMovement = {
+  anticipo_capi_id?: string | null
   importo: number | null
   metodo: string | null
   tipo_movimento: string | null
@@ -17,6 +18,9 @@ export type AccountingBalances = {
   saldoFinaleCassa: number
   saldoFinaleBanca: number
   saldoFinaleTotale: number
+  deltaFuoriBilancioCassa: number
+  deltaFuoriBilancioBanca: number
+  deltaFuoriBilancioTotale: number
   risultatoEsercizio: number
 }
 
@@ -31,12 +35,21 @@ export function calculateAccountingBalances(
   let entrateBanca = 0
   let usciteBanca = 0
 
+  let deltaFuoriBilancioCassa = 0
+  let deltaFuoriBilancioBanca = 0
+
   for (const movement of movements) {
-    if (!isIncludedInAccounting(movement, includeCensus)) continue
     const importo = Number(movement.importo)
     if (!Number.isFinite(importo) || importo < 0) continue
 
     const isBanca = toCanonicalMetodo(movement.metodo) !== 'Contanti'
+    if (movement.anticipo_capi_id) {
+      const delta = movement.tipo_movimento === 'ENTRATA' ? importo : movement.tipo_movimento === 'USCITA' ? -importo : 0
+      if (isBanca) deltaFuoriBilancioBanca += delta
+      else deltaFuoriBilancioCassa += delta
+      continue
+    }
+    if (!isIncludedInAccounting(movement, includeCensus)) continue
     if (movement.tipo_movimento === 'ENTRATA') {
       if (isBanca) entrateBanca += importo
       else entrateContanti += importo
@@ -46,8 +59,8 @@ export function calculateAccountingBalances(
     }
   }
 
-  const saldoFinaleCassa = saldoInizialeCassa + entrateContanti - usciteContanti
-  const saldoFinaleBanca = saldoInizialeBanca + entrateBanca - usciteBanca
+  const saldoFinaleCassa = saldoInizialeCassa + entrateContanti - usciteContanti + deltaFuoriBilancioCassa
+  const saldoFinaleBanca = saldoInizialeBanca + entrateBanca - usciteBanca + deltaFuoriBilancioBanca
 
   return {
     entrateContanti,
@@ -57,6 +70,9 @@ export function calculateAccountingBalances(
     saldoFinaleCassa,
     saldoFinaleBanca,
     saldoFinaleTotale: saldoFinaleCassa + saldoFinaleBanca,
+    deltaFuoriBilancioCassa,
+    deltaFuoriBilancioBanca,
+    deltaFuoriBilancioTotale: deltaFuoriBilancioCassa + deltaFuoriBilancioBanca,
     risultatoEsercizio: entrateContanti + entrateBanca - usciteContanti - usciteBanca,
   }
 }

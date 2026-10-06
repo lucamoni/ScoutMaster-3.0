@@ -1,7 +1,7 @@
 'use client'
 import {useState,useRef} from 'react'
 import Link from 'next/link'
-import {useRouter} from 'next/navigation'
+import {useRouter,useSearchParams} from 'next/navigation'
 import {toast} from 'sonner'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -16,8 +16,9 @@ const money=(n:number)=>new Intl.NumberFormat('it-IT',{style:'currency',currency
 const dateLabel=(date:string)=>date.split('-').reverse().join('/')
 const nativeSelect='h-11 w-full rounded-lg border bg-white px-3 text-base'
 export default function ReimbursementsClient({year,userId,canValidate,initialRequests,users,categories}:{year:string;userId:string;canValidate:boolean;initialRequests:Reimbursement[];users:StaffOption[];categories:string[]}){
- const router=useRouter(),busyRef=useRef(false)
- const [rows,setRows]=useState(initialRequests),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[filter,setFilter]=useState('DA_RIMBORSARE'),[yearFilter,setYearFilter]=useState('ALL')
+ const router=useRouter(),query=useSearchParams(),busyRef=useRef(false)
+ const initialFilter=query.get('stato');const chosenFilter=initialFilter&&['DA_RIMBORSARE','RIMBORSATO','ANNULLATO','ALL'].includes(initialFilter)?initialFilter:(canValidate?'DA_RIMBORSARE':'ALL')
+ const [rows,setRows]=useState(initialRequests),[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[filter,setFilter]=useState(chosenFilter),[yearFilter,setYearFilter]=useState('ALL')
  const empty=()=>({id:crypto.randomUUID(),date:todayInItaly()>=`${year.slice(0,4)}-10-01`&&todayInItaly()<=`${year.slice(5)}-09-30`?todayInItaly():`${year.slice(5)}-09-30`,amount:'',category:categories[0]||'Altro',period:'ANNO',note:'',beneficiary:userId})
  const [form,setForm]=useState<ReturnType<typeof empty>|null>(null),[file,setFile]=useState<File|null>(null),[action,setAction]=useState<{row:Reimbursement;type:'confirm'|'cancel'}|null>(null),[paymentDate,setPaymentDate]=useState(todayInItaly()),[method,setMethod]=useState('Contanti')
  const refresh=async()=>{const response=await fetch('/api/rimborsi',{cache:'no-store'});const result=await response.json();if(!response.ok)throw Error(result.error||'Impossibile aggiornare l’elenco');setRows(result.requests);router.refresh()}

@@ -36,6 +36,7 @@ export default async function ReportPage() {
       eventi={(eventiRes.data || []).filter(event => dateInWorkingYear(event.data_inizio, currentYear))}
       partecipazioni={partecipazioniRes.data || []}
       cassa={(cassaRes.data || []).filter(movement => isIncludedInAccounting(movement, impostazioni?.find(item => item.chiave === CENSUS_INCOME_SETTING)?.valore === 'true'))}
+      rawCassa={cassaRes.data || []}
       quote={quoteRes.data || []}
       currentYear={currentYear}
     />

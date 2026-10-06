@@ -115,12 +115,13 @@ export default function BilancioAgesciClient({
   const endDate = `${endYear}-09-30`
 
   // Filtra movimenti di cassa per l'anno scout selezionato
-  const speseAnno = initialSpese.filter(s => {
-    if (!isIncludedInAccounting(s, settings[CENSUS_INCOME_SETTING] === 'true')) return false
+  const movimentiAnno = initialSpese.filter(s => {
     if (!s.data) return false
     if (s.tipo_movimento !== 'ENTRATA' && s.tipo_movimento !== 'USCITA') return false
     return s.data >= startDate && s.data <= endDate
   })
+
+  const speseAnno = movimentiAnno.filter(s => isIncludedInAccounting(s, settings[CENSUS_INCOME_SETTING] === 'true'))
 
   // Classifica la spesa/entrata in una voce AGESCI
   const classifySpesa = (spesa: Spesa): string => {
@@ -163,12 +164,15 @@ export default function BilancioAgesciClient({
     saldoFinaleCassa,
     saldoFinaleBanca,
     saldoFinaleTotale,
-  } = calculateAccountingBalances(speseAnno, saldoInizialeCassa, saldoInizialeBanca, settings[CENSUS_INCOME_SETTING] === 'true')
+    deltaFuoriBilancioCassa,
+    deltaFuoriBilancioBanca,
+    deltaFuoriBilancioTotale,
+  } = calculateAccountingBalances(movimentiAnno, saldoInizialeCassa, saldoInizialeBanca, settings[CENSUS_INCOME_SETTING] === 'true')
   const saldoInizialeTotale = saldoInizialeCassa + saldoInizialeBanca
 
   // La quadratura reale confronta il saldo teorico con denaro contato ed
   // estratto conto, non due risultati derivati dagli stessi movimenti.
-  const quadraturaTeorica = saldoInizialeTotale + risultatoEsercizio
+  const quadraturaTeorica = saldoFinaleTotale
   const saldoEffettivoTotale = saldoEffettivoCassa + saldoEffettivoBanca
   const differenzaQuadratura = hasSaldiEffettivi
     ? Math.abs(saldoEffettivoTotale - quadraturaTeorica)
@@ -273,10 +277,10 @@ export default function BilancioAgesciClient({
     csvContent += `;;TOTALE USCITE;${totaleUscite.toFixed(2).replace('.', ',')}\n\n`
 
     csvContent += `--- PROSPETTO RICONCILIAZIONE SALDI ---\n`
-    csvContent += `Conto;Saldo Iniziale (01/10);Entrate;Uscite;Saldo Finale (30/09)\n`
-    csvContent += `Cassa Contanti;${saldoInizialeCassa.toFixed(2).replace('.', ',')};${entrateContanti.toFixed(2).replace('.', ',')};${usciteContanti.toFixed(2).replace('.', ',')};${saldoFinaleCassa.toFixed(2).replace('.', ',')}\n`
-    csvContent += `Banca C/C;${saldoInizialeBanca.toFixed(2).replace('.', ',')};${entrateBanca.toFixed(2).replace('.', ',')};${usciteBanca.toFixed(2).replace('.', ',')};${saldoFinaleBanca.toFixed(2).replace('.', ',')}\n`
-    csvContent += `TOTALE RICONCILIATO;${saldoInizialeTotale.toFixed(2).replace('.', ',')};${totaleEntrate.toFixed(2).replace('.', ',')};${totaleUscite.toFixed(2).replace('.', ',')};${saldoFinaleTotale.toFixed(2).replace('.', ',')}\n`
+    csvContent += `Conto;Saldo Iniziale (01/10);Entrate reparto;Uscite reparto;Delta capi fuori bilancio;Saldo Finale (30/09)\n`
+    csvContent += `Cassa Contanti;${saldoInizialeCassa.toFixed(2).replace('.', ',')};${entrateContanti.toFixed(2).replace('.', ',')};${usciteContanti.toFixed(2).replace('.', ',')};${deltaFuoriBilancioCassa.toFixed(2).replace('.', ',')};${saldoFinaleCassa.toFixed(2).replace('.', ',')}\n`
+    csvContent += `Banca C/C;${saldoInizialeBanca.toFixed(2).replace('.', ',')};${entrateBanca.toFixed(2).replace('.', ',')};${usciteBanca.toFixed(2).replace('.', ',')};${deltaFuoriBilancioBanca.toFixed(2).replace('.', ',')};${saldoFinaleBanca.toFixed(2).replace('.', ',')}\n`
+    csvContent += `TOTALE RICONCILIATO;${saldoInizialeTotale.toFixed(2).replace('.', ',')};${totaleEntrate.toFixed(2).replace('.', ',')};${totaleUscite.toFixed(2).replace('.', ',')};${deltaFuoriBilancioTotale.toFixed(2).replace('.', ',')};${saldoFinaleTotale.toFixed(2).replace('.', ',')}\n`
 
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -543,6 +547,11 @@ export default function BilancioAgesciClient({
                   <span className="font-mono font-semibold">- € {usciteContanti.toFixed(2)}</span>
                 </div>
 
+                <div className="flex items-center justify-between text-amber-800">
+                  <span>Movimenti capi fuori bilancio:</span>
+                  <span className="font-mono font-semibold">€ {deltaFuoriBilancioCassa.toFixed(2)}</span>
+                </div>
+
                 <div className="flex items-center justify-between pt-1 font-bold text-base">
                   <span>(=) Saldo Finale Cassa (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleCassa.toFixed(2)}</span>
@@ -599,6 +608,11 @@ export default function BilancioAgesciClient({
                   <span className="font-mono font-semibold">- € {usciteBanca.toFixed(2)}</span>
                 </div>
 
+                <div className="flex items-center justify-between text-amber-800">
+                  <span>Movimenti capi fuori bilancio:</span>
+                  <span className="font-mono font-semibold">€ {deltaFuoriBilancioBanca.toFixed(2)}</span>
+                </div>
+
                 <div className="flex items-center justify-between pt-1 font-bold text-base">
                   <span>(=) Saldo Finale Banca (30/09):</span>
                   <span className="font-mono text-primary">€ {saldoFinaleBanca.toFixed(2)}</span>
@@ -632,7 +646,7 @@ export default function BilancioAgesciClient({
                 <span>Esito Riconciliazione Saldi Anno Scout {selectedAnnoScout}</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Saldo Iniziale Complessivo (€ {saldoInizialeTotale.toFixed(2)}) + Risultato d&apos;Esercizio (€ {risultatoEsercizio.toFixed(2)}) = Saldo Finale Complessivo (€ {saldoFinaleTotale.toFixed(2)}).
+                Saldo Iniziale Complessivo (€ {saldoInizialeTotale.toFixed(2)}) + Risultato d&apos;Esercizio (€ {risultatoEsercizio.toFixed(2)}) + Movimenti capi fuori bilancio (€ {deltaFuoriBilancioTotale.toFixed(2)}) = Saldo Finale Complessivo (€ {saldoFinaleTotale.toFixed(2)}).
               </p>
             </div>
 

@@ -45,7 +45,7 @@ export function answerFromData(message: string, facts: ScoutBotContext, previous
   }
   if (winter || summer) return `${heading}\nNon risultano eventi ${winter ? 'di campo invernale' : 'di campo estivo'} con una data in questo anno scout. Non posso ricavare presenze o pagamenti senza le registrazioni.`
   if (/\b(saldo|cassa|bilancio|banca|contanti)\b/.test(text)) {
-    return `${heading}\n- Saldo totale: **${euro(facts.cassa.saldoFinaleTotale)}**\n- Contanti: **${euro(facts.cassa.saldoFinaleCassa)}**\n- Banca/carta: **${euro(facts.cassa.saldoFinaleBanca)}**\n- Entrate: **${euro(facts.cassa.entrate)}**\n- Uscite: **${euro(facts.cassa.uscite)}**\nSaldi iniziali inclusi: contanti ${euro(facts.periodo.initialCash)}, banca ${euro(facts.periodo.initialBank)}. Censimento ${facts.cassa.censimento_incluso ? 'incluso' : 'escluso'} dalle entrate.`
+    return `${heading}\n- Saldo totale: **${euro(facts.cassa.saldoFinaleTotale)}**\n- Contanti: **${euro(facts.cassa.saldoFinaleCassa)}**\n- Banca/carta: **${euro(facts.cassa.saldoFinaleBanca)}**\n- Entrate: **${euro(facts.cassa.entrate)}**\n- Uscite: **${euro(facts.cassa.uscite)}**\n${facts.cassa.deltaFuoriBilancioTotale ? `Movimenti capi fuori bilancio: ${euro(facts.cassa.deltaFuoriBilancioTotale)} sul denaro disponibile, esclusi da entrate e uscite del reparto.\n` : ''}Saldi iniziali inclusi: contanti ${euro(facts.periodo.initialCash)}, banca ${euro(facts.periodo.initialBank)}. Censimento ${facts.cassa.censimento_incluso ? 'incluso' : 'escluso'} dalle entrate.`
   }
   if (/eventi|uscite/.test(text) && /quant|qual|elenc|programm|ci sono/.test(text)) {
     const events = /uscite/.test(text) ? facts.eventi.filter(e => e.tipo?.toUpperCase() === 'USCITA') : facts.eventi

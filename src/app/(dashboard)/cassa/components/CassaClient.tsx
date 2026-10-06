@@ -265,7 +265,7 @@ export default function CassaClient({
   const { entrateContanti: saldoEntrateContanti, entrateBanca: saldoEntrateBanca,
     usciteContanti: saldoUsciteContanti, usciteBanca: saldoUsciteBanca,
     saldoFinaleCassa: saldoContanti, saldoFinaleBanca: saldoBanca,
-  } = calculateAccountingBalances(cassaSpese, initialBalances.contanti, initialBalances.banca, includeCensus)
+  } = calculateAccountingBalances(spese, initialBalances.contanti, initialBalances.banca, includeCensus)
 
 
   // Helper per la sincronizzazione inversa da Cassa verso Eventi / Uscite / Partecipazioni
@@ -307,6 +307,7 @@ export default function CassaClient({
   }
 
   const handleUpdateMetodoSpesa = async (spesa: Spesa, newMetodo: string) => {
+    if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
     const safeMetodo = toCanonicalMetodo(newMetodo)
 
     // Ottimistic UI update immediato
@@ -342,6 +343,7 @@ export default function CassaClient({
   }
 
   const saveMovement = async (expense: Spesa | null, file: File | null) => {
+    if (expense?.rimborso_id || expense?.anticipo_capi_id) throw new Error('Gestisci questo movimento dalla sezione rimborsi o spese capi.')
     const amount = Number(formData.importo)
     const movementDate = formData.data || expense?.data || new Date().toISOString().split('T')[0]
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('Inserisci un importo maggiore di zero')
@@ -400,7 +402,7 @@ export default function CassaClient({
   }
 
   const deleteSpesa = async (id: string) => {
-    if (spese.find(s=>s.id===id)?.rimborso_id) { toast.error('Il rimborso validato resta conservato con il suo movimento.'); return }
+    if (spese.some(s=>s.id===id && (s.rimborso_id || s.anticipo_capi_id))) { toast.error('Il movimento resta conservato con il rimborso o la spesa capi collegata.'); return }
     setDeleteFiles(false)
     setDeleteTargets(spese.filter(s => s.id === id))
   }
@@ -548,7 +550,7 @@ export default function CassaClient({
           <DialogFooter><Button variant="outline" disabled={deletingMovements} onClick={() => setDeleteTargets([])}>Annulla</Button><Button variant="destructive" disabled={deletingMovements} onClick={confirmDeleteMovements}>{deletingMovements ? 'Eliminazione…' : 'Conferma eliminazione'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="flex justify-end"><Link href="/cassa/rimborsi" className="inline-flex items-center rounded-lg border px-3 py-2 text-sm">Spese anticipate / rimborsi</Link>
+      <div className="flex flex-wrap justify-end gap-2"><Link href="/cassa/anticipi-capi" className="inline-flex items-center rounded-lg border px-3 py-2 text-sm">Da restituire alla cassa</Link><Link href="/cassa/rimborsi" className="inline-flex items-center rounded-lg border px-3 py-2 text-sm">Spese anticipate / rimborsi</Link>
         <Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> <span className="sm:hidden">Archivio scontrini</span><span className="hidden sm:inline">Archivio scontrini e file</span></Link></div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-4" aria-label="Riepilogo saldi">
         <Card className="col-span-2 gap-1 py-3 md:col-span-1 md:gap-4 md:py-4 bg-purple-50 border-purple-200 shadow-sm">
@@ -967,10 +969,10 @@ export default function CassaClient({
               <TableRow className="h-8">
               <TableHead className="w-8 text-center border-r px-2">
                 <Checkbox 
-                  checked={speseFiltrate.some(s=>!s.rimborso_id) && selectedIds.size === speseFiltrate.filter(s=>!s.rimborso_id).length}
+                  checked={speseFiltrate.some(s=>!s.rimborso_id && !s.anticipo_capi_id) && selectedIds.size === speseFiltrate.filter(s=>!s.rimborso_id && !s.anticipo_capi_id).length}
                   onCheckedChange={(checked) => {
                     if (checked) {
-                      setSelectedIds(new Set(speseFiltrate.filter(s=>!s.rimborso_id).map(s => s.id)))
+                      setSelectedIds(new Set(speseFiltrate.filter(s=>!s.rimborso_id && !s.anticipo_capi_id).map(s => s.id)))
                     } else {
                       setSelectedIds(new Set())
                     }
@@ -993,7 +995,7 @@ export default function CassaClient({
               <TableRow key={spesa.id} className="h-8 border-b">
                 <TableCell className="text-center border-r px-2 py-0">
                   <Checkbox 
-                    disabled={!!spesa.rimborso_id}
+                    disabled={!!(spesa.rimborso_id || spesa.anticipo_capi_id)}
                     checked={selectedIds.has(spesa.id)} 
                     onCheckedChange={(checked) => {
                       const newSet = new Set(selectedIds)
@@ -1037,7 +1039,7 @@ export default function CassaClient({
                   <div className="flex justify-center">
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => {
                       setReceiptFile(null)
-                      if (spesa.rimborso_id) { toast.error('Questo movimento è collegato a un rimborso già validato.'); return }
+                      if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
                       setEditingSpesa(spesa)
                       setFormData({
                         voce_spesa: spesa.voce_spesa || '',
@@ -1102,7 +1104,7 @@ export default function CassaClient({
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 touch-min" onClick={() => {
                     setReceiptFile(null)
-                      if (spesa.rimborso_id) { toast.error('Questo movimento è collegato a un rimborso già validato.'); return }
+                      if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
                       setEditingSpesa(spesa)
                     setFormData({
                       voce_spesa: spesa.voce_spesa || '',
