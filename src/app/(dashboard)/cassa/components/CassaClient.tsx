@@ -376,6 +376,7 @@ export default function CassaClient({
   }
 
   const deleteSpesa = async (id: string) => {
+    if (spese.find(s=>s.id===id)?.rimborso_id) { toast.error('Il rimborso validato resta conservato con il suo movimento.'); return }
     setDeleteFiles(false)
     setDeleteTargets(spese.filter(s => s.id === id))
   }
@@ -522,7 +523,8 @@ export default function CassaClient({
           <DialogFooter><Button variant="outline" disabled={deletingMovements} onClick={() => setDeleteTargets([])}>Annulla</Button><Button variant="destructive" disabled={deletingMovements} onClick={confirmDeleteMovements}>{deletingMovements ? 'Eliminazione…' : 'Conferma eliminazione'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="flex justify-end"><Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> <span className="sm:hidden">Archivio scontrini</span><span className="hidden sm:inline">Archivio scontrini e file</span></Link></div>
+      <div className="flex justify-end"><Link href="/cassa/rimborsi" className="inline-flex items-center rounded-lg border px-3 py-2 text-sm">Spese anticipate / rimborsi</Link>
+        <Link href="/cassa/archivio" className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm"><Paperclip className="h-4 w-4" /> <span className="sm:hidden">Archivio scontrini</span><span className="hidden sm:inline">Archivio scontrini e file</span></Link></div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-4" aria-label="Riepilogo saldi">
         <Card className="col-span-2 gap-1 py-3 md:col-span-1 md:gap-4 md:py-4 bg-purple-50 border-purple-200 shadow-sm">
           <CardHeader className="px-3 md:px-4"><CardTitle className="text-xs md:text-lg text-purple-800">Saldo totale</CardTitle></CardHeader>
@@ -930,10 +932,10 @@ export default function CassaClient({
               <TableRow className="h-8">
               <TableHead className="w-8 text-center border-r px-2">
                 <Checkbox 
-                  checked={speseFiltrate.length > 0 && selectedIds.size === speseFiltrate.length}
+                  checked={speseFiltrate.some(s=>!s.rimborso_id) && selectedIds.size === speseFiltrate.filter(s=>!s.rimborso_id).length}
                   onCheckedChange={(checked) => {
                     if (checked) {
-                      setSelectedIds(new Set(speseFiltrate.map(s => s.id)))
+                      setSelectedIds(new Set(speseFiltrate.filter(s=>!s.rimborso_id).map(s => s.id)))
                     } else {
                       setSelectedIds(new Set())
                     }
@@ -956,6 +958,7 @@ export default function CassaClient({
               <TableRow key={spesa.id} className="h-8 border-b">
                 <TableCell className="text-center border-r px-2 py-0">
                   <Checkbox 
+                    disabled={!!spesa.rimborso_id}
                     checked={selectedIds.has(spesa.id)} 
                     onCheckedChange={(checked) => {
                       const newSet = new Set(selectedIds)
@@ -999,6 +1002,7 @@ export default function CassaClient({
                   <div className="flex justify-center">
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => {
                       setReceiptFile(null)
+                      if (spesa.rimborso_id) { toast.error('Questo movimento è collegato a un rimborso già validato.'); return }
                       setEditingSpesa(spesa)
                       setFormData({
                         voce_spesa: spesa.voce_spesa || '',
@@ -1063,6 +1067,7 @@ export default function CassaClient({
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 touch-min" onClick={() => {
                     setReceiptFile(null)
+                      if (spesa.rimborso_id) { toast.error('Questo movimento è collegato a un rimborso già validato.'); return }
                       setEditingSpesa(spesa)
                     setFormData({
                       voce_spesa: spesa.voce_spesa || '',

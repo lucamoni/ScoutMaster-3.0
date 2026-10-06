@@ -103,6 +103,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
       links: [
         { name: 'Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
+        { name: 'Spese anticipate e rimborsi', href: '/cassa/rimborsi', icon: Wallet },
         { name: 'Archivio Scontrini e File', href: '/cassa/archivio', icon: FolderArchive },
         { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: ScanLine },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },

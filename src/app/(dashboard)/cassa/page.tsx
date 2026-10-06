@@ -1,3 +1,6 @@
+import Link from 'next/link'
+import { freshUser, listRequests } from '@/lib/reimbursements/server'
+import { pendingByUser } from '@/lib/reimbursements/model'
 import { requireAuthenticatedUser, getUserRole } from '@/lib/security/auth'
 import { canManageSystem } from '@/lib/security/roles'
 import { getWorkingYear } from '@/lib/workingYear'
@@ -12,7 +15,7 @@ import { CENSUS_INCOME_SETTING } from '@/lib/utils/censusAccounting'
 export const dynamic = 'force-dynamic'
 
 export default async function CassaPage() {
-  const user = await requireAuthenticatedUser()
+  const user = await freshUser(await requireAuthenticatedUser())
   const supabase = await createClient()
 
   const [{ data: impostazioni }, { data: categorie }] = await Promise.all([
@@ -34,6 +37,8 @@ export default async function CassaPage() {
     return <div>Errore nel caricamento della prima nota.</div>
   }
 
+  const pending = pendingByUser(await listRequests(user))
+  const pendingTotal = pending.reduce((n,item)=>n+item.amount,0)
   const boys = (await getAnnualBoys(currentYear, true)).map(({id,nome,cognome})=>({id,nome,cognome}))
   return (
     <div className="p-3 md:p-6 w-full max-w-7xl mx-auto space-y-3 md:space-y-6">
@@ -43,6 +48,7 @@ export default async function CassaPage() {
           <p className="text-xs md:text-sm text-muted-foreground">Prima nota {currentYear} · 1 ottobre – 30 settembre</p>
         </div>
       </div>
+      <Link href="/cassa/rimborsi" className="block rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><strong>Spese anticipate da rimborsare: {new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(pendingTotal)}</strong><span className="ml-2">Apri richieste →</span><p className="mt-1 text-xs">Tutti gli anni · escluse dai saldi e dalle spese totali fino alla conferma.</p></Link>
       <CassaClient
         key={currentYear}
         canManageSettings={canManageSystem(getUserRole(user))}
