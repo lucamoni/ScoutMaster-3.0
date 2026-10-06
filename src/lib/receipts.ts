@@ -1,3 +1,4 @@
+import { staffFileUrl } from '@/lib/staffAdvances/model'
 import { reimbursementFileUrl } from '@/lib/reimbursements/model'
 import { annualBoyUpdate } from '@/lib/annualRoster/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -40,6 +41,7 @@ export async function removeUnlinkedReceipt(client: Client, value: string) {
 }
 
 export async function removeExpenseReceipt(client: Client, expense: ReceiptExpense, markReceiptAbsent: boolean) {
+  if (expense.rimborso_id || expense.anticipo_capi_id) throw new Error('Gestisci questo movimento dalla sezione rimborsi o spese capi: allegati e movimenti restano conservati.')
   if (!expense.foto_scontrino_url) throw new Error('Nessun allegato da eliminare')
   const { data, error } = await client.from('registro_spese').update({
     foto_scontrino_url: null,
@@ -55,6 +57,7 @@ export async function removeExpenseReceipt(client: Client, expense: ReceiptExpen
 }
 
 export async function deleteExpenseRecord(client: Client, expense: ReceiptExpense, deleteFile: boolean) {
+  if (expense.rimborso_id || expense.anticipo_capi_id) throw new Error('Gestisci questo movimento dalla sezione rimborsi o spese capi: allegati e movimenti restano conservati.')
   let query = client.from('registro_spese').delete().eq('id', expense.id)
   query = expense.foto_scontrino_url === null ? query.is('foto_scontrino_url', null) : query.eq('foto_scontrino_url', expense.foto_scontrino_url)
   const { data, error } = await query.select('id').single()
@@ -143,6 +146,7 @@ export async function uploadReceipt(client: Client, file: File) {
 
 // Roll back only the newly uploaded object; a failed replacement must never remove the old file.
 export async function saveExpenseReceipt(client: Client, expense: ReceiptExpense, file: File) {
+  if (expense.rimborso_id || expense.anticipo_capi_id) throw new Error('Gestisci questo movimento dalla sezione rimborsi o spese capi: allegati e movimenti restano conservati.')
   return withReceiptUpload(client, file, async path => {
     const query = client.from('registro_spese').update({ foto_scontrino_url: path, ricevuta_presente: true }).eq('id', expense.id)
     const guarded = expense.foto_scontrino_url === null
@@ -156,7 +160,7 @@ export async function saveExpenseReceipt(client: Client, expense: ReceiptExpense
 }
 
 export async function downloadReceipt(client: Client, path: string) {
-  const reimbursementUrl = reimbursementFileUrl(path)
+  const reimbursementUrl = reimbursementFileUrl(path) || staffFileUrl(path)
   const result = reimbursementUrl ? await fetch(reimbursementUrl, { cache: 'no-store' }).then(async response => ({ data: response.ok && !response.redirected ? await response.blob() : null, error: !response.ok || response.redirected })) : await client.storage.from(RECEIPT_BUCKET).download(path)
   const { data, error } = result
   if (error || !data) throw new Error('Impossibile scaricare il file. Riprova dopo aver effettuato l’accesso.')

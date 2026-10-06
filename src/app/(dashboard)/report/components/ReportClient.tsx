@@ -21,6 +21,7 @@ export function ReportClient({
   eventi,
   partecipazioni,
   cassa,
+  rawCassa,
   quote,
   currentYear
 }: {
@@ -28,6 +29,7 @@ export function ReportClient({
   eventi: Evento[]
   partecipazioni: Partecipazione[]
   cassa: Spesa[]
+  rawCassa: Spesa[]
   quote: Quota[]
   currentYear: string
 }) {
@@ -131,11 +133,22 @@ export function ReportClient({
     doc.save(`estratto_conto_${r.cognome}_${r.nome}.pdf`)
   }
 
+  const rawMovementRows = () => rawCassa.map(m => ({ ...m, fuori_bilancio: !!m.anticipo_capi_id }))
+  const exportRawCSV = () => {
+    const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rawMovementRows()), { FS: ';' })
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `movimenti_completi_${currentYear}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const exportExcel = () => {
     const wb = XLSX.utils.book_new()
     
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ragazzi), 'Ragazzi')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cassa), 'Cassa')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rawMovementRows()), 'Cassa')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(quote), 'Quote')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(eventi), 'Eventi')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partecipazioni), 'Partecipazioni')
@@ -240,6 +253,7 @@ export function ReportClient({
           >
             <Download className="h-4 w-4" /> Esporta XLSX
           </button>
+          <button onClick={exportRawCSV} className="w-full rounded-md border px-4 py-2 text-sm font-medium">Esporta movimenti completi CSV</button>
         </div>
 
       </div>

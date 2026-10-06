@@ -87,3 +87,29 @@ describe('impostazioni contabili condivise', () => {
     expect(period).toEqual({ currentYear: '2026-2027', startDate: '2026-10-01', endDate: '2027-09-30', initialCash: 0, initialBank: 120 })
   })
 })
+
+
+describe('spese capi fuori bilancio', () => {
+  it('esclude anticipi e restituzioni dal bilancio anche con censimento incluso, ma aggiorna il denaro disponibile', () => {
+    const movements = [
+      { importo: 20, metodo: 'Contanti', tipo_movimento: 'ENTRATA' },
+      { importo: 100, metodo: 'Contanti', tipo_movimento: 'USCITA', anticipo_capi_id: 'advance' },
+      { importo: 40, metodo: 'Bonifico', tipo_movimento: 'ENTRATA', anticipo_capi_id: 'advance' },
+    ]
+    const before = structuredClone(movements)
+    for (const includeCensus of [false, true]) {
+      const b = calculateAccountingBalances(movements, 200, 50, includeCensus)
+      expect(b).toMatchObject({ entrateContanti: 20, usciteContanti: 0, entrateBanca: 0, usciteBanca: 0, risultatoEsercizio: 20, saldoFinaleCassa: 120, saldoFinaleBanca: 90, saldoFinaleTotale: 210, deltaFuoriBilancioCassa: -100, deltaFuoriBilancioBanca: 40, deltaFuoriBilancioTotale: -60 })
+      expect(isIncludedInAccounting(movements[1], includeCensus)).toBe(false)
+      expect(isIncludedInAccounting(movements[2], includeCensus)).toBe(false)
+    }
+    expect(movements).toEqual(before)
+  })
+  it('una restituzione nell’anno successivo recupera il denaro senza generare entrate del reparto', () => {
+    const previous = calculateAccountingBalances([{ importo: 100, metodo: 'Carta', tipo_movimento: 'USCITA', anticipo_capi_id: 'advance' }], 0, 200)
+    const next = calculateAccountingBalances([{ importo: 100, metodo: 'Bonifico', tipo_movimento: 'ENTRATA', anticipo_capi_id: 'advance' }], previous.saldoFinaleCassa, previous.saldoFinaleBanca)
+    expect(next.saldoFinaleTotale).toBe(200)
+    expect(next.risultatoEsercizio).toBe(0)
+    expect(next.entrateBanca).toBe(0)
+  })
+})

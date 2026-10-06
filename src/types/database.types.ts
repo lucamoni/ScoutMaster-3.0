@@ -478,6 +478,9 @@ export type Database = {
         }
         Relationships: []
       }
+      anticipi_capi: { Row: import('@/lib/staffAdvances/model').StaffExpense; Insert: import('@/lib/staffAdvances/model').StaffExpense; Update: Partial<import('@/lib/staffAdvances/model').StaffExpense>; Relationships: [] }
+      quote_anticipi_capi: { Row: import('@/lib/staffAdvances/model').StaffQuota; Insert: import('@/lib/staffAdvances/model').StaffQuota; Update: Partial<import('@/lib/staffAdvances/model').StaffQuota>; Relationships: [] }
+      restituzioni_capi: { Row: import('@/lib/staffAdvances/model').StaffReturn; Insert: import('@/lib/staffAdvances/model').StaffReturn; Update: Partial<import('@/lib/staffAdvances/model').StaffReturn>; Relationships: [] }
       rimborsi: {
         Row: import('@/lib/reimbursements/model').Reimbursement & {file_path:string|null;fingerprint:string;validated_by:string|null;cancelled_by:string|null;cancelled_at:string|null}
         Insert: {id:string;created_by:string;created_by_name:string;beneficiary_id:string;beneficiary_name:string;anno_scout:string;data_spesa:string;importo:number;categoria:string;momento_anno:string;note?:string;file_path?:string|null;file_name?:string|null;fingerprint:string}
@@ -486,6 +489,7 @@ export type Database = {
       }
       registro_spese: {
         Row: {
+          anticipo_capi_id: string | null
           rimborso_id: string | null
           data: string | null
           foto_scontrino_url: string | null
@@ -505,6 +509,7 @@ export type Database = {
           partecipazione_evento_id: string | null
         }
         Insert: {
+          anticipo_capi_id?: string | null
           rimborso_id?: string | null
           data?: string | null
           foto_scontrino_url?: string | null
@@ -524,6 +529,7 @@ export type Database = {
           partecipazione_evento_id?: string | null
         }
         Update: {
+          anticipo_capi_id?: string | null
           rimborso_id?: string | null
           data?: string | null
           foto_scontrino_url?: string | null
@@ -549,6 +555,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_staff_advance: {Args:{p_actor:string;p_actor_name:string;p_expense:Json;p_shares:Json};Returns:string}
+      record_staff_return: {Args:{p_id:string;p_quota:string;p_actor:string;p_actor_name:string;p_amount:number;p_date:string;p_method:string};Returns:string}
       confirm_reimbursement: {Args:{p_id:string;p_actor:string;p_actor_name:string;p_date:string;p_method:string};Returns:string}
 
       reset_year_data: { Args: { p_year: string; p_target: string }; Returns: Json }

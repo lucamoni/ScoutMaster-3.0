@@ -9,7 +9,7 @@ import { workingYearSettings } from '@/lib/utils/workingYear'
 import { getIndividualMonthlyQuotaAmount, getMonthlyQuotaAmount } from '@/lib/utils/monthlyQuota'
 
 type Person = Pick<Tables<'ragazzi'>, 'id' | 'nome' | 'cognome' | 'attivo' | 'pattuglia' | 'quota_censimento' | 'importo_censimento' | 'foglio_privacy_firmato' | 'partecipazione_ci' | 'partecipazione_ce' | 'scheda_medica_ci' | 'scheda_medica_ce'>
-type Movement = Pick<Tables<'registro_spese'>, 'id' | 'data' | 'importo' | 'metodo' | 'tipo_movimento' | 'voce_spesa' | 'momento_anno' | 'note' | 'riferimento_censimento_anno'>
+type Movement = Pick<Tables<'registro_spese'>, 'id' | 'data' | 'importo' | 'metodo' | 'tipo_movimento' | 'voce_spesa' | 'momento_anno' | 'note' | 'riferimento_censimento_anno' | 'anticipo_capi_id'>
 type BcEvent = { id: string; titolo: string; categoria: string | null; data_inizio: string | null; luogo: string | null; costo_evento: number | null }
 type BcEntry = { id: string; evento_id: string; ragazzo_id: string; stato_iscrizione: string | null; quota_pagata: boolean | null }
 
@@ -78,7 +78,7 @@ export async function loadScoutBotContext(client: SupabaseClient<Database>, year
     getAnnualBoys(year,true),
     readAllRows((from, to) => client.from('eventi').select('*').order('id').range(from, to)),
     readAllRows((from, to) => client.from('partecipazioni_eventi').select('*').order('id').range(from, to)),
-    readAllRows((from, to) => client.from('registro_spese').select('id,data,importo,metodo,tipo_movimento,voce_spesa,momento_anno,note,riferimento_censimento_anno').order('id').range(from, to)),
+    readAllRows((from, to) => client.from('registro_spese').select('id,data,importo,metodo,tipo_movimento,voce_spesa,momento_anno,note,riferimento_censimento_anno,anticipo_capi_id').order('id').range(from, to)),
     readAllRows((from, to) => client.from('quote_mensili').select('*').in('anno_scout', annoScoutVariants(year)).order('id').range(from, to)),
     readAllRows<BcEvent>((from, to) => rawClient.from('eventi_buonacaccia').select('id,titolo,categoria,data_inizio,luogo,costo_evento').order('id').range(from, to)),
     readAllRows<BcEntry>((from, to) => rawClient.from('candidature_buonacaccia').select('id,evento_id,ragazzo_id,stato_iscrizione,quota_pagata').order('id').range(from, to)),

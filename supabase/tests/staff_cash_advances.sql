@@ -1,0 +1,37 @@
+BEGIN;
+CREATE TEMP SEQUENCE staff_advance_test_numbers START -1700000000 INCREMENT -1;
+ALTER TABLE public.registro_spese ALTER COLUMN numero_operazione SET DEFAULT pg_catalog.nextval('pg_temp.staff_advance_test_numbers');
+GRANT USAGE,SELECT ON SEQUENCE pg_temp.staff_advance_test_numbers TO service_role;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE actor uuid:=gen_random_uuid(); second_actor uuid:=gen_random_uuid(); req uuid:=gen_random_uuid(); closed_req uuid:=gen_random_uuid(); quota uuid; movement uuid; ret uuid:=gen_random_uuid(); before_count integer; payload jsonb; shares jsonb;
+BEGIN
+ ASSERT NOT has_table_privilege('authenticated','public.anticipi_capi','SELECT'), 'Client can read all staff expenses';
+ ASSERT NOT has_table_privilege('authenticated','public.quote_anticipi_capi','UPDATE'), 'Client can alter debts';
+ ASSERT NOT has_function_privilege('authenticated','public.record_staff_return(uuid,uuid,uuid,text,numeric,date,text)','EXECUTE'), 'Client can fake returns';
+ SELECT count(*) INTO before_count FROM public.registro_spese;
+ payload:=jsonb_build_object('id',req,'anno','1998-1999','data','1999-09-30','descrizione','Cena capi TEST','importo',12.34,'metodo','Contanti','fingerprint','test-staff');
+ shares:=jsonb_build_array(jsonb_build_object('id',actor,'name','Capo A','quota',6.17),jsonb_build_object('id',second_actor,'name','Capo B','quota',6.17));
+ ASSERT public.create_staff_advance(actor,'Tesoriere test',payload,shares)=req;
+ ASSERT public.create_staff_advance(actor,'Tesoriere test',payload,shares)=req;
+ ASSERT (SELECT count(*) FROM public.registro_spese)=before_count+1, 'Retry duplicates cash advance';
+ ASSERT (SELECT count(*) FROM public.quote_anticipi_capi WHERE anticipo_id=req)=2, 'Shares missing';
+ ASSERT (SELECT tipo_movimento='USCITA' AND importo=12.34 AND anticipo_capi_id=req FROM public.registro_spese WHERE id=(SELECT movimento_id FROM public.anticipi_capi WHERE id=req)), 'Physical outgoing missing';
+ SELECT id INTO quota FROM public.quote_anticipi_capi WHERE anticipo_id=req AND staff_id=actor;
+ movement:=public.record_staff_return(ret,quota,actor,'Tesoriere test',2,'1999-10-01','Bonifico');
+ ASSERT public.record_staff_return(ret,quota,actor,'Tesoriere test',2,'1999-10-01','Bonifico')=movement;
+ ASSERT (SELECT count(*) FROM public.registro_spese)=before_count+2, 'Retry duplicates repayment';
+ ASSERT (SELECT tipo_movimento='ENTRATA' AND data='1999-10-01' AND metodo='Bonifico' AND importo=2 AND anticipo_capi_id=req FROM public.registro_spese WHERE id=movement), 'Cross-year partial repayment missing';
+ BEGIN PERFORM public.record_staff_return(gen_random_uuid(),quota,actor,'Tesoriere test',5,'1999-10-01','Contanti'); RAISE EXCEPTION 'Overpayment accepted'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'Importo superiore al residuo o non valido' THEN RAISE;END IF;END;
+ BEGIN UPDATE public.registro_spese SET importo=99 WHERE id=movement;RAISE EXCEPTION 'Movement mutable'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'Movimento fuori bilancio conservato con anticipo e restituzioni' THEN RAISE;END IF;END;
+ PERFORM public.record_staff_return(gen_random_uuid(),quota,actor,'Tesoriere test',4.17,'1999-10-02','Contanti');
+ ASSERT (SELECT sum(importo) FROM public.restituzioni_capi WHERE quota_id=quota)=6.17, 'Partial returns lost';
+ INSERT INTO public.impostazioni(chiave,valore) VALUES('anno_chiuso_1999-2000','true') ON CONFLICT(chiave) DO UPDATE SET valore='true';
+ BEGIN PERFORM public.record_staff_return(gen_random_uuid(),(SELECT id FROM public.quote_anticipi_capi WHERE anticipo_id=req AND staff_id=second_actor),actor,'Tesoriere test',1,'1999-10-03','Contanti');RAISE EXCEPTION 'Closed-year return accepted';EXCEPTION WHEN check_violation THEN NULL;END;
+ ASSERT (SELECT count(*) FROM public.registro_spese)=before_count+3, 'Failed return left ledger rows';
+ payload:=payload||jsonb_build_object('id',closed_req,'anno','1999-2000','data','1999-10-01');
+ BEGIN PERFORM public.create_staff_advance(actor,'Tesoriere test',payload,shares);RAISE EXCEPTION 'Closed-year expense accepted';EXCEPTION WHEN check_violation THEN NULL;END;
+ ASSERT NOT EXISTS(SELECT 1 FROM public.anticipi_capi WHERE id=closed_req), 'Failed expense left debt';
+END $$;
+RESET ROLE;
+ROLLBACK;

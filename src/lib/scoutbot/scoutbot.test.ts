@@ -59,3 +59,10 @@ it('distingue dati vuoti ed esempi parziali da conteggi completi', () => {
   expect(modelContext(context, 'situazione generale').movimenti).toHaveLength(30)
   expect(modelContext(context, 'situazione generale').cassa.movimenti).toBe(60)
 })
+
+it('mantiene anticipi capi nel denaro disponibile, escludendoli dalle spese e spiegando la differenza', () => {
+  const context = facts({movements: [movement('normal'), movement('staff', {importo: 100, anticipo_capi_id: 'advance'})]})
+  expect(context.cassa).toMatchObject({uscite: 10, movimenti: 1, saldoFinaleCassa: 890, deltaFuoriBilancioTotale: -100})
+  expect(context.movimenti).toHaveLength(1)
+  expect(answerFromData('saldo cassa', context)).toContain('Movimenti capi fuori bilancio')
+})

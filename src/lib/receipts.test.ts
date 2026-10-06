@@ -74,3 +74,11 @@ describe('allegati spese', () => {
     expect(storage.remove).toHaveBeenCalledOnce()
   })
 })
+
+
+it('blocca la sostituzione di allegati protetti prima di caricare file o modificare movimenti', async () => {
+  const { client, storage } = mockClient()
+  await expect(saveExpenseReceipt(client, { id: 'staff', anticipo_capi_id: 'advance' } as ReceiptExpense, file)).rejects.toThrow('spese capi')
+  expect(storage.upload).not.toHaveBeenCalled()
+  expect(client.from).not.toHaveBeenCalled()
+})
