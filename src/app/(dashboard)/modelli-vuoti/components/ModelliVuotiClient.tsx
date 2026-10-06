@@ -109,7 +109,7 @@ export function ModelliVuotiClient() {
     finally { setBusy(false) }
   }
 
-  return <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
+  return <div className="mx-auto max-w-5xl space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold">Modelli vuoti e moduli AGESCI</h1><p className="text-sm text-muted-foreground">Carica i tuoi moduli originali e sostituiscili quando hai una versione nuova.</p></div><Button onClick={() => edit(null)}>Aggiungi modulo</Button></div>
     {loading && <p>Caricamento moduli…</p>}{loadError && <p role="alert" className="text-red-700">{loadError}</p>}
     {!loading && !loadError && models.length === 0 && <p className="rounded border border-dashed p-8 text-center">Nessun modulo caricato. Aggiungi il primo file quando sei pronto.</p>}

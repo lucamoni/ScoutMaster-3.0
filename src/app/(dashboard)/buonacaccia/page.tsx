@@ -31,7 +31,7 @@ export default async function BuonacacciaPage() {
   })
 
   return (
-    <div className="p-4 md:p-6 w-full max-w-7xl mx-auto space-y-4">
+    <div className="w-full max-w-7xl mx-auto space-y-4">
       <BuonacacciaClient
         key={currentYear}
         initialEventi={(eventiRes.data as any) || []}

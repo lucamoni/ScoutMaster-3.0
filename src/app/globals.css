@@ -152,3 +152,47 @@
     min-width: 44px;
   }
 }
+
+/* Shared presentation for dashboard pages; business logic stays in the clients. */
+.app-content h1 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  color: var(--color-agesci-blue);
+}
+.app-content [data-slot="tabs-list"] {
+  max-width: 100%;
+  height: auto;
+  min-height: 2.75rem;
+  overflow-x: auto;
+  justify-content: flex-start;
+}
+.app-content [data-slot="tabs-trigger"] {
+  min-height: 2.25rem;
+  padding-inline: .75rem;
+}
+.app-content details > summary:focus-visible {
+  outline: 2px solid var(--color-agesci-blue);
+  outline-offset: 3px;
+}
+@media (min-width: 768px) {
+  .app-content h1 { font-size: 1.75rem; }
+}
+@media (max-width: 767px) {
+  :is(.app-content, [data-slot="dialog-content"]) [data-slot="input"],
+  :is(.app-content, [data-slot="dialog-content"]) textarea,
+  :is(.app-content, [data-slot="dialog-content"]) input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  :is(.app-content, [data-slot="dialog-content"]) [data-slot="button"],
+  :is(.app-content, [data-slot="dialog-content"]) [data-slot="select-trigger"] {
+    min-height: 44px;
+  }
+  :is(.app-content, [data-slot="dialog-content"]) [data-size^="icon"] {
+    min-width: 44px;
+  }
+  .app-content [data-slot="tabs-trigger"] { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-content *, aside * { transition-duration: 0.01ms !important; }
+}

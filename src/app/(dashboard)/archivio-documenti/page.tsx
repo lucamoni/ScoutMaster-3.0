@@ -17,7 +17,7 @@ export default async function ArchivioDocumentiPage() {
   const ragazzi = await getAnnualBoys(currentYear, false)
 
   return <>
-    <div className="mx-auto max-w-7xl px-4 pt-4 md:px-6"><Link href="/cassa/archivio" className="inline-flex rounded-md border bg-white px-4 py-2 text-sm font-medium">Vai all’archivio scontrini e file delle spese →</Link></div>
+    <div className="mx-auto max-w-7xl pb-4"><Link href="/cassa/archivio" className="inline-flex rounded-md border bg-white px-4 py-2 text-sm font-medium">Vai all’archivio scontrini e file delle spese →</Link></div>
     <ArchivioDocumentiClient key={currentYear} currentYear={currentYear} initialRagazzi={ragazzi || []} />
   </>
 }

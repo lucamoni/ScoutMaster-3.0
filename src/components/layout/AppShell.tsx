@@ -16,6 +16,7 @@ import {
   Settings, 
   Menu, 
   X, 
+  ChevronDown,
   ChevronLeft, 
   ChevronRight, 
   LayoutDashboard,
@@ -90,32 +91,32 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
 
   const navGroups = [
     {
-      groupLabel: 'VITA DI REPARTO',
+      groupLabel: 'Reparto',
       links: [
         { name: 'Dashboard', href: '/', icon: LayoutDashboard },
         { name: 'Anagrafica', href: '/anagrafica', icon: Users },
-        { name: 'Panoramica & Bento', href: '/panoramica', icon: LayoutDashboard },
+        { name: 'Panoramica reparto', href: '/panoramica', icon: LayoutDashboard },
         { name: 'Presenze & Uscite', href: '/uscite', icon: Calendar },
+        { name: 'Panoramica mancanti', href: '/panoramica-mancanti', icon: AlertTriangle },
         { name: 'BuonaCaccia', href: '/buonacaccia', icon: Compass },
       ]
     },
     {
-      groupLabel: 'AMMINISTRAZIONE',
+      groupLabel: 'Cassa e pagamenti',
       links: [
-        { name: 'Salda Ora (Pendenze)', href: '/salda-ora', icon: CheckCircle2 },
+        { name: 'Pagamenti da saldare', href: '/salda-ora', icon: CheckCircle2 },
         { name: 'Cassa & Spese', href: '/cassa', icon: Wallet },
         { name: 'Spese anticipate e rimborsi', href: '/cassa/rimborsi', icon: Wallet },
         { name: 'Da restituire alla cassa', href: '/cassa/anticipi-capi', icon: Banknote },
         { name: 'Archivio Scontrini e File', href: '/cassa/archivio', icon: FolderArchive },
-        { name: 'Scansione Scontrini OCR', href: '/cassa/ocr', icon: ScanLine },
+        { name: 'Scansiona scontrino', href: '/cassa/ocr', icon: ScanLine },
         { name: 'Quote Mensili', href: '/quote-mensili', icon: FileSpreadsheet },
         { name: 'Ricevute pagamenti', href: '/ricevute', icon: FileCheck },
         { name: 'Censimento', href: '/censimento', icon: ShieldCheck },
-        { name: 'Panoramica Mancanti', href: '/panoramica-mancanti', icon: AlertTriangle },
       ]
     },
     {
-      groupLabel: 'DOCUMENTI & MODULI',
+      groupLabel: 'Documenti',
       links: [
         { name: 'Documenti & Privacy', href: '/privacy', icon: FileText },
         { name: 'Modelli Vuoti', href: '/modelli-vuoti', icon: FileCheck },
@@ -123,7 +124,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
       ]
     },
     {
-      groupLabel: 'STRUMENTI',
+      groupLabel: 'Organizzazione',
       links: [
         { name: 'Strumenti & Link', href: '/strumenti-link', icon: Globe },
         { name: 'Raccordo Bilancio AGESCI', href: '/report/bilancio-agesci', icon: FileSpreadsheet },
@@ -134,12 +135,16 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
     }
   ]
 
+  const activeHref = navGroups.flatMap(group => group.links)
+    .filter(link => pathname === link.href || (link.href !== '/' && pathname?.startsWith(`${link.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(amount)
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-surface-bg text-slate-900 font-sans">
+    <div className="flex h-dvh w-full overflow-hidden bg-surface-bg text-slate-900 font-sans">
       {/* Desktop Collapsible Sidebar */}
       <aside 
         className={cn(
@@ -159,30 +164,34 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-agesci-blue-light/80 transition-colors"
-            title={collapsed ? "Espandi Sidebar" : "Riduci Sidebar"}
+            aria-label={collapsed ? "Espandi menu laterale" : "Riduci menu laterale"}
+            aria-expanded={!collapsed}
+            title={collapsed ? "Espandi menu laterale" : "Riduci menu laterale"}
           >
             {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Sidebar Nav Items */}
-        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto py-3 px-3 space-y-2 scrollbar-thin">
           {navGroups.map((group, idx) => (
-            <div key={idx} className="space-y-1">
-              {!collapsed && (
-                <div className="px-3 pb-1 text-[10px] font-bold text-slate-300/80 tracking-widest uppercase">
+            <details key={`${pathname}-${collapsed}-${idx}`} open={collapsed || group.links.some(link => link.href === activeHref)} className="group/nav space-y-1">
+                <summary className={cn("cursor-pointer list-none items-center justify-between rounded-lg px-3 py-3 text-xs font-semibold text-slate-300 hover:bg-agesci-blue-light focus-visible:outline-2 focus-visible:outline-scout-gold [&::-webkit-details-marker]:hidden", collapsed ? "hidden" : "flex")}>
                   {group.groupLabel}
-                </div>
-              )}
+                  <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform group-open/nav:rotate-180" />
+                </summary>
               <div className="space-y-1">
                 {group.links.map((link) => {
-                  const isActive = pathname === link.href || (link.href !== '/' && pathname?.startsWith(link.href))
+                  const isActive = activeHref === link.href
                   const Icon = link.icon
 
                   return (
                     <Link
                       key={link.href}
                       href={link.href}
+                      aria-label={link.name}
+                      aria-current={isActive ? 'page' : undefined}
+                      title={collapsed ? link.name : undefined}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative",
                         isActive 
@@ -195,7 +204,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
                         isActive ? "text-scout-gold" : "text-slate-300"
                       )} />
                       {!collapsed && (
-                        <span className="truncate">{link.name}</span>
+                        <span className="leading-snug">{link.name}</span>
                       )}
                       {collapsed && (
                         <div className="absolute left-full rounded-md px-2 py-1 ml-2 bg-slate-900 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-md">
@@ -206,7 +215,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
                   )
                 })}
               </div>
-            </div>
+            </details>
           ))}
         </div>
 
@@ -249,7 +258,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           {/* Center/Right Anno Scout Selector */}
           <div className="flex items-center gap-3 ml-auto md:ml-0">
             <div className="relative inline-flex items-center">
-              <select aria-label="Anno scout di lavoro" title="Cambia anno scout" value={annoScout} className="text-agesci-blue font-semibold text-xs md:text-sm bg-slate-100 px-3 py-1.5 rounded-lg" onChange={event => {
+              <select aria-label="Anno scout di lavoro" title="Cambia anno scout" value={annoScout} className="text-agesci-blue font-semibold text-base md:text-sm bg-slate-100 min-h-11 px-3 py-1.5 rounded-lg" onChange={event => {
                 document.cookie = `${WORKING_YEAR_COOKIE}=${encodeURIComponent(event.target.value)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`
                 window.location.reload()
               }}>
@@ -259,13 +268,13 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           </div>
 
           {/* Indicatori Cassa Live (Mini-Widget con Icone Premium) */}
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             <Link href="/cassa" className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/90 px-3 py-1.5 rounded-lg transition-colors text-xs shadow-2xs group">
               <Banknote className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
               <span className="font-medium text-slate-600">Cassa:</span>
               <span className="font-bold tabular-nums text-emerald-900">{formatCurrency(saldi.cassa)}</span>
             </Link>
-            <Link href="/cassa" className="flex items-center gap-2 bg-sky-50 hover:bg-sky-100/80 text-sky-800 border border-sky-200/90 px-3 py-1.5 rounded-full transition-all text-xs shadow-2xs group">
+            <Link href="/cassa" className="flex items-center gap-2 bg-sky-50 hover:bg-sky-100/80 text-sky-800 border border-sky-200/90 px-3 py-1.5 rounded-lg transition-colors text-xs shadow-2xs group">
               <Landmark className="h-4 w-4 text-sky-600 group-hover:scale-110 transition-transform" />
               <span className="font-medium text-slate-600">Banca:</span>
               <span className="font-bold tabular-nums text-sky-900">{formatCurrency(saldi.banca)}</span>
@@ -274,7 +283,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-6 p-4 md:p-6 bg-surface-bg">
+        <main className="app-content flex-1 overflow-y-auto pb-24 md:pb-8 p-4 md:p-6 bg-surface-bg">
           {children}
         </main>
       </div>
@@ -291,6 +300,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
               <ScoutMasterLogo className="h-8 w-auto" theme="dark" />
               <button 
                 onClick={() => setMobileMenuOpen(false)}
+                aria-label="Chiudi menu"
                 className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-agesci-blue-light touch-min flex items-center justify-center"
               >
                 <X className="h-6 w-6" />
@@ -314,21 +324,23 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
               </div>
             </div>
 
-            <div className="p-4 space-y-6 flex-1">
+            <div className="p-4 space-y-2 flex-1">
               {navGroups.map((group, idx) => (
-                <div key={idx} className="space-y-2">
-                  <div className="text-[11px] font-bold text-slate-400 tracking-widest uppercase">
+                <details key={`${pathname}-${idx}`} open={group.links.some(link => link.href === activeHref)} className="group/nav space-y-2">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg px-3 text-sm font-semibold text-slate-300 hover:bg-agesci-blue-light [&::-webkit-details-marker]:hidden">
                     {group.groupLabel}
-                  </div>
+                    <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform group-open/nav:rotate-180" />
+                  </summary>
                   <div className="space-y-1">
                     {group.links.map((link) => {
-                      const isActive = pathname === link.href || (link.href !== '/' && pathname?.startsWith(link.href))
+                      const isActive = activeHref === link.href
                       const Icon = link.icon
 
                       return (
                         <Link
                           key={link.href}
                           href={link.href}
+                          aria-current={isActive ? 'page' : undefined}
                           onClick={() => setMobileMenuOpen(false)}
                           className={cn(
                             "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors touch-min",
@@ -343,7 +355,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
                       )
                     })}
                   </div>
-                </div>
+                </details>
               ))}
             </div>
           </div>
@@ -360,7 +372,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           )}
         >
           <Calendar className="h-5 w-5" />
-          <span className="text-[10px] leading-none">Presenze</span>
+          <span className="text-[11px] leading-none">Presenze</span>
         </Link>
         
         <Link
@@ -370,19 +382,19 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
             pathname === '/salda-ora' ? "text-emerald-600 font-bold" : "text-slate-500 hover:text-emerald-600"
           )}
         >
-          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          <span className="text-[10px] leading-none font-bold text-emerald-700">Salda Ora</span>
+          <CheckCircle2 className="h-5 w-5" />
+          <span className="text-[11px] leading-none">Salda Ora</span>
         </Link>
 
         <Link
           href="/cassa"
           className={cn(
             "flex flex-1 flex-col items-center justify-center gap-1 touch-min transition-colors",
-            pathname === '/cassa' ? "text-agesci-blue font-bold" : "text-slate-500 hover:text-agesci-blue"
+            pathname?.startsWith('/cassa') ? "text-agesci-blue font-bold" : "text-slate-500 hover:text-agesci-blue"
           )}
         >
           <Wallet className="h-5 w-5" />
-          <span className="text-[10px] leading-none">Cassa</span>
+          <span className="text-[11px] leading-none">Cassa</span>
         </Link>
 
         <Link
@@ -393,7 +405,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           )}
         >
           <Users className="h-5 w-5" />
-          <span className="text-[10px] leading-none">Ragazzi</span>
+          <span className="text-[11px] leading-none">Ragazzi</span>
         </Link>
 
         <button
@@ -401,7 +413,7 @@ export function AppShell({ children, selectedYear, availableYears, canManageSett
           className="flex flex-1 flex-col items-center justify-center gap-1 touch-min text-slate-500 hover:text-agesci-blue transition-colors"
         >
           <Menu className="h-5 w-5" />
-          <span className="text-[10px] leading-none">Menu</span>
+          <span className="text-[11px] leading-none">Menu</span>
         </button>
       </nav>
 

@@ -227,11 +227,11 @@ export function PanoramicaClient({
   return (
     <div className="space-y-6">
       {/* Bento Grid Header Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         
         {/* Widget 1: Prossima Uscita / Evento */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute top-0 right-0 hidden md:block p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Calendar className="h-24 w-24 text-agesci-blue" />
           </div>
           <div>
@@ -269,7 +269,7 @@ export function PanoramicaClient({
         </div>
 
         {/* Widget 2: Stato Quote & Debiti */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 flex items-center gap-1">
@@ -315,7 +315,7 @@ export function PanoramicaClient({
         </div>
 
         {/* Widget 3: Quick Stats & Anno Scout */}
-        <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-agesci-blue to-agesci-blue-light text-white p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
+        <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-agesci-blue to-agesci-blue-light text-white p-3 sm:p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-scout-gold uppercase tracking-wider bg-white/10 px-2.5 py-1 rounded-full border border-white/10 backdrop-blur-xs flex items-center gap-1">

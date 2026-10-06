@@ -32,36 +32,81 @@ export default async function ImpostazioniPage() {
   const period = getAccountingPeriod(workingYearSettings(new Map(Object.entries(settings)), await getWorkingYear(settings.anno_scout_corrente)), getCurrentAnnoScout())
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-5">
       <div>
-        <h1 className="text-3xl font-bold text-primary">Impostazioni Globali</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-xl md:text-2xl font-bold text-primary">Impostazioni Globali</h1>
+        <p className="text-sm text-muted-foreground mt-1">
           Gestisci le configurazioni di sistema, le quote censimento (standard e scontate fratelli), la sincronizzazione con Google Sheets e la pulizia dei dati.
         </p>
       </div>
 
-      <UserSettings />
-      <RosterSettings key={period.currentYear} currentYear={period.currentYear} />
+      <div className="space-y-2">
+        <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Utenti e accessi
+          </summary>
+          <div className="border-t p-3 md:p-4">
+            <UserSettings />
+          </div>
+        </details>
 
-      <CensimentoSettings key={period.currentYear}
-        currentYear={period.currentYear}
-        initialCensimentoStandard={settings.quota_censimento_standard || '45'}
-        initialCensimentoFratelli={settings.quota_censimento_fratelli || '35'}
-        initialMensileStandard={String(getMonthlyQuotaAmount(new Map(Object.entries(settings)), period.currentYear))}
-        initialSaldoContanti={String(period.initialCash)}
-        initialSaldoBanca={String(period.initialBank)}
-      />
+        <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Importa ed esporta anagrafiche
+          </summary>
+          <div className="border-t p-3 md:p-4">
+            <RosterSettings key={period.currentYear} currentYear={period.currentYear} />
+          </div>
+        </details>
 
-      <AuditSettings />
+        <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Quote e saldi iniziali
+          </summary>
+          <div className="border-t p-3 md:p-4">
+            <CensimentoSettings key={period.currentYear}
+              currentYear={period.currentYear}
+              initialCensimentoStandard={settings.quota_censimento_standard || '45'}
+              initialCensimentoFratelli={settings.quota_censimento_fratelli || '35'}
+              initialMensileStandard={String(getMonthlyQuotaAmount(new Map(Object.entries(settings)), period.currentYear))}
+              initialSaldoContanti={String(period.initialCash)}
+              initialSaldoBanca={String(period.initialBank)}
+            />
+          </div>
+        </details>
 
-      <SheetsSettings 
-        initialSpreadsheetId={settings.spreadsheet_id || ''}
-        initialSheetName={settings.sheet_name || 'Foglio1'}
-        initialSheetNameSpese={settings.sheet_name_spese || 'SPESE'}
-        initialAnnoScout={period.currentYear}
-      />
+        <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Controllo e riconciliazione
+          </summary>
+          <div className="border-t p-3 md:p-4">
+            <AuditSettings />
+          </div>
+        </details>
 
-      <DataResetSettings currentYear={period.currentYear} />
+        <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Importazione da Google Sheets
+          </summary>
+          <div className="border-t p-3 md:p-4">
+            <SheetsSettings
+              initialSpreadsheetId={settings.spreadsheet_id || ''}
+              initialSheetName={settings.sheet_name || 'Foglio1'}
+              initialSheetNameSpese={settings.sheet_name_spese || 'SPESE'}
+              initialAnnoScout={period.currentYear}
+            />
+          </div>
+        </details>
+
+        <details className="rounded-xl border border-destructive/30 bg-card">
+          <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+            Pulizia dei dati dell’anno
+          </summary>
+          <div className="border-t p-3 md:p-4">
+            <DataResetSettings currentYear={period.currentYear} />
+          </div>
+        </details>
+      </div>
     </div>
   )
 }

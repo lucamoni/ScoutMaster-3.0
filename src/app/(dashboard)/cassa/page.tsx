@@ -42,7 +42,7 @@ export default async function CassaPage() {
   const pendingTotal = pending.reduce((n,item)=>n+item.amount,0)
   const boys = (await getAnnualBoys(currentYear, true)).map(({id,nome,cognome})=>({id,nome,cognome}))
   return (
-    <div className="p-3 md:p-6 w-full max-w-7xl mx-auto space-y-3 md:space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-3 md:space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cassa & Saldi</h1>

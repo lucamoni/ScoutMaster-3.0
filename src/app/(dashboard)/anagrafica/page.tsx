@@ -16,10 +16,7 @@ export default async function AnagraficaPage() {
     .order('nome', { ascending: true })
 
   return (
-    <div className="p-4 md:p-6 w-full max-w-7xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Anagrafica Reparto</h1>
-      </div>
+    <div className="w-full max-w-7xl mx-auto space-y-4">
       <AnagraficaClient key={currentYear} currentYear={currentYear} initialData={ragazzi || []} initialPattuglie={pattuglie || []} />
     </div>
   )

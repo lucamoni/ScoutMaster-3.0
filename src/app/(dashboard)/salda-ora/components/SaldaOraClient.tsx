@@ -395,36 +395,31 @@ export default function SaldaOraClient({
   const squadriglieNomi = Array.from(new Set(ragazzi.map(r => r.pattuglia).filter(Boolean))) as string[]
 
   return (
-    <div className="min-h-screen bg-[#071930] text-slate-100 p-4 md:p-8 space-y-6 font-sans">
+    <div className="mx-auto w-full max-w-7xl bg-slate-50/60 text-slate-900 space-y-4 font-sans">
       {/* Top Header & Controlli */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0d2647] p-5 rounded-2xl border border-slate-700/60 shadow-lg">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <div className="flex items-center gap-2">
-            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-bold uppercase tracking-wider">
-              1-Click Fast Clear
-            </Badge>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white mt-1">Salda Ora</h1>
-          <p className="text-xs text-slate-300">Gestisci rapidamente le pendenze di ogni esploratore e salda in 1-tap</p>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-primary">Salda Ora</h1>
+          <p className="text-sm text-slate-600">Gestisci rapidamente le pendenze di ogni esploratore e salda in 1-tap</p>
         </div>
 
         {/* Toolbar Cerca & Filtri */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
             <Input 
               placeholder="Cerca esploratore..." 
               value={searchTerm} 
               onChange={e => setSearchTerm(e.target.value)} 
-              className="h-9 text-xs pl-9 w-48 bg-[#091e3a] border-slate-700 text-white placeholder:text-slate-400 rounded-xl focus:border-emerald-500"
+              className="min-h-11 text-base pl-9 w-full lg:w-56 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-lg focus:border-primary"
             />
           </div>
 
           <Select value={filterPattuglia} onValueChange={(v) => setFilterPattuglia(v || 'TUTTE')}>
-            <SelectTrigger className="h-9 text-xs w-40 bg-[#091e3a] border-slate-700 text-white rounded-xl">
+            <SelectTrigger className="min-h-11 text-base w-full lg:w-48 bg-white border-slate-200 text-slate-900 rounded-lg">
               <SelectValue placeholder="Tutte le Squadriglie" />
             </SelectTrigger>
-            <SelectContent className="bg-[#0d2647] border-slate-700 text-white">
+            <SelectContent className="bg-white border-slate-200 text-slate-900">
               <SelectItem value="TUTTE" className="text-xs">Tutte le Squadriglie</SelectItem>
               {squadriglieNomi.map(sq => (
                 <SelectItem key={sq} value={sq} className="text-xs">{sq}</SelectItem>
@@ -435,7 +430,7 @@ export default function SaldaOraClient({
       </div>
 
       {/* Lista Squadriglie con Card Esploratori */}
-      <div className="space-y-8">
+      <div className="space-y-4">
         {(filterPattuglia === 'TUTTE' ? squadriglieNomi : [filterPattuglia]).map(sqNome => {
           const membriSquadriglia = ragazziFiltrati.filter(r => r.pattuglia === sqNome)
           if (membriSquadriglia.length === 0) return null
@@ -443,18 +438,18 @@ export default function SaldaOraClient({
           return (
             <div key={sqNome} className="space-y-3">
               {/* Intestazione Squadriglia (es. CORMORANI - 5 membri) */}
-              <div className="flex items-center justify-between bg-[#0a213f]/80 px-4 py-2.5 rounded-xl border border-slate-700/50">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-blue-50/70 px-3 py-2.5 rounded-lg border border-blue-100">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-emerald-400" />
-                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-100">{sqNome}</h2>
+                  <Users className="h-4 w-4 text-primary" />
+                  <h2 className="text-sm font-bold uppercase tracking-wide text-primary">{sqNome}</h2>
                 </div>
-                <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-xs font-semibold px-2.5">
+                <Badge className="bg-white text-slate-600 border-slate-200 text-xs font-semibold px-2.5">
                   {membriSquadriglia.length} membri
                 </Badge>
               </div>
 
               {/* Grid Card Esploratori */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {membriSquadriglia.map(ragazzo => {
                   const debt = computeBoyDebt(ragazzo)
                   const hasDebt = debt.totalDebt > 0
@@ -466,7 +461,7 @@ export default function SaldaOraClient({
                     <div 
                       key={ragazzo.id} 
                       className={cn(
-                        "rounded-2xl p-4 transition-all duration-200 border shadow-md space-y-3 flex flex-col justify-between",
+                        "rounded-xl p-3 md:p-4 transition-colors border shadow-sm space-y-3 flex flex-col justify-between",
                         hasDebt 
                           ? "bg-white text-slate-900 border-slate-200" 
                           : "bg-white/95 text-slate-900 border-slate-200 opacity-90"
@@ -477,7 +472,7 @@ export default function SaldaOraClient({
                         <div className="flex items-center gap-3">
                           {/* Circle Avatar */}
                           <div className={cn(
-                            "h-12 w-12 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-md shrink-0",
+                            "h-9 w-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0",
                             hasDebt ? "bg-rose-500" : "bg-emerald-600"
                           )}>
                             {initials}
@@ -550,7 +545,7 @@ export default function SaldaOraClient({
                               variant="outline"
                               size="sm"
                               onClick={() => openGestisciModal(ragazzo)}
-                              className="w-full h-10 text-xs font-bold text-sky-600 border-sky-300 hover:bg-sky-50 rounded-xl gap-1.5"
+                              className="w-full min-h-11 text-sm font-bold text-sky-600 border-sky-300 hover:bg-sky-50 rounded-xl gap-1.5"
                             >
                               <CreditCard className="h-4 w-4 text-sky-600" /> Gestisci Pagamenti
                             </Button>
@@ -559,7 +554,7 @@ export default function SaldaOraClient({
                               size="sm"
                               disabled={isBoyLoading}
                               onClick={() => handleSaldaTutto(ragazzo)}
-                              className="w-full h-11 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md gap-1.5 active:scale-95 transition-all"
+                              className="w-full min-h-11 text-sm font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm gap-1.5 transition-colors"
                             >
                               {isBoyLoading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -588,7 +583,7 @@ export default function SaldaOraClient({
       {/* Modal / Bottom-Sheet Gestisci Pagamenti Puntuali */}
       {selectedBoyForModal && (
         <Dialog open={!!selectedBoyForModal} onOpenChange={(open) => !open && setSelectedBoyForModal(null)}>
-          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto bg-white text-slate-900 rounded-2xl p-6">
+          <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto bg-white text-slate-900 rounded-xl p-4 md:p-6">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-sky-600" /> Gestisci Pendenze per {selectedBoyForModal.nome} {selectedBoyForModal.cognome}
@@ -599,7 +594,7 @@ export default function SaldaOraClient({
               <div className="mb-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <label className="text-xs font-bold text-slate-800">Metodo di pagamento</label>
                 <Select value={modalSelections.metodo} onValueChange={(value) => setModalSelections(prev => ({ ...prev, metodo: (value as 'Contanti' | 'Bonifico') || 'Contanti' }))}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="min-h-11 text-base"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Contanti">Contanti</SelectItem>
                     <SelectItem value="Bonifico">Bonifico / Carta</SelectItem>
@@ -610,7 +605,7 @@ export default function SaldaOraClient({
               
               {/* Sezione Censimento */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
                   <Checkbox 
                     checked={modalSelections.censimento} 
                     onCheckedChange={(c) => setModalSelections(prev => ({ ...prev, censimento: c === true }))}
@@ -636,7 +631,7 @@ export default function SaldaOraClient({
                           }))
                         }}
                         className={cn(
-                          "px-2 py-1.5 rounded-lg text-[11px] font-bold border transition-colors",
+                          "min-h-11 px-2 py-1.5 rounded-lg text-xs font-bold border transition-colors",
                           isUnpaid 
                             ? "bg-rose-100 text-rose-800 border-rose-300" 
                             : "bg-emerald-100 text-emerald-800 border-emerald-300"
@@ -657,7 +652,7 @@ export default function SaldaOraClient({
                     {eventi.map(ev => {
                       const isUnpaid = modalSelections.eventi.includes(ev.id)
                       return (
-                        <label key={ev.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs cursor-pointer">
+                        <label key={ev.id} className="flex min-h-11 items-center justify-between gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs cursor-pointer">
                           <div className="flex items-center gap-2">
                             <Checkbox 
                               checked={isUnpaid}
@@ -680,10 +675,10 @@ export default function SaldaOraClient({
             </div>
 
             <DialogFooter className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setSelectedBoyForModal(null)} className="h-10 text-xs rounded-xl">
+              <Button variant="outline" size="sm" onClick={() => setSelectedBoyForModal(null)} className="min-h-11 text-sm rounded-lg">
                 Annulla
               </Button>
-              <Button size="sm" onClick={handleSaveModalSelections} className="h-10 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+              <Button size="sm" onClick={handleSaveModalSelections} className="min-h-11 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
                 Salva Modifiche
               </Button>
             </DialogFooter>

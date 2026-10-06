@@ -523,11 +523,11 @@ export default function UsciteClient({
   const visibleEventiIds = eventi.map(e => e.id)
 
   return (
-    <div className="space-y-4 p-4 md:p-6 flex flex-col h-[calc(100vh-3.5rem)]">
+    <div className="space-y-4 flex flex-col">
       {/* Intestazione e Controlli Globali in Aggregato */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 bg-muted/40 p-4 rounded-xl border">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 bg-white p-3 sm:p-4 rounded-xl border">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Presenze & Quote Uscite</h1>
+          <h1 className="text-xl font-bold tracking-tight">Presenze e quote uscite</h1>
           <p className="text-xs text-muted-foreground">Gestisci presenze, quote e metodo di pagamento (con quote ridotte per Pendolari)</p>
         </div>
 
@@ -672,7 +672,7 @@ export default function UsciteClient({
       </div>
 
       {/* Griglia Tabellare Desktop */}
-      <div className="hidden md:block rounded-2xl border border-slate-200/80 bg-white flex-1 overflow-auto relative shadow-2xs">
+      <div className="hidden md:block max-h-[calc(100dvh-18rem)] min-h-64 rounded-2xl border border-slate-200/80 bg-white overflow-auto relative shadow-2xs">
         <table className="w-full text-xs text-left border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200/80 sticky top-0 z-10 shadow-2xs">
             <tr>
