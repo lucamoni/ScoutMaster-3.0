@@ -478,8 +478,15 @@ export type Database = {
         }
         Relationships: []
       }
+      rimborsi: {
+        Row: import('@/lib/reimbursements/model').Reimbursement & {file_path:string|null;fingerprint:string;validated_by:string|null;cancelled_by:string|null;cancelled_at:string|null}
+        Insert: {id:string;created_by:string;created_by_name:string;beneficiary_id:string;beneficiary_name:string;anno_scout:string;data_spesa:string;importo:number;categoria:string;momento_anno:string;note?:string;file_path?:string|null;file_name?:string|null;fingerprint:string}
+        Update: {stato?:string;cancelled_by?:string;cancelled_at?:string}
+        Relationships: []
+      }
       registro_spese: {
         Row: {
+          rimborso_id: string | null
           data: string | null
           foto_scontrino_url: string | null
           id: string
@@ -498,6 +505,7 @@ export type Database = {
           partecipazione_evento_id: string | null
         }
         Insert: {
+          rimborso_id?: string | null
           data?: string | null
           foto_scontrino_url?: string | null
           id?: string
@@ -516,6 +524,7 @@ export type Database = {
           partecipazione_evento_id?: string | null
         }
         Update: {
+          rimborso_id?: string | null
           data?: string | null
           foto_scontrino_url?: string | null
           id?: string
@@ -540,6 +549,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      confirm_reimbursement: {Args:{p_id:string;p_actor:string;p_actor_name:string;p_date:string;p_method:string};Returns:string}
+
       reset_year_data: { Args: { p_year: string; p_target: string }; Returns: Json }
       ensure_roster_year: { Args: { p_year: string }; Returns: number }
       write_annual_boy: { Args: { p_year: string; p_id: string | null; p_changes: Json; p_census_method?: string; p_census_date?: string }; Returns: Json }

@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Camera, Paperclip, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-export function ReceiptFilePicker({ file, onChange, disabled = false }: {
-  file: File | null; onChange: (file: File | null) => void; disabled?: boolean
+export function ReceiptFilePicker({ file, onChange, disabled = false, description }: {
+  file: File | null; onChange: (file: File | null) => void; disabled?: boolean; description?: string
 }) {
   const id = useId()
   const choose = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -31,7 +31,7 @@ export function ReceiptFilePicker({ file, onChange, disabled = false }: {
       <input id={`${id}-camera`} aria-label="Scatta foto dello scontrino" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" className="hidden" disabled={disabled} onChange={choose} />
       <input id={`${id}-file`} aria-label="Carica allegato della spesa" type="file" accept={RECEIPT_ACCEPT} className="hidden" disabled={disabled} onChange={choose} />
       {file ? <div className="flex items-center gap-2 text-sm" role="status"><span className="break-all">{file.name}</span><Button type="button" size="icon" variant="ghost" disabled={disabled} aria-label="Rimuovi file selezionato" onClick={() => onChange(null)}><X className="h-4 w-4" /></Button></div>
-        : <p className="text-xs text-muted-foreground">Foto, PDF, DOCX, XLSX, CSV o TXT · massimo 20 MB.</p>}
+        : <p className="text-xs text-muted-foreground">{description || 'Foto, PDF, DOCX, XLSX, CSV o TXT · massimo 20 MB.'}</p>}
     </div>
   )
 }

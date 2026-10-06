@@ -1,3 +1,4 @@
+import { reimbursementFileUrl } from '@/lib/reimbursements/model'
 import { annualBoyUpdate } from '@/lib/annualRoster/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database.types'
@@ -155,7 +156,9 @@ export async function saveExpenseReceipt(client: Client, expense: ReceiptExpense
 }
 
 export async function downloadReceipt(client: Client, path: string) {
-  const { data, error } = await client.storage.from(RECEIPT_BUCKET).download(path)
+  const reimbursementUrl = reimbursementFileUrl(path)
+  const result = reimbursementUrl ? await fetch(reimbursementUrl, { cache: 'no-store' }).then(async response => ({ data: response.ok && !response.redirected ? await response.blob() : null, error: !response.ok || response.redirected })) : await client.storage.from(RECEIPT_BUCKET).download(path)
+  const { data, error } = result
   if (error || !data) throw new Error('Impossibile scaricare il file. Riprova dopo aver effettuato l’accesso.')
   const url = URL.createObjectURL(data)
   const link = document.createElement('a')
