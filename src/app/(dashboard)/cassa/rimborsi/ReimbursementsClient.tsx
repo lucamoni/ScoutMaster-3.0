@@ -11,7 +11,7 @@ import {ReceiptFilePicker} from '@/components/receipts/ReceiptFilePicker'
 import {pendingByUser,todayInItaly,type Reimbursement,type StaffOption} from '@/lib/reimbursements/model'
 import {getCurrentAnnoScout} from '@/lib/utils/payment'
 import {WORKING_YEAR_COOKIE} from '@/lib/utils/workingYear'
-import {imageForRecognition} from '@/lib/ocr/receipt'
+import {submitReimbursement} from '@/lib/reimbursements/client'
 const money=(n:number)=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n)
 const dateLabel=(date:string)=>date.split('-').reverse().join('/')
 const nativeSelect='h-11 w-full rounded-lg border bg-white px-3 text-base'
@@ -23,9 +23,7 @@ export default function ReimbursementsClient({year,userId,canValidate,initialReq
  const refresh=async()=>{const response=await fetch('/api/rimborsi',{cache:'no-store'});const result=await response.json();if(!response.ok)throw Error(result.error||'Impossibile aggiornare l’elenco');setRows(result.requests);router.refresh()}
  const call=async(callback:()=>Promise<void>)=>{if(busyRef.current)return;busyRef.current=true;setBusy(true);try{await callback()}catch(e){toast.error(e instanceof Error?e.message:'Operazione non riuscita')}finally{busyRef.current=false;setBusy(false)}}
  const submit=(event:React.FormEvent)=>{event.preventDefault();if(!form)return;void call(async()=>{
-  const data=new FormData();for(const [key,value]of Object.entries({...form,year}))data.set(key,value)
-  if(file){let upload=file;if(file.type.startsWith('image/')){const blob=await imageForRecognition(file,2200);if(blob!==file)upload=new File([blob],blob.type==='image/jpeg'?file.name.replace(/\.[^.]+$/,'')+'.jpg':file.name,{type:blob.type})}if(upload.size>3145728)throw Error('Il file supera 3 MB. Riduci il documento prima di caricarlo.');data.set('file',upload)}
-  const response=await fetch('/api/rimborsi',{method:'POST',body:data});const result=await response.json();if(!response.ok)throw Error(result.error||'Richiesta non salvata');setOpen(false);setForm(null);setFile(null);toast.success('Spesa inviata al tesoriere e admin come da rimborsare. Cassa invariata.');try{await refresh()}catch{toast.warning('Richiesta salvata. Ricarica la pagina per aggiornare l’elenco.')}
+  await submitReimbursement({...form,year},file);setOpen(false);setForm(null);setFile(null);toast.success('Spesa inviata al tesoriere e admin come da rimborsare. Cassa invariata.');try{await refresh()}catch{toast.warning('Richiesta salvata. Ricarica la pagina per aggiornare l’elenco.')}
  })}
  const runAction=()=>{if(!action)return;void call(async()=>{const response=await fetch(`/api/rimborsi/${action.row.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:action.type,confirm:true,date:paymentDate,method})});const result=await response.json();if(!response.ok)throw Error(result.error||'Operazione non riuscita');setAction(null);toast.success(action.type==='confirm'?'Rimborso confermato e uscita registrata in cassa':'Richiesta annullata. Cassa invariata.');try{await refresh()}catch{toast.warning('Operazione salvata. Ricarica la pagina per aggiornare l’elenco.')}})}
  const summary=pendingByUser(rows),visible=rows.filter(r=>(filter==='ALL'||r.stato===filter)&&(yearFilter==='ALL'||r.anno_scout===yearFilter)),years=[...new Set([year,...rows.map(r=>r.anno_scout)])].sort().reverse()

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { freshUser, listRequests } from '@/lib/reimbursements/server'
+import { freshUser, listRequests, staffOptions } from '@/lib/reimbursements/server'
 import { pendingByUser } from '@/lib/reimbursements/model'
 import { requireAuthenticatedUser, getUserRole } from '@/lib/security/auth'
 import { canManageSystem } from '@/lib/security/roles'
@@ -37,7 +37,8 @@ export default async function CassaPage() {
     return <div>Errore nel caricamento della prima nota.</div>
   }
 
-  const pending = pendingByUser(await listRequests(user))
+  const [requests, reimbursementUsers] = await Promise.all([listRequests(user), staffOptions()])
+  const pending = pendingByUser(requests)
   const pendingTotal = pending.reduce((n,item)=>n+item.amount,0)
   const boys = (await getAnnualBoys(currentYear, true)).map(({id,nome,cognome})=>({id,nome,cognome}))
   return (
@@ -51,6 +52,8 @@ export default async function CassaPage() {
       <Link href="/cassa/rimborsi" className="block rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><strong>Spese anticipate da rimborsare: {new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(pendingTotal)}</strong><span className="ml-2">Apri richieste →</span><p className="mt-1 text-xs">Tutti gli anni · escluse dai saldi e dalle spese totali fino alla conferma.</p></Link>
       <CassaClient
         key={currentYear}
+        userId={user.id}
+        reimbursementUsers={reimbursementUsers}
         canManageSettings={canManageSystem(getUserRole(user))}
         includeCensus={settings.get(CENSUS_INCOME_SETTING) === 'true'}
         startDate={startDate}

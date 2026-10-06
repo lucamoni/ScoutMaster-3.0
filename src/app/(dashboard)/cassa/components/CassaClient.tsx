@@ -1,7 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { ExpenseFundingPicker } from '@/components/receipts/ExpenseFundingPicker'
+import { saveExpenseEntry, submitReimbursement, type ExpenseFunding } from '@/lib/reimbursements/client'
+import { todayInItaly, type StaffOption } from '@/lib/reimbursements/model'
 import { ReceiptDialog } from '@/components/receipts/ReceiptDialog'
 import { ReceiptFilePicker } from '@/components/receipts/ReceiptFilePicker'
 import { receiptFileName, withReceiptUpload, deleteExpenseRecord } from '@/lib/receipts'
@@ -40,6 +43,8 @@ const isMobileReceiptOcr = () => /iPhone|iPad|Android/i.test(navigator.userAgent
 
 export default function CassaClient({
   initialSpese,
+  userId = '',
+  reimbursementUsers = [],
   boys = [],
   includeCensus = false,
   canManageSettings = false,
@@ -48,6 +53,8 @@ export default function CassaClient({
   initialCategorie,
   initialBalances = { contanti: 0, banca: 0 },
 }: {
+  userId?: string
+  reimbursementUsers?: StaffOption[]
   startDate: string
   canManageSettings?: boolean
   includeCensus?: boolean
@@ -61,6 +68,10 @@ export default function CassaClient({
   const [receiptExpense, setReceiptExpense] = useState<Spesa | null>(null)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const [funding, setFunding] = useState<ExpenseFunding>('')
+  const [beneficiary, setBeneficiary] = useState(userId)
+  const advanceId = useRef<string | null>(null)
+  const resetFunding = useCallback(() => { setFunding(''); setBeneficiary(userId); advanceId.current = null }, [userId])
   const [keepScannedPhoto, setKeepScannedPhoto] = useState(true)
   const [scannerPreview, setScannerPreview] = useState<string | null>(null)
   const [spese, setSpese] = useState<Spesa[]>(initialSpese)
@@ -95,9 +106,10 @@ export default function CassaClient({
   // Scanner Scontrino State
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   useEffect(() => {
+    if (isScannerOpen) { resetFunding(); setKeepScannedPhoto(true); setFormData(prev => ({...prev, momento_anno: 'ANNO', tipo_movimento: 'USCITA', ragazzo_id: undefined})) }
     if (isScannerOpen && !isMobileReceiptOcr()) void prepareReceiptOcr().catch(() => undefined)
     if (!isScannerOpen) { setScannerFile(null); setScannerPreviewBlob(null); setOcrData(null); setScannerError(null) }
-  }, [isScannerOpen])
+  }, [isScannerOpen, resetFunding])
   const [scannerFile, setScannerFile] = useState<File | null>(null)
   const [scannerPreviewBlob, setScannerPreviewBlob] = useState<Blob | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -358,6 +370,18 @@ export default function CassaClient({
     })
   }
 
+  const saveEntry = async (expense: Spesa | null, file: File | null) => {
+    const source = expense || formData.tipo_movimento === 'ENTRATA' ? 'UNIT' : funding
+    return saveExpenseEntry(source, () => saveMovement(expense, file), async () => {
+      advanceId.current ||= crypto.randomUUID()
+      return submitReimbursement({
+        id: advanceId.current, beneficiary, year: `${startDate.slice(0, 4)}-${endDate.slice(0, 4)}`,
+        date: formData.data || todayInItaly(), amount: formData.importo,
+        category: formData.voce_spesa, period: formData.momento_anno, note: [formData.note, !file && formData.ricevuta_presente ? 'Ricevuta cartacea disponibile' : ''].filter(Boolean).join(' · '),
+      }, file)
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (savingRef.current) return
@@ -365,11 +389,11 @@ export default function CassaClient({
     setSaving(true)
     try {
       if (editingSpesa && toCanonicalMetodo(editingSpesa.metodo) !== toCanonicalMetodo(formData.metodo)) await syncSpesaMetodoWithDB(editingSpesa, toCanonicalMetodo(formData.metodo))
-      const saved = await saveMovement(editingSpesa, receiptFile)
-      setSpese(prev => [saved, ...prev.filter(s => s.id !== saved.id)])
+      const result = await saveEntry(editingSpesa, receiptFile)
+      if (result.kind === 'movement') setSpese(prev => [result.movement, ...prev.filter(s => s.id !== result.movement.id)])
       setReceiptFile(null)
       setIsOpen(false)
-      toast.success(receiptFile ? 'Movimento e allegato salvati' : 'Movimento salvato')
+      toast.success(result.kind === 'advance' ? 'Richiesta di rimborso salvata. Cassa invariata.' : receiptFile ? 'Movimento e allegato salvati' : 'Movimento salvato')
       router.refresh()
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Salvataggio non riuscito') }
     finally { savingRef.current = false; setSaving(false) }
@@ -504,12 +528,13 @@ export default function CassaClient({
     savingRef.current = true
     setIsProcessing(true)
     try {
-      const saved = await saveMovement(null, keepScannedPhoto ? scannerFile : null)
-      setSpese(prev => [saved, ...prev.filter(s => s.id !== saved.id)])
+      const result = await saveEntry(null, keepScannedPhoto ? scannerFile : null)
+      if (result.kind === 'movement') setSpese(prev => [result.movement, ...prev.filter(s => s.id !== result.movement.id)])
       setIsScannerOpen(false)
       setScannerFile(null)
       setOcrData(null)
-      toast.success(keepScannedPhoto ? 'Spesa salvata con la foto dello scontrino' : 'Spesa salvata senza allegato')
+      toast.success(result.kind === 'advance' ? 'Richiesta di rimborso salvata con i dati dello scontrino. Cassa invariata.' : keepScannedPhoto ? 'Spesa salvata con la foto dello scontrino' : 'Spesa salvata senza allegato')
+      router.refresh()
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Errore salvataggio scontrino') }
     finally { savingRef.current = false; setIsProcessing(false) }
   }
@@ -552,6 +577,7 @@ export default function CassaClient({
       <div className="flex flex-wrap gap-2 md:gap-4 [&>button]:basis-[calc(50%-0.25rem)] md:[&>button]:basis-auto">
         <Dialog open={isOpen} onOpenChange={(open) => { if (saving) return; setIsOpen(open); if(!open) { setEditingSpesa(null); setReceiptFile(null); } }}>
           <DialogTrigger className="flex-1 md:flex-none inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2" onClick={() => {
+            resetFunding()
             setReceiptFile(null)
             setEditingSpesa(null)
             setFormData({
@@ -560,7 +586,8 @@ export default function CassaClient({
               metodo: 'Contanti',
               momento_anno: 'ANNO',
               note: '',
-              tipo_movimento: 'USCITA'
+              tipo_movimento: 'USCITA',
+              data: todayInItaly() >= startDate && todayInItaly() <= endDate ? todayInItaly() : endDate
             })
           }}>
             <Plus className="mr-2 h-4 w-4" /><span className="md:hidden">Movimento</span><span className="hidden md:inline">Nuovo Movimento</span>
@@ -575,14 +602,14 @@ export default function CassaClient({
           </Button>)}
           <DialogContent className="max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingSpesa ? 'Modifica Movimento' : 'Registra Movimento'}</DialogTitle>
+              <DialogTitle>{editingSpesa ? 'Modifica Movimento' : formData.tipo_movimento === 'USCITA' && funding === 'PERSONAL' ? 'Registra spesa anticipata' : 'Registra Movimento'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit}><fieldset disabled={saving} className="space-y-4">
               <div className="space-y-2"><Label htmlFor="movement-date">Data del movimento</Label><Input id="movement-date" type="date" required value={formData.data ?? editingSpesa?.data ?? new Date().toLocaleDateString('sv-SE')} onChange={event => setFormData({ ...formData, data: event.target.value })} /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo Movimento</Label>
-                  <Select value={formData.tipo_movimento || ''} onValueChange={v => setFormData({...formData, tipo_movimento: v || 'USCITA'})}>
+                  <Select value={formData.tipo_movimento || ''} onValueChange={v => { resetFunding(); setFormData({...formData, tipo_movimento: v || 'USCITA'}) }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ENTRATA" className="text-green-600 font-bold">Entrata (+)</SelectItem>
@@ -595,6 +622,7 @@ export default function CassaClient({
                   <Input type="number" step="0.01" required value={formData.importo || ''} onChange={e => setFormData({...formData, importo: e.target.value})} />
                 </div>
               </div>
+              {!editingSpesa && formData.tipo_movimento === 'USCITA' && <ExpenseFundingPicker id="movement" value={funding} onChange={setFunding} beneficiary={beneficiary} onBeneficiaryChange={setBeneficiary} users={reimbursementUsers} disabled={saving} />}
               <div className="space-y-2">
                 <Label>Categoria (Voce)</Label>
                 <Select value={formData.voce_spesa || ''} onValueChange={v => setFormData({...formData, voce_spesa: v || ''})}>
@@ -607,9 +635,9 @@ export default function CassaClient({
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Metodo</Label>
-                  <Select value={formData.metodo || ''} onValueChange={v => setFormData({...formData, metodo: v || ''})}>
+                {(!!editingSpesa || formData.tipo_movimento === 'ENTRATA' || funding === 'UNIT') && <div className="space-y-2">
+                  <Label>Metodo usato dal reparto</Label>
+                  <Select disabled={!editingSpesa && formData.tipo_movimento === 'USCITA' && funding !== 'UNIT'} value={formData.metodo || ''} onValueChange={v => setFormData({...formData, metodo: v || ''})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Contanti">Contanti</SelectItem>
@@ -617,7 +645,7 @@ export default function CassaClient({
                       <SelectItem value="Bonifico">Bonifico</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div>}
                 <div className="space-y-2">
                   <Label>Momento Anno</Label>
                   <Select value={formData.momento_anno || ''} onValueChange={v => setFormData({...formData, momento_anno: v || ''})}>
@@ -637,8 +665,8 @@ export default function CassaClient({
               </div>
               {editingSpesa?.foto_scontrino_url && <p className="text-xs text-muted-foreground break-all">Allegato attuale: {receiptFileName(editingSpesa.foto_scontrino_url)}. Carica un file per sostituirlo.</p>}
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={formData.ricevuta_presente ?? editingSpesa?.ricevuta_presente ?? false} onChange={event => setFormData({ ...formData, ricevuta_presente: event.target.checked })} /> Ricevuta presente (anche cartacea)</label>
-              <ReceiptFilePicker file={receiptFile} onChange={setReceiptFile} disabled={saving} />
-              <Button type="submit" className="w-full" disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salva movimento{receiptFile ? ' e allegato' : ''}</Button>
+              <ReceiptFilePicker file={receiptFile} onChange={setReceiptFile} disabled={saving} description={!editingSpesa && funding === 'PERSONAL' && formData.tipo_movimento === 'USCITA' ? 'Foto ridotte prima dell’invio. PDF e altri documenti: massimo 3 MB.' : undefined} />
+              <Button type="submit" className="w-full" disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{!editingSpesa && formData.tipo_movimento === 'USCITA' && funding === 'PERSONAL' ? 'Salva richiesta di rimborso' : `Salva movimento${receiptFile ? ' e allegato' : ''}`}</Button>
             </fieldset></form>
           </DialogContent>
         </Dialog>
@@ -727,10 +755,11 @@ export default function CassaClient({
               <DialogTitle>Acquisisci Scontrino</DialogTitle>
               <DialogDescription>
                 Scatta o carica uno scontrino per compilare la spesa. Puoi conservare la foto come allegato.
-                <span className="block mt-1">Sul telefono una copia ridotta viene letta dai servizi OCR Groq o Google Gemini; la foto originale viene conservata solo se scegli di allegarla.</span>
+                <span className="block mt-1">Sul telefono una copia ridotta viene letta dai servizi OCR Groq o Google Gemini; la foto viene conservata solo se scegli di allegarla; per i rimborsi viene ridotta prima dell’archiviazione.</span>
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
+            <div className="py-4 space-y-4">
+              <ExpenseFundingPicker id="scanner" value={funding} onChange={setFunding} beneficiary={beneficiary} onBeneficiaryChange={setBeneficiary} users={reimbursementUsers} disabled={isProcessing} />
               {!scannerFile ? (
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => document.getElementById('scontrino-camera')?.click()}><Camera className="mr-2 h-4 w-4" /> Scatta foto</Button>
@@ -783,8 +812,14 @@ export default function CassaClient({
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label>Metodo Pagamento</Label>
-                          <Select value={formData.metodo || ''} onValueChange={v => setFormData({...formData, metodo: v || ''})}>
+                          <label htmlFor="scanner-period" className="text-sm font-medium">Momento anno</label>
+                          <select id="scanner-period" className="h-11 w-full rounded-md border px-2 text-base" value={formData.momento_anno} onChange={e => setFormData({...formData, momento_anno: e.target.value})}>
+                            <option value="ANNO">Anno</option><option value="CI">Campo invernale</option><option value="CE">Campo estivo</option>
+                          </select>
+                        </div>
+                        {funding === 'UNIT' && <div className="space-y-2">
+                          <Label>Metodo usato dal reparto</Label>
+                          <Select disabled={funding !== 'UNIT'} value={formData.metodo || ''} onValueChange={v => setFormData({...formData, metodo: v || ''})}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Contanti">Contanti</SelectItem>
@@ -792,7 +827,7 @@ export default function CassaClient({
                               <SelectItem value="Bonifico">Bonifico</SelectItem>
                             </SelectContent>
                           </Select>
-                        </div>
+                        </div>}
                       </div>
                     </div>
                   )}
@@ -803,9 +838,9 @@ export default function CassaClient({
             <DialogFooter>
               <Button variant="outline" disabled={isProcessing} onClick={() => setIsScannerOpen(false)}>Annulla</Button>
               {scannerFile && ocrData && (
-                <Button onClick={handleSaveScannedScontrino} disabled={isProcessing}>
+                <Button onClick={handleSaveScannedScontrino} disabled={isProcessing || !funding || (funding === 'PERSONAL' && !beneficiary)}>
                   {isProcessing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {keepScannedPhoto ? 'Salva spesa e foto' : 'Salva solo la spesa'}
+                  {funding === 'PERSONAL' ? 'Salva richiesta di rimborso' : keepScannedPhoto ? 'Salva spesa e foto' : 'Salva solo la spesa'}
                 </Button>
               )}
             </DialogFooter>
