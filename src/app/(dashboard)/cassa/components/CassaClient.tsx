@@ -106,7 +106,7 @@ export default function CassaClient({
   // Scanner Scontrino State
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   useEffect(() => {
-    if (isScannerOpen) { resetFunding(); setKeepScannedPhoto(true); setFormData(prev => ({...prev, momento_anno: 'ANNO', tipo_movimento: 'USCITA', ragazzo_id: undefined})) }
+    if (isScannerOpen) { resetFunding(); setKeepScannedPhoto(true); setFormData(prev => ({...prev, momento_anno: 'ANNO', tipo_movimento: 'USCITA', ragazzo_id: undefined, ricevuta_presente: false})) }
     if (isScannerOpen && !isMobileReceiptOcr()) void prepareReceiptOcr().catch(() => undefined)
     if (!isScannerOpen) { setScannerFile(null); setScannerPreviewBlob(null); setOcrData(null); setScannerError(null) }
   }, [isScannerOpen, resetFunding])
