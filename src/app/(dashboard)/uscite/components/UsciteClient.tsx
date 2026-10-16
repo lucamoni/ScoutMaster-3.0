@@ -444,7 +444,7 @@ export default function UsciteClient({
       toast.error('Inserisci una quota valida (zero o maggiore)')
       return
     }
-    if (!formData.data_inizio || !/^\\d{4}-\\d{2}-\\d{2}$/.test(formData.data_inizio)) {
+    if (!formData.data_inizio || !/^\d{4}-\d{2}-\d{2}$/.test(formData.data_inizio)) {
       toast.error('Seleziona la data dell’evento')
       return
     }
