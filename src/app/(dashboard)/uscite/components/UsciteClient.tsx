@@ -433,14 +433,32 @@ export default function UsciteClient({
 
   const handleEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const nomeEvento = formData.nome_evento.trim()
+    const quota = Number(formData.quota_standard)
+    if (!nomeEvento) {
+      toast.error('Inserisci il nome dell’evento')
+      return
+    }
+    if (formData.quota_standard.trim() === '' || !Number.isFinite(quota) || quota < 0) {
+      toast.error('Inserisci una quota valida (zero o maggiore)')
+      return
+    }
+    if (!formData.data_inizio || !/^\d{4}-\d{2}-\d{2}$/.test(formData.data_inizio)) {
+      toast.error('Seleziona la data dell’evento')
+      return
+    }
+
+    const payload = {
+      nome_evento: nomeEvento,
+      quota_standard: quota,
+      tipo_evento: formData.tipo_evento,
+      data_inizio: formData.data_inizio,
+      metodo_pagamento: formData.metodo_pagamento
+    }
+
     if (editingEvento) {
-      const { data, error } = await supabase.from('eventi').update({
-        nome_evento: formData.nome_evento,
-        quota_standard: Number(formData.quota_standard),
-        tipo_evento: formData.tipo_evento,
-        data_inizio: formData.data_inizio || null,
-        metodo_pagamento: formData.metodo_pagamento
-      }).eq('id', editingEvento.id).select().single()
+      const { data, error } = await supabase.from('eventi').update(payload).eq('id', editingEvento.id).select().single()
       
       if (error) {
         toast.error("Errore modifica evento: " + error.message)
@@ -455,27 +473,29 @@ export default function UsciteClient({
         router.refresh()
       }
     } else {
-      const { data, error } = await supabase.from('eventi').insert({
-        nome_evento: formData.nome_evento,
-        quota_standard: Number(formData.quota_standard),
-        tipo_evento: formData.tipo_evento,
-        data_inizio: formData.data_inizio || null,
-        metodo_pagamento: formData.metodo_pagamento
-      }).select().single()
+      const { data, error } = await supabase.from('eventi').insert(payload).select().single()
       
       if (error) {
         toast.error("Errore inserimento evento: " + error.message)
       }
       if (!error && data) {
-        setEventi([...eventi, data].filter(ev => dateInWorkingYear(ev.data_inizio, currentYear)))
-        
-        await supabase.from('categorie_spesa').insert({ 
-          nome: `Evento: ${data.nome_evento}`, 
-          tipo_movimento: 'ENTRATA' 
+        setEventi(prev => prev.some(ev => ev.id === data.id) ? prev : [...prev, data].filter(ev => dateInWorkingYear(ev.data_inizio, currentYear)))
+
+        const { error: categoriaError } = await supabase.from('categorie_spesa').insert({
+          nome: `Evento: ${data.nome_evento}`,
+          tipo_movimento: 'ENTRATA'
         })
+        if (categoriaError && categoriaError.code !== '23505') {
+          console.error('Evento salvato, ma creazione categoria non riuscita:', categoriaError)
+          toast.warning('Evento salvato, ma non è stato possibile creare la categoria di cassa: ' + categoriaError.message)
+        } else {
+          toast.success('Evento inserito correttamente')
+        }
 
         setFormData({ nome_evento: '', quota_standard: '', tipo_evento: 'CI', data_inizio: '', metodo_pagamento: 'Contanti' })
-        setTimeout(() => router.refresh(), 500) 
+        setEditingEvento(null)
+        setIsEventiOpen(true)
+        router.refresh() 
       }
     }
   }
@@ -604,6 +624,16 @@ export default function UsciteClient({
                   <div className="space-y-1">
                     <Label className="text-xs">Quota (€)</Label>
                     <Input type="number" step="0.01" value={formData.quota_standard} onChange={e => setFormData({...formData, quota_standard: e.target.value})} required className="h-8 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Data evento</Label>
+                    <Input
+                      type="date"
+                      value={formData.data_inizio}
+                      onChange={e => setFormData({ ...formData, data_inizio: e.target.value })}
+                      required
+                      className="h-8 text-xs"
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Metodo Pag.</Label>
