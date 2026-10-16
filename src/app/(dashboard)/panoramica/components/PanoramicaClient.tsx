@@ -78,7 +78,7 @@ export function PanoramicaClient({
     let timer: ReturnType<typeof setTimeout>
     const refresh = () => { clearTimeout(timer); timer = setTimeout(() => router.refresh(), 150) }
     let channel = supabase.channel('panoramica_realtime')
-    for (const table of ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'eventi', 'impostazioni']) {
+    for (const table of ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'eventi', 'registro_spese', 'impostazioni']) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
     }
     channel.subscribe()
@@ -497,22 +497,26 @@ export function PanoramicaClient({
                         
                         <Button
                           size="sm"
-                          disabled={isCurrentProcessing || !(sel.censimento || sel.months.length > 0 || sel.eventi.length > 0)}
-                          onClick={() => saldaRagazzo(ragazzo.id, 'Contanti', unpaidEventsData.reduce((acc, ev) => ({ ...acc, [ev.id]: { nome: ev.nome, quota: ev.quota } }), {}), sel)}
+                          disabled={isCurrentProcessing}
+                          onClick={() => (sel.censimento || sel.months.length > 0 || sel.eventi.length > 0)
+                            ? saldaRagazzo(ragazzo.id, 'Contanti', unpaidEventsData.reduce((acc, ev) => ({ ...acc, [ev.id]: { nome: ev.nome, quota: ev.quota } }), {}), sel)
+                            : saldaTuttoRagazzo(ragazzo.id, missingCensimento, unpaidMonths, unpaidEventsData, 'Contanti')}
                           className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-2xs"
                         >
                           {isCurrentProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5 mr-1" />}
-                          Salda selezionati / tutto (<Banknote className="h-3.5 w-3.5 inline mr-1" /> Contanti)
+                          {(sel.censimento || sel.months.length > 0 || sel.eventi.length > 0) ? 'Salda selezionati' : 'Salda tutto'} (<Banknote className="h-3.5 w-3.5 inline mr-1" /> Contanti)
                         </Button>
 
                         <Button
                           size="sm"
-                          disabled={isCurrentProcessing || !(sel.censimento || sel.months.length > 0 || sel.eventi.length > 0)}
-                          onClick={() => saldaRagazzo(ragazzo.id, 'Bonifico', unpaidEventsData.reduce((acc, ev) => ({ ...acc, [ev.id]: { nome: ev.nome, quota: ev.quota } }), {}), sel)}
+                          disabled={isCurrentProcessing}
+                          onClick={() => (sel.censimento || sel.months.length > 0 || sel.eventi.length > 0)
+                            ? saldaRagazzo(ragazzo.id, 'Bonifico', unpaidEventsData.reduce((acc, ev) => ({ ...acc, [ev.id]: { nome: ev.nome, quota: ev.quota } }), {}), sel)
+                            : saldaTuttoRagazzo(ragazzo.id, missingCensimento, unpaidMonths, unpaidEventsData, 'Bonifico')}
                           className="h-8 text-xs bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium shadow-2xs"
                         >
                           {isCurrentProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5 mr-1" />}
-                          Salda selezionati / tutto (<Landmark className="h-3.5 w-3.5 inline mr-1" /> Bonifico / Carta)
+                          {(sel.censimento || sel.months.length > 0 || sel.eventi.length > 0) ? 'Salda selezionati' : 'Salda tutto'} (<Landmark className="h-3.5 w-3.5 inline mr-1" /> Bonifico / Carta)
                         </Button>
                       </div>
 
