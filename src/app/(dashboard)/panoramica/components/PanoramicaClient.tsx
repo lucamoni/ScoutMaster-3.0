@@ -30,6 +30,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { calculateScoutDebt, getScoutMonthsUpTo } from '@/lib/utils/debts'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { validWorkingYear } from '@/lib/utils/workingYear'
 import { getIndividualMonthlyQuotaAmount, getMonthlyQuotaAccountingDate } from '@/lib/utils/monthlyQuota'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
@@ -149,7 +150,7 @@ export function PanoramicaClient({
     const ragazzo = ragazzi.find(r => r.id === ragazzoId)
     try {
       if (sel.censimento) {
-        const { error } = await annualBoyUpdate(ragazzoId, { quota_censimento: true }, currentYear, { method })
+        const { error } = await annualBoyUpdate(ragazzoId, { quota_censimento: true }, validWorkingYear(currentYear) || undefined, { method })
         if (error) throw error
       }
 
