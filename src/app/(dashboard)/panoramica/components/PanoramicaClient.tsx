@@ -30,6 +30,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { calculateScoutDebt, getScoutMonthsUpTo } from '@/lib/utils/debts'
 import { normalizeAnnoScout } from '@/lib/utils/payment'
+import { getIndividualMonthlyQuotaAmount, getMonthlyQuotaAccountingDate } from '@/lib/utils/monthlyQuota'
 
 type Ragazzo = Database['public']['Tables']['ragazzi']['Row']
 type Evento = Database['public']['Tables']['eventi']['Row']
@@ -77,7 +78,7 @@ export function PanoramicaClient({
     let timer: ReturnType<typeof setTimeout>
     const refresh = () => { clearTimeout(timer); timer = setTimeout(() => router.refresh(), 150) }
     let channel = supabase.channel('panoramica_realtime')
-    for (const table of ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'eventi', 'impostazioni']) {
+    for (const table of ['ragazzi', 'quote_mensili', 'partecipazioni_eventi', 'eventi', 'registro_spese', 'impostazioni']) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refresh)
     }
     channel.subscribe()
@@ -133,13 +134,16 @@ export function PanoramicaClient({
   }
 
   const saldaRagazzo = async (
-    ragazzoId: string, 
-    method: 'Contanti'|'Bonifico', 
+    ragazzoId: string,
+    method: 'Contanti' | 'Bonifico',
     eventiDataMap: Record<string, { nome: string, quota: number }>,
     customSelection?: RagazzoSelection
   ) => {
     const sel = customSelection || selections[ragazzoId]
-    if (!sel || (!sel.censimento && sel.months.length === 0 && sel.eventi.length === 0)) return
+    if (!sel || (!sel.censimento && sel.months.length === 0 && sel.eventi.length === 0)) {
+      toast.info('Seleziona almeno una quota da saldare')
+      return
+    }
 
     setIsProcessing(ragazzoId)
     const ragazzo = ragazzi.find(r => r.id === ragazzoId)
@@ -148,33 +152,87 @@ export function PanoramicaClient({
         const { error } = await annualBoyUpdate(ragazzoId, { quota_censimento: true }, currentYear, { method })
         if (error) throw error
       }
+
       if (sel.months.length > 0) {
-        const existing = quoteState.find(q => q.ragazzo_id === ragazzoId && normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(currentYear))
-        const changes = Object.fromEntries(sel.months.map(m => [m, true])) as Database['public']['Tables']['quote_mensili']['Update']
-        const query = existing
-          ? supabase.from('quote_mensili').update(changes).eq('id', existing.id)
-          : supabase.from('quote_mensili').upsert({ ragazzo_id: ragazzoId, anno_scout: normalizeAnnoScout(currentYear), ...changes }, { onConflict: 'ragazzo_id,anno_scout' })
-        const { data, error } = await query.select('id').single()
-        if (error || !data) throw error || new Error('Quota non salvata')
-        const { data: movements, error: ledgerError } = await supabase.from('registro_spese').update({ metodo: method })
-          .eq('quota_mensile_id', data.id).in('riferimento_quota', sel.months).select('id')
-        if (ledgerError) throw ledgerError
-        if (movements?.length !== sel.months.length) throw new Error('Movimenti di cassa incompleti: verificare la sincronizzazione del database')
+        const existingQuote = quoteState.find(q =>
+          q.ragazzo_id === ragazzoId &&
+          normalizeAnnoScout(q.anno_scout) === normalizeAnnoScout(currentYear)
+        )
+        const changes = Object.fromEntries(sel.months.map(month => [month, true])) as Database['public']['Tables']['quote_mensili']['Update']
+        const quoteQuery = existingQuote
+          ? supabase.from('quote_mensili').update(changes).eq('id', existingQuote.id)
+          : supabase.from('quote_mensili').upsert({
+              ragazzo_id: ragazzoId,
+              anno_scout: normalizeAnnoScout(currentYear),
+              ...changes,
+            }, { onConflict: 'ragazzo_id,anno_scout' })
+        const { data: savedQuote, error: quoteError } = await quoteQuery.select('*').single()
+        if (quoteError || !savedQuote) throw quoteError || new Error('Quote mensili non salvate')
+
+        // La tabella quote_mensili è la fonte dello stato; il trigger DB crea
+        // il movimento contabile. Verifichiamo comunque ogni voce e la
+        // completiamo se il trigger non ha creato il movimento, così Cassa e
+        // Bilancio non rimangono indietro.
+        const amount = getIndividualMonthlyQuotaAmount([savedQuote], quotaMensileNum)
+        const accountingDate = getMonthlyQuotaAccountingDate(currentYear, savedQuote.data_contabile)
+        for (const month of sel.months) {
+          const { data: movement, error: lookupError } = await supabase
+            .from('registro_spese')
+            .select('id, data')
+            .eq('quota_mensile_id', savedQuote.id)
+            .eq('riferimento_quota', month)
+            .limit(1)
+            .maybeSingle()
+          if (lookupError) throw lookupError
+
+          const movementPayload = {
+            importo: amount,
+            metodo: method,
+            voce_spesa: 'Quota Mensile',
+            tipo_movimento: 'ENTRATA',
+            data: movement?.data || accountingDate,
+            ragazzo_id: ragazzoId,
+            quota_mensile_id: savedQuote.id,
+            riferimento_quota: month,
+            note: `Quota ${month.slice(0, 3).toUpperCase()} - ${ragazzo?.nome || ''} ${ragazzo?.cognome || ''}`.trim(),
+          }
+          if (movement) {
+            const { data: updatedMovement, error: updateError } = await supabase
+              .from('registro_spese')
+              .update(movementPayload)
+              .eq('id', movement.id)
+              .select('id')
+              .maybeSingle()
+            if (updateError || !updatedMovement) throw updateError || new Error(`Movimento di cassa non aggiornato per ${month}`)
+          } else {
+            const { error: insertError } = await supabase.from('registro_spese').insert(movementPayload)
+            if (insertError) throw insertError
+          }
+        }
       }
+
       for (const evId of sel.eventi) {
         const response = await fetch('/api/uscite/sync', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ragazziIds: [ragazzoId], eventoId: evId, riscosso: true,
-            metodoPagamento: method, aggiornaMetodoEvento: false, quotaDovuta: eventiDataMap[evId]?.quota }),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ragazziIds: [ragazzoId],
+            eventoId: evId,
+            riscosso: true,
+            metodoPagamento: method,
+            aggiornaMetodoEvento: false,
+            quotaDovuta: eventiDataMap[evId]?.quota,
+          }),
         })
-        if (!response.ok) throw new Error('Pagamento evento non salvato')
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(result.error || 'Pagamento evento non salvato')
       }
 
       setSelections(prev => ({ ...prev, [ragazzoId]: { censimento: false, months: [], eventi: [] } }))
-      toast.success(`Quote saldate con successo per ${ragazzo?.nome}!`)
+      toast.success(`Pagamenti registrati per ${ragazzo?.nome || 'il ragazzo'}: Cassa e pendenze aggiornate.`)
     } catch (err: unknown) {
-      console.error(err)
-      toast.error("Saldo non completato. Alcune voci potrebbero essere state salvate: controlla le pendenze aggiornate.")
+      console.error('[Pagamenti da saldare]', err)
+      toast.error(err instanceof Error ? err.message : 'Saldo non completato. Aggiorna la pagina e verifica le pendenze.')
     } finally {
       router.refresh()
       setIsProcessing(null)
@@ -440,21 +498,25 @@ export function PanoramicaClient({
                         <Button
                           size="sm"
                           disabled={isCurrentProcessing}
-                          onClick={() => saldaTuttoRagazzo(ragazzo.id, missingCensimento, unpaidMonths, unpaidEventsData, 'Contanti')}
+                          onClick={() => (sel.censimento || sel.months.length > 0 || sel.eventi.length > 0)
+                            ? saldaRagazzo(ragazzo.id, 'Contanti', unpaidEventsData.reduce((acc, ev) => ({ ...acc, [ev.id]: { nome: ev.nome, quota: ev.quota } }), {}), sel)
+                            : saldaTuttoRagazzo(ragazzo.id, missingCensimento, unpaidMonths, unpaidEventsData, 'Contanti')}
                           className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-2xs"
                         >
                           {isCurrentProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5 mr-1" />}
-                          Salda tutto (<Banknote className="h-3.5 w-3.5 inline mr-1" /> Contanti)
+                          {(sel.censimento || sel.months.length > 0 || sel.eventi.length > 0) ? 'Salda selezionati' : 'Salda tutto'} (<Banknote className="h-3.5 w-3.5 inline mr-1" /> Contanti)
                         </Button>
 
                         <Button
                           size="sm"
                           disabled={isCurrentProcessing}
-                          onClick={() => saldaTuttoRagazzo(ragazzo.id, missingCensimento, unpaidMonths, unpaidEventsData, 'Bonifico')}
+                          onClick={() => (sel.censimento || sel.months.length > 0 || sel.eventi.length > 0)
+                            ? saldaRagazzo(ragazzo.id, 'Bonifico', unpaidEventsData.reduce((acc, ev) => ({ ...acc, [ev.id]: { nome: ev.nome, quota: ev.quota } }), {}), sel)
+                            : saldaTuttoRagazzo(ragazzo.id, missingCensimento, unpaidMonths, unpaidEventsData, 'Bonifico')}
                           className="h-8 text-xs bg-agesci-blue hover:bg-agesci-blue-light text-white font-medium shadow-2xs"
                         >
                           {isCurrentProcessing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5 mr-1" />}
-                          Salda tutto (<Landmark className="h-3.5 w-3.5 inline mr-1" /> Bonifico)
+                          {(sel.censimento || sel.months.length > 0 || sel.eventi.length > 0) ? 'Salda selezionati' : 'Salda tutto'} (<Landmark className="h-3.5 w-3.5 inline mr-1" /> Bonifico / Carta)
                         </Button>
                       </div>
 
