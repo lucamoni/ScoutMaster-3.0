@@ -258,7 +258,7 @@ export function PanoramicaClient({
 
   const ragazziFiltrati = filtroPattuglia === 'TUTTE' 
     ? ragazzi 
-    : ragazzi.filter(r => r.pattuglia === filtroPattuglia)
+    : ragazzi.filter(r => (r.pattuglia || '').trim().toLocaleLowerCase('it-IT') === filtroPattuglia.trim().toLocaleLowerCase('it-IT'))
 
   const prossimaUscita = eventi.length > 0 ? eventi[0] : null
   const prossimePartecipazioni = prossimaUscita 

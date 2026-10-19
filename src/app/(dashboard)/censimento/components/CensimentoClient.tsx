@@ -157,7 +157,7 @@ export default function CensimentoClient({
 
   const ragazziFiltrati = ragazzi.filter(r => {
     if (filterPattuglia === 'TUTTE') return true
-    return r.pattuglia === filterPattuglia
+    return (r.pattuglia || '').trim().toLocaleLowerCase('it-IT') === filterPattuglia.trim().toLocaleLowerCase('it-IT')
   })
 
   return (
