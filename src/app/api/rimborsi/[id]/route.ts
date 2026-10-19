@@ -23,11 +23,6 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   if(movementReadError||!movement)throw Error('Movimento collegato non trovato in Cassa')
   const {data:updatedMovement,error:movementError}=await db.from('registro_spese').update({data:date,importo:amount,voce_spesa:category,momento_anno:period,note,metodo:method}).eq('id',row.movimento_id).select('id').maybeSingle()
   if(movementError||!updatedMovement)throw Error('Movimento di Cassa non aggiornato: '+(movementError?.message||'nessuna riga modificata'))
-  const {data:updatedRequest,error:requestError}=await db.from('rimborsi').update({data_spesa:date,importo:amount,categoria:category,momento_anno:period,note,metodo_rimborso:method}).eq('id',id).eq('stato','RIMBORSATO').eq('movimento_id',row.movimento_id).select('id').maybeSingle()
-  if(requestError||!updatedRequest){
-   await db.from('registro_spese').update({data:movement.data,importo:movement.importo,voce_spesa:movement.voce_spesa,momento_anno:movement.momento_anno,note:movement.note,metodo:movement.metodo}).eq('id',row.movimento_id)
-   throw Error('Richiesta di rimborso non aggiornata: '+(requestError?.message||'nessuna riga modificata'))
-  }
   return reply({ok:true,movementId:row.movimento_id})
  }
  if(input.action==='cancel'){
