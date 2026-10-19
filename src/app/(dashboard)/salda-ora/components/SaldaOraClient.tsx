@@ -387,7 +387,7 @@ export default function SaldaOraClient({
   const ragazziFiltrati = ragazzi.filter(r => {
     const fullName = `${r.nome} ${r.cognome}`.toLowerCase()
     const matchesSearch = fullName.includes(searchTerm.toLowerCase())
-    const matchesPattuglia = filterPattuglia === 'TUTTE' || r.pattuglia === filterPattuglia
+    const matchesPattuglia = filterPattuglia === 'TUTTE' || (r.pattuglia || '').trim().toLocaleLowerCase('it-IT') === filterPattuglia.trim().toLocaleLowerCase('it-IT')
     return matchesSearch && matchesPattuglia
   })
 
