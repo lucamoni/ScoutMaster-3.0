@@ -1118,7 +1118,7 @@ export default function CassaClient({
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 touch-min" onClick={() => {
                     setReceiptFile(null)
-                      if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
+                      if (spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione spese capi.'); return }
                       setEditingSpesa(spesa)
                     setFormData({
                       voce_spesa: spesa.voce_spesa || '',
