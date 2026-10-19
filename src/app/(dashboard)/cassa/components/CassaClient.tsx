@@ -307,7 +307,7 @@ export default function CassaClient({
   }
 
   const handleUpdateMetodoSpesa = async (spesa: Spesa, newMetodo: string) => {
-    if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
+    if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Per modificare tutti i dati usa Modifica movimento; le spese capi restano gestite dalla loro sezione.'); return }
     const safeMetodo = toCanonicalMetodo(newMetodo)
 
     // Ottimistic UI update immediato
@@ -343,7 +343,7 @@ export default function CassaClient({
   }
 
   const saveMovement = async (expense: Spesa | null, file: File | null) => {
-    if (expense?.rimborso_id || expense?.anticipo_capi_id) throw new Error('Gestisci questo movimento dalla sezione rimborsi o spese capi.')
+    if (expense?.anticipo_capi_id) throw new Error('Gestisci questo movimento dalla sezione spese capi.')
     const amount = Number(formData.importo)
     const movementDate = formData.data || expense?.data || new Date().toISOString().split('T')[0]
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('Inserisci un importo maggiore di zero')
@@ -364,6 +364,20 @@ export default function CassaClient({
         if (path) query = expense.foto_scontrino_url === null
           ? query.is('foto_scontrino_url', null) : query.eq('foto_scontrino_url', expense.foto_scontrino_url)
         return query.select('*').single()
+      }
+      if (expense?.rimborso_id) {
+        const response = await fetch(`/api/rimborsi/${expense.rimborso_id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'edit_settled', confirm: true, date: movementDate, amount,
+            category: formData.voce_spesa, period: formData.momento_anno,
+            note: formData.note, method: toCanonicalMetodo(formData.metodo),
+          }),
+        })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(result.error || 'Rimborso non aggiornato')
+        return { ...expense, ...payload, metodo: toCanonicalMetodo(formData.metodo) }
       }
       let result = await write(payload.metodo)
       if (result.error && (result.error.code === '23514' || result.error.message?.toLowerCase().includes('metodo'))) result = await write(payload.metodo.toUpperCase())
@@ -402,7 +416,7 @@ export default function CassaClient({
   }
 
   const deleteSpesa = async (id: string) => {
-    if (spese.some(s=>s.id===id && (s.rimborso_id || s.anticipo_capi_id))) { toast.error('Il movimento resta conservato con il rimborso o la spesa capi collegata.'); return }
+    if (spese.some(s=>s.id===id && (s.rimborso_id || s.anticipo_capi_id))) { toast.error('Il movimento collegato non può essere eliminato da Cassa.'); return }
     setDeleteFiles(false)
     setDeleteTargets(spese.filter(s => s.id === id))
   }
@@ -1039,7 +1053,7 @@ export default function CassaClient({
                   <div className="flex justify-center">
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => {
                       setReceiptFile(null)
-                      if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
+                      if (spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione spese capi.'); return }
                       setEditingSpesa(spesa)
                       setFormData({
                         voce_spesa: spesa.voce_spesa || '',
@@ -1104,7 +1118,7 @@ export default function CassaClient({
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 touch-min" onClick={() => {
                     setReceiptFile(null)
-                      if (spesa.rimborso_id || spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione rimborsi o spese capi.'); return }
+                      if (spesa.anticipo_capi_id) { toast.error('Gestisci questo movimento dalla sezione spese capi.'); return }
                       setEditingSpesa(spesa)
                     setFormData({
                       voce_spesa: spesa.voce_spesa || '',
