@@ -494,9 +494,8 @@ export default function CassaClient({
     setScannerError(null)
     toast.info('Analisi scontrino in corso...', { id: 'ocr-scontrino' })
     try {
-      let data: ReceiptOcrResult
       setScannerPreviewBlob(fileToAnalyze)
-      data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
+      const data: ReceiptOcrResult = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
       
       setOcrData(data)
       
