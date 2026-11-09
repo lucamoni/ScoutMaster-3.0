@@ -8,15 +8,24 @@ import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { validWorkingYear } from '@/lib/utils/workingYear'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+type AuthClaims = {
+  email?: string
+  app_metadata?: Record<string, unknown>
+  user_metadata?: Record<string, unknown>
+}
+
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Middleware already verified the JWT with Supabase Auth. Re-verify its
+  // signature locally here instead of making a second network request to Auth.
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+  const user = claimsData?.claims as AuthClaims | undefined
 
-  if (!user || !getUserRole(user)) {
+  if (claimsError || !user || !getUserRole(user)) {
     redirect('/login')
   }
 
@@ -33,7 +42,7 @@ export default async function DashboardLayout({
     if (date) candidates.push(getCurrentAnnoScout(new Date(`${date}T12:00:00`)))
   }
   for (const setting of settings || []) {
-    candidates.push(setting.chiave.match(/\d{4}[-/]\d{4}$/)?.[0])
+    candidates.push(setting.chiave.match(/\\d{4}[-/]\\d{4}$/)?.[0])
   }
   const starts = candidates.map(value => validWorkingYear(value)).filter((value): value is string => !!value).map(value => Number(value.slice(0, 4)))
   const first = Math.min(...starts)
@@ -41,7 +50,7 @@ export default async function DashboardLayout({
   const availableYears = Array.from({ length: last - first + 1 }, (_, index) => `${last - index}-${last - index + 1}`)
 
   return (
-    <AppShell userName={typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim() ? user.user_metadata.name.trim() : user.email?.split('@')[0] || 'Capo'} canManageSettings={canManageSystem(getUserRole(user))} selectedYear={selectedYear} availableYears={availableYears}>
+    <AppShell userName={typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim() ? user.user_metadata.name.trim() : typeof user.email === 'string' ? user.email.split('@')[0] : 'Capo'} canManageSettings={canManageSystem(getUserRole(user))} selectedYear={selectedYear} availableYears={availableYears}>
       {children}
     </AppShell>
   )
