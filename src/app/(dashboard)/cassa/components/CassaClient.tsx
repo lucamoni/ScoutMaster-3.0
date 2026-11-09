@@ -13,7 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 import { calculateAccountingBalances } from '@/lib/utils/accounting'
 import { toCanonicalMetodo } from '@/lib/utils/payment'
 import { isIncludedInAccounting } from '@/lib/utils/censusAccounting'
-import { ReceiptOcrResult, scanReceiptLocally, scanReceiptOnServer, imageForRecognition, prepareReceiptOcr } from '@/lib/ocr/receipt'
+import { ReceiptOcrResult, scanReceiptLocally, prepareReceiptOcr } from '@/lib/ocr/receipt'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -107,7 +107,7 @@ export default function CassaClient({
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   useEffect(() => {
     if (isScannerOpen) { resetFunding(); setKeepScannedPhoto(true); setFormData(prev => ({...prev, momento_anno: 'ANNO', tipo_movimento: 'USCITA', ragazzo_id: undefined, ricevuta_presente: false})) }
-    if (isScannerOpen && !isMobileReceiptOcr()) void prepareReceiptOcr().catch(() => undefined)
+    if (isScannerOpen) void prepareReceiptOcr().catch(() => undefined)
     if (!isScannerOpen) { setScannerFile(null); setScannerPreviewBlob(null); setOcrData(null); setScannerError(null) }
   }, [isScannerOpen, resetFunding])
   const [scannerFile, setScannerFile] = useState<File | null>(null)
@@ -477,9 +477,11 @@ export default function CassaClient({
   const handleScannerFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
-      const allowed = ['image/jpeg', 'image/png', 'image/webp']
-      if (!allowed.includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) {
-        toast.error('Carica un’immagine JPEG, PNG o WebP fino a 10 MB')
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/octet-stream']
+      const extension = file.name.split('.').pop()?.toLowerCase() || ''
+      const isSupportedImage = allowed.includes(file.type) || ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(extension)
+      if (!isSupportedImage || file.size === 0 || file.size > 20 * 1024 * 1024) {
+        toast.error('Carica una foto JPEG, PNG, WebP o HEIC fino a 20 MB')
         e.target.value = ''
         return
       }
@@ -494,16 +496,9 @@ export default function CassaClient({
     setScannerError(null)
     toast.info('Analisi scontrino in corso...', { id: 'ocr-scontrino' })
     try {
-      const mobile = isMobileReceiptOcr()
       let data: ReceiptOcrResult
-      if (mobile) {
-        const image = await imageForRecognition(fileToAnalyze, 1600)
-        setScannerPreviewBlob(image)
-        data = await scanReceiptOnServer(image, categorie.map(c => c.nome))
-      } else {
-        setScannerPreviewBlob(fileToAnalyze)
-        data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
-      }
+      setScannerPreviewBlob(fileToAnalyze)
+      data = await scanReceiptLocally(fileToAnalyze, categorie.map(c => c.nome))
       
       setOcrData(data)
       
@@ -526,7 +521,7 @@ export default function CassaClient({
       toast.error(`Impossibile analizzare lo scontrino: ${errMsg}`, { id: 'ocr-scontrino' })
       setFormData(prev => ({ ...prev, importo: '', data: new Date().toISOString().slice(0, 10), note: '', voce_spesa: categorie.find(c => c.tipo_movimento === 'USCITA')?.nome || '', tipo_movimento: 'USCITA' }))
       setOcrData({
-        provider: isMobileReceiptOcr() ? 'gemini-server' : 'paddleocr-browser',
+        provider: 'paddleocr-browser',
         importo: null,
         data: null,
         fornitore: null,
