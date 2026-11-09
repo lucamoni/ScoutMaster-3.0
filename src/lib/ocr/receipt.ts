@@ -1,5 +1,5 @@
 export type ReceiptOcrResult = {
-  provider: 'paddleocr-browser' | 'gemini-server' | 'groq-server'
+  provider: 'paddleocr-browser'
   importo: number | null
   data: string | null
   fornitore: string | null
@@ -59,7 +59,6 @@ export async function imageForRecognition(file: Blob, maxDimension = 2400): Prom
     const width = 'naturalWidth' in bitmap ? bitmap.naturalWidth : bitmap.width
     const height = 'naturalHeight' in bitmap ? bitmap.naturalHeight : bitmap.height
     const longestSide = Math.max(width, height)
-    if (longestSide <= maxDimension && file.size <= 2 * 1024 * 1024) return file
     const scale = Math.min(1, maxDimension / longestSide)
     canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(width * scale))
@@ -76,23 +75,6 @@ export async function imageForRecognition(file: Blob, maxDimension = 2400): Prom
     if (canvas) { canvas.width = 0; canvas.height = 0 }
     if (objectUrl) URL.revokeObjectURL(objectUrl)
   }
-}
-
-export async function scanReceiptOnServer(image: Blob, categories: string[]): Promise<ReceiptOcrResult> {
-  const form = new FormData()
-  form.append('file', image, 'scontrino.jpg')
-  form.append('categories', JSON.stringify(categories))
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 35_000)
-  try {
-    const response = await fetch('/api/ocr/scontrino', { method: 'POST', body: form, signal: controller.signal })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'Lettura non disponibile')
-    return payload as ReceiptOcrResult
-  } catch (error) {
-    if (controller.signal.aborted) throw new Error('La lettura sta impiegando troppo tempo. Riprova o compila i dati manualmente.')
-    throw error
-  } finally { clearTimeout(timeout) }
 }
 
 const parseItalianAmount = (raw: string) => {
@@ -168,7 +150,7 @@ const chooseCategory = (lines: string[], categories: string[]) => {
   ) ?? categories.find(category => category.toLowerCase() === 'altro') ?? categories[0]
 }
 
-export async function scanReceiptLocally(file: File, categories: string[]): Promise<ReceiptOcrResult> {
+export async function scanReceiptLocally(file: Blob, categories: string[]): Promise<ReceiptOcrResult> {
   const [engine, image] = await Promise.all([getEngine(), imageForRecognition(file)])
   const [result] = await engine.predict(image, { textRecScoreThresh: 0.35 })
   const items = result?.items ?? []
