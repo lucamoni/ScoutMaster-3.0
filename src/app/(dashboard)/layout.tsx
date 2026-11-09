@@ -8,6 +8,12 @@ import { getCurrentAnnoScout } from '@/lib/utils/payment'
 import { validWorkingYear } from '@/lib/utils/workingYear'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+type AuthClaims = {
+  email?: string
+  app_metadata?: Record<string, unknown>
+  user_metadata?: Record<string, unknown>
+}
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -16,7 +22,8 @@ export default async function DashboardLayout({
   const supabase = await createClient()
   // Middleware already verified the JWT with Supabase Auth. Re-verify its
   // signature locally here instead of making a second network request to Auth.
-  const { data: user, error: claimsError } = await supabase.auth.getClaims()
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+  const user = claimsData?.claims as AuthClaims | undefined
 
   if (claimsError || !user || !getUserRole(user)) {
     redirect('/login')
