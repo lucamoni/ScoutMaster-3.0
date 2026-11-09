@@ -16,8 +16,7 @@ export default async function DashboardLayout({
   const supabase = await createClient()
   // Middleware already verified the JWT with Supabase Auth. Re-verify its
   // signature locally here instead of making a second network request to Auth.
-  const { data: { claims }, error: claimsError } = await supabase.auth.getClaims()
-  const user = claims
+  const { data: user, error: claimsError } = await supabase.auth.getClaims()
 
   if (claimsError || !user || !getUserRole(user)) {
     redirect('/login')
