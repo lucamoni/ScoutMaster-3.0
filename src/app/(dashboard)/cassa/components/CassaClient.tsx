@@ -39,8 +39,6 @@ type Categoria = Database['public']['Tables']['categorie_spesa']['Row']
 
 const money = (amount: number) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(amount)
 
-const isMobileReceiptOcr = () => /iPhone|iPad|Android/i.test(navigator.userAgent) || window.matchMedia('(max-width: 767px)').matches
-
 export default function CassaClient({
   initialSpese,
   userId = '',
@@ -775,8 +773,8 @@ export default function CassaClient({
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => document.getElementById('scontrino-camera')?.click()}><Camera className="mr-2 h-4 w-4" /> Scatta foto</Button>
                   <Button variant="outline" onClick={() => document.getElementById('scontrino-upload')?.click()}><Paperclip className="mr-2 h-4 w-4" /> Scegli foto</Button>
-                  <input id="scontrino-camera" aria-label="Fotografa scontrino da scansionare" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleScannerFileChange} />
-                  <input id="scontrino-upload" aria-label="Carica foto da scansionare" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleScannerFileChange} />
+                  <input id="scontrino-camera" aria-label="Fotografa scontrino da scansionare" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" capture="environment" className="hidden" onChange={handleScannerFileChange} />
+                  <input id="scontrino-upload" aria-label="Carica foto da scansionare" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" className="hidden" onChange={handleScannerFileChange} />
                 </div>
               ) : (
                 <div className="space-y-4">
